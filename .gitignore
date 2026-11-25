@@ -1,0 +1,29 @@
+# 忽略运行时产物与本地环境
+
+# IPC 交换区（cmd/result/log/临时导出）
+ipc/
+# 生成的 native 与实验脚本
+work/
+tmp/
+*.tmp
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# 编辑器 / 系统
+.vscode/
+.idea/
+Thumbs.db
+desktop.ini
+.DS_Store
+
+# 本地凭据，绝不提交
+.env
+.env.*
+*.key
+*.pem
+token.txt

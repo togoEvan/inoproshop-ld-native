@@ -1,0 +1,10 @@
+# 统一换行：文本文件用 LF，避免跨平台 diff 噪声
+* text=auto eol=lf
+
+# 脚本保持 LF（IronPython / Python 3 都能读）
+*.py   text eol=lf
+*.ps1  text eol=crlf
+*.md   text eol=lf
+
+# native XML 是 IDE 产物，按二进制处理避免换行被改写
+*.native -text
