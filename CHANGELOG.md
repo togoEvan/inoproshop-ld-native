@@ -7,18 +7,14 @@
 
 ## [Unreleased]
 
-### 修复
-- **`git push` 报 `Failed to connect to github.com:443 after 21000 ms`，实为 DNS 污染**（2026-11-25 实测）。本机 DNS 把 `github.com` 解析到 `20.6.7.17`（不可达），但真实 IP `20.205.243.166:443` 直连正常，凭据 `git credential fill` 也能正常返回 `username=Tang-zhi-l`。极易被误判成"网络断了"或"凭据失效"而反复重试。修复：`sync.ps1` 推送前依次 TCP 探测候选 IP（`20.205.243.166` / `20.27.177.113` / `140.82.113.4`）的 443 端口，用 `git -c http.curloptResolve=github.com:443:<ip>` 钉住第一个可达地址；全部不可达才回退系统 DNS。用**候选列表 + 探测**而非硬编码单 IP，因为 GitHub 的 IP 会变
-- `references/mcp-bridge.md`「换环境必查」从 6 项扩到 7 项，新增「GitHub DNS 是否被污染」判别行；并新增「DNS 污染」小节（症状原文、三步判别命令、`curloptResolve` 修复法、IP 会变所以要用候选列表）
-- `docs/iteration.md` 新增 §5.5「DNS 污染」：与 §5.4「为什么不弹凭据窗口了」并列，明确区分「凭据问题」和「DNS 问题」两种都表现为 push 失败的场景
-
 ### 修改
 - **库更新规则从「遇新坑必回写」升级为「四类触发」**。原来只笼统说"遇到新坑要回写"，容易漏记。现明确为四类，每类都规定了**触发信号 / 落到哪个文件 / 必带什么证据**：①**没见过的格式**（新 GUID、层级、属性组合、槽位排布）→ `native-structure.md` + `assets/natives/` 样本 + `scripts/examples/` 生成器，须附双分类 0 错误与往返一致；②**Bug**（脚本报错 / IDE 崩 / 导入失败 / 验收漏报）→ `precompile-errors.md` 或直接修 `scripts/`，须附报错原文与复现步骤；③**吃过的亏**（理解错、结论被证伪）→ 提炼成铁律（README + SKILL 双写），须写清「错在哪 / 对的是什么 / 怎么自检」；④**新配置**（换机器 / IDE 版本 / 路径 / 凭据）→ `mcp-bridge.md` 环境要点，须附一条能直接跑的自检命令。四处同步改写：`SKILL.md`「更新规则」、`AGENTS.md` §6、`docs/iteration.md` §2.1、`README.md`「贡献 / 迭代」
-- `references/mcp-bridge.md`「环境要点」新增**换环境必查的自检表**（BASE 解析 / IPC 目录 / daemon 存活 / IDE 进程与工程 / IronPython 语法 / Git 凭据 / GitHub DNS），每项给出可直接执行的命令与失效表现
+- **更新规则适用范围收窄为「只记中型 PLC（InoProShop 梯形图）相关问题」**。git 推送、DNS、网络、凭据这类仓库工具链问题不再进知识库——它们不是中型 PLC 梯形图知识，混进来会稀释 `references/` 的信噪比。工具链问题只在 `sync.ps1` 等脚本里修，不写文档、不记 CHANGELOG
+- `references/mcp-bridge.md`「环境要点」新增**换环境必查的自检表**（BASE 解析 / IPC 目录 / daemon 存活 / IDE 进程与工程 / IronPython 语法 / Git 凭据），每项给出可直接执行的命令与失效表现
 - `docs/iteration.md` §1 改动分类表：验证要求从「预编译 0 错误」统一改为「**双分类 0 错误**」；新增「环境配置」类；样本类补「被证伪的旧样本必须替换而非仅追加」；并加注「双分类 0 错误 ≠ 图形没问题」的实测案例（单支路分支组）
 - `docs/iteration.md` §2 标准流程补第 ⑨ 步（重新打包 `.skill` 并同步本机技能目录），并新增 §2.1「回写四类触发」对表
 
-### 修复（分支组渲染）
+### 修复
 - **分支组 `Trees` 只有 1 条支路会让 IDE 绘制网络时崩溃**（用户截图报「在绘制该网络的时候遇到错误 / 不能显示内容 / 索引超出了数组界限」，堆栈在 `IBoxTreeParallel`）。`make_fb_call_test.py` 首版给只有一条 FB 调用的网络套了「单支路分支组 + NETITEM.RValue」，**预编译 0 错误、编译 0 错误，但梯形图编辑器打不开这一级网络**。脚本枚举全部样本后确认：act03_PackMLCmd 的 10 个网络、prg_PackMLCmdTest 的 7 个网络，所有分支组 `Trees` 都是 2，工程里从未出现过 `Trees=1`。修法：单支路时**不用 `branch()`、不套 `NETITEM`**，直接把 AND 框挂 `NetworkItems`（照 act90_PackMLManager 网络3）。改后重新导入，导出结构与实测样本一致，预编译 0 + 编译 0，程序段 2 正常显示
 - `scripts/examples/make_fb_call_test.py`：`build_networks()` 改为「多支路 → 分支组直挂；单支路 → AND 框直挂」；`netitem_rvalue()` 标记为**已弃用**并在 docstring 写明踩坑原因，防止后来者照抄
 

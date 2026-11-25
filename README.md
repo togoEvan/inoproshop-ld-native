@@ -230,6 +230,10 @@ inoproshop-ld-native/
 
 **回写四类触发**（详见 [`AGENTS.md`](AGENTS.md) §6 与 [`docs/iteration.md`](docs/iteration.md) §2.1）：
 
+> **适用范围：只记中型 PLC 梯形图相关问题。** git 推送 / DNS / 网络 / 凭据等仓库工具链问题
+> 不进知识库——它们不是中型 PLC 知识，混进来只会稀释 `references/` 的信噪比。
+> 工具链问题直接在 `sync.ps1` / `sync.cmd` 里修，不写文档、不记 CHANGELOG。
+
 | # | 类别 | 落到哪 |
 |---|------|--------|
 | ① | **没见过的格式**（新 GUID / 层级 / 属性组合 / 槽位排布） | `native-structure.md` + `assets/natives/` + `scripts/examples/` |

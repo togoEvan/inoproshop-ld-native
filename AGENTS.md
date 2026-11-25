@@ -113,6 +113,12 @@ README.md  →  references/native-structure.md  →  assets/natives/ 里的样�
 
 ## 6. 遇到新坑时的处理（四类触发）
 
+### ⚠ 适用范围：只记中型 PLC 梯形图相关问题
+
+**只记录 InoProShop（CODESYS V3.5 SP11 系）中型 PLC 梯形图 native XML 相关的问题**——结构、导入导出、预编译/编译错误、IDE 行为、工程配置。
+
+**不记录**：git 推送、DNS、网络、凭据、代理、GitHub 访问这类**仓库工具链**问题。它们不是中型 PLC 知识，混进 `references/` 只会稀释信噪比。工具链问题直接在 `sync.ps1` / `sync.cmd` 等脚本里修，**不写文档、不记 CHANGELOG**。
+
 用户批准的四类更新触发（2026-11-25）。**每次任务收尾必须逐条对表**，不能只挑自己记得的那条：
 
 | # | 类别 | 触发信号 | 落到哪 | 必带证据 |
@@ -120,7 +126,7 @@ README.md  →  references/native-structure.md  →  assets/natives/ 里的样�
 | ① | **没见过的格式** | 见到 `references/` 里没有的节点 GUID、层级嵌套、属性组合、`CallType` 取值、槽位排布、`Flags` 位含义、声明区写法 | `references/native-structure.md` 新增一节 + `assets/natives/` 存克隆样本 + `scripts/examples/` 加生成器 | 结构解析输出 + 导入成功 + **双分类 0 错误** + 导出往返一致 |
 | ② | **Bug** | 脚本报错 / IDE 崩 / 导入失败 / 弹框 / 验收漏报 / daemon 异常 | 报错类 → `references/precompile-errors.md`；工具类 → 修 `scripts/` + `docs/iteration.md` 记一条 | 报错**原文**（含堆栈）+ 复现步骤 + 根因 + 修复后验证 |
 | ③ | **吃过的亏** | 按错误理解做过事、浪费了时间；或文档已有结论被实测**证伪** | 提炼成**铁律第 N 条**（README + SKILL 双写）+ reference 加 `⚠` 块 + `CHANGELOG`「修改」 | 「错在哪 / 对的是什么 / **怎么自检**」三句话 |
-| ④ | **新配置** | 换机器、换 IDE 版本、换工程路径、凭据方式变、环境变量行为变、目录布局变 | `references/mcp-bridge.md`「环境要点」+ `_base.py` 顶部注释 + `docs/iteration.md` §7 | **一条自检命令**（能直接验证配置生效） |
+| ④ | **新配置** | 换机器、换 IDE 版本、换工程路径、环境变量行为变、目录布局变（**限中型 PLC 侧**；git/DNS/凭据等工具链配置不记） | `references/mcp-bridge.md`「环境要点」+ `_base.py` 顶部注释 + `docs/iteration.md` §7 | **一条自检命令**（能直接验证配置生效） |
 
 共同底线：
 

@@ -42,12 +42,18 @@
 
 四类分别对应知识库必须补的四种东西：**新知识 / 缺陷 / 教训 / 环境**。
 
+> **⚠ 适用范围：只记中型 PLC 梯形图相关问题。**
+> 只记录 InoProShop（CODESYS V3.5 SP11 系）中型 PLC 梯形图 native XML 相关的结构、导入导出、
+> 预编译/编译错误、IDE 行为、工程配置。**git 推送 / DNS / 网络 / 凭据 / 代理 / GitHub 访问**
+> 这类仓库工具链问题**不记**——它们不是中型 PLC 知识，混进 `references/` 只会稀释信噪比。
+> 工具链问题直接在 `sync.ps1` / `sync.cmd` 里修，不写文档、不记 CHANGELOG。
+
 | # | 类别 | 触发信号 | 落到哪 | 必带证据 |
 |---|------|---------|--------|---------|
 | ① | **没见过的格式** | 见到 `references/` 里没有的节点 GUID、层级嵌套、属性组合、`CallType` 取值、槽位排布、`Flags` 位含义、声明区写法 | `references/native-structure.md` 新增一节<br>+ `assets/natives/` 存克隆样本<br>+ `scripts/examples/` 加生成器 | 结构解析输出 + 导入成功 + 双分类 0 错误 + 导出往返一致 |
 | ② | **Bug** | 脚本报错 / IDE 崩 / 导入失败 / 弹框 / 验收漏报 / daemon 异常 | 报错类 → `references/precompile-errors.md`（编号续写）<br>工具类 → 修 `scripts/` + 本文件记一条 | 报错**原文**（含堆栈）+ 复现步骤 + 根因 + 修复后验证 |
 | ③ | **吃过的亏** | 按错误理解做过事、浪费时间；或文档已有结论被实测**证伪** | 提炼成**铁律第 N 条**（README + SKILL 双写）+ reference 加 `⚠` 块 + `CHANGELOG`「修改」 | 「错在哪 / 对的是什么 / **怎么自检**」三句话 |
-| ④ | **新配置** | 换机器、换 IDE 版本、换工程路径、凭据方式变、环境变量行为变、目录布局变 | `references/mcp-bridge.md`「环境要点」+ `scripts/ide/_base.py` 顶部注释 + 本文件 §7 | **一条自检命令**（能直接验证配置生效） |
+| ④ | **新配置** | 换机器、换 IDE 版本、换工程路径、环境变量行为变、目录布局变（**限中型 PLC 侧**；git/DNS/凭据等工具链配置不记） | `references/mcp-bridge.md`「环境要点」+ `scripts/ide/_base.py` 顶部注释 + 本文件 §7 | **一条自检命令**（能直接验证配置生效） |
 
 **分类冲突时**：按「后人最可能在哪一步踩到」落**主库**，其余位置只放一句话 + 链接，不复制全文。
 
@@ -188,35 +194,6 @@ printf "protocol=https`nhost=github.com`n`n" | git credential fill
 ```
 
 凭据失效时 `sync.ps1` 会直接报错提示重新登录，**不会弹窗等待**。
-
-### 5.5 DNS 污染（2026-11-25 实测）
-
-**症状**：
-
-```
-fatal: unable to access 'https://github.com/...': Failed to connect to github.com:443 after 21072 ms
-```
-
-**关键**：这不一定是网络断了，也不是凭据失效。本机 DNS 曾把 `github.com` 解析到
-`20.6.7.17`（不可达），而真实 IP `20.205.243.166:443` 是通的。
-
-判别（三步全过说明只是 DNS 问题）：
-
-```powershell
-printf "protocol=https`nhost=github.com`n`n" | git credential fill   # 有 username/password = 凭据 OK
-nslookup github.com                                                    # 污染时给不可达 IP
-```
-
-修复：把域名钉到可用 IP。
-
-```powershell
-git -c http.curloptResolve=github.com:443:20.205.243.166 push origin main
-```
-
-`sync.ps1` 已内置兜底：推送前依次探测候选 IP（`20.205.243.166` / `20.27.177.113` /
-`140.82.113.4`）的 443 端口，钉住第一个可达的；全不可达才回退系统 DNS。
-IP 会变，所以是**候选列表 + TCP 探测**，不是硬编码单个 IP。全部失败时用
-`nslookup github.com 8.8.8.8` 拿新 IP 补进 `sync.ps1` 的 `$GithubIpCandidates`。
 
 ---
 
