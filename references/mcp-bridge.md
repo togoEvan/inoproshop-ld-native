@@ -8,6 +8,9 @@ bridge.py（本地客户端，文件队列 IPC）
    → do_replace.py（静默导入便捷入口）
 ```
 
+**命令防重复执行（领取-改名机制，学自 inoproshop-mcp，2026-11-25）**：
+daemon 轮询发现 `cmd.json` 后，先**原子改名为 `running.json`** 再读取执行。改名成功即视为「领取」，之后无论执行正常/异常/崩溃，文件都不再叫 `cmd.json`，绝不会被二次领取。旧机制（mtime+size 签名判重）在签名比较失败或执行中途崩溃时可能把同一命令执行两遍——对写入类命令是实打实的事故。写方 `bridge.py` 本就是原子写（`.tmp` + `os.replace`），与领取-改名配合，端到端恰好一次。
+
 ## 环境要点
 
 - InoProShop = CODESYS V3.5 SP11 基础，IronPython 2.7 脚本引擎
@@ -94,6 +97,15 @@ python bridge.py eval_file '{\"path\": \"D:\\\\plc_mcp\\\\ide\\\\task_check.py\"
 - `system.get_messages()` → 返回字符串数组（DeprecationWarning），**不可用**
 - `system.get_message_objects(category_guid)` → 返回 ScriptMessage 对象，**唯一正确方式**
 - 消息对象属性：`severity` / `text` / `object.get_name()` / `position`
+- **动态枚举全部分类，不要只读硬编码的几个**（学自 inoproshop-mcp，2026-11-25）：
+  `system.get_message_categories()` 先枚举运行时暴露的**每一个**分类，全量扫描。
+  大工程里编译错误会落到已知分类之外的分类（Library Manager、POU 专属、工程树等），
+  只读预编译 `217bc73e` + 编译 `97f48d64` 会漏。本机 SP11 实测暴露 5 个分类
+  （含脚本 `194b48a9` 和导入导出 `2af7707f`）；**`220493a1`（Additional code checks）
+  本机不存在**——GUID 集合因版本/配置而异，不能照抄外部项目的分类清单。`task_check.py` 已按此实现：
+  三个基础分类（预编译/编译/格式检查）缺一即 `raise`；其余分类（含已知的 `220493a1`）
+  存在才读、计入合计。
+- ⚠ `Guid` 是 `script_engine.Guid`（.NET 类型），不是 Python 内建——裸写 `Guid("{...}")` 会静默 `NameError`
 
 ## system.commands
 

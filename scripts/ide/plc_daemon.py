@@ -19,6 +19,7 @@ import _base
 BASE = _base.resolve_base()
 CMD_DIR = _base.ensure_ipc(BASE)
 CMD_FILE = os.path.join(CMD_DIR, "cmd.json")
+CMD_RUNNING = os.path.join(CMD_DIR, "running.json")
 RES_FILE = os.path.join(CMD_DIR, "result.json")
 STOP_FILE = os.path.join(CMD_DIR, "stop.flag")
 READY_FILE = os.path.join(CMD_DIR, "ready.flag")
@@ -773,7 +774,7 @@ def loop():
         f.close()
     except Exception:
         pass
-    last_sig = None
+    # 注意：不用 mtime+size 签名判重，改用「领取-改名」机制（见循环内注释）
     while True:
         _beat()
         try:
@@ -785,16 +786,21 @@ def loop():
                     pass
                 break
             if os.path.exists(CMD_FILE):
+                # ═══ 领取-改名（学自 inoproshop-mcp 的 Watcher）═══
+                # 先原子改名为 running.json 再执行，保证同一命令绝不执行两遍：
+                # 旧机制靠 mtime+size 签名判重，签名比较失败或执行抛异常时
+                # 都可能把同一命令再执行一次。改名后即使本循环崩溃，
+                # 文件也不再叫 cmd.json，不会被再次领取。
+                taken = False
                 try:
-                    st = os.stat(CMD_FILE)
-                    sig = (st.st_mtime, st.st_size)
-                except Exception:
-                    sig = None
-                if sig is not None and sig != last_sig:
-                    last_sig = sig
+                    os.rename(CMD_FILE, CMD_RUNNING)
+                    taken = True
+                except Exception, e:
+                    log(u"claim cmd err: %s" % e)
+                if taken:
                     time.sleep(0.05)
                     try:
-                        cmd = load_json(CMD_FILE)
+                        cmd = load_json(CMD_RUNNING)
                     except Exception, e:
                         log(u"read cmd err: %s" % e)
                         cmd = None
@@ -811,7 +817,7 @@ def loop():
                         except Exception, e:
                             log(u"write result err: %s" % e)
                         try:
-                            os.remove(CMD_FILE)
+                            os.remove(CMD_RUNNING)
                         except Exception:
                             pass
         except Exception, e:

@@ -1,5 +1,10 @@
 # -*- coding: utf-8 -*-
-"""验收：读预编译(217bc73e) + 编译(97f48d64) 两个分类，单次快照，绝不阻塞 IDE。
+"""验收：动态枚举全部消息分类并全量扫描，单次快照，绝不阻塞 IDE。
+
+已知四分类：预编译(217bc73e) + 编译(97f48d64) + 格式检查(0986c5dd)
++ 附加代码检查(220493a1)。大工程里编译错误还可能落到其它分类
+（Library Manager、POU 专属、工程树等），所以其余分类也全量扫描
+（学自 inoproshop-mcp 的 compile_project.py，2026-11-25）。
 
 ═══════════════════════════════════════════════════════════════════════
 为什么这个脚本「不编译、不清消息、不 sleep、不轮询」（2026-11-25 最终定论）
@@ -73,6 +78,7 @@ def L(m):
 CAT_PRE = u"217bc73e-759b-4a3c-bfa1-991c938a6541"
 CAT_BUILD = u"97f48d64-a2a3-4856-b640-75c046e37ea9"
 CAT_FMT = u"0986c5dd-ca06-40a7-94e5-bf42de3dfd91"
+CAT_CHECKS = u"220493a1-f49b-4416-9a3f-a545db707cbe"
 
 try:
     proj = projects.primary
@@ -83,9 +89,21 @@ try:
     # 只处理一次待办消息，绝不循环、绝不 sleep
     system.process_messageloop()
 
+    # ═══ 动态枚举全部消息分类（学自 inoproshop-mcp 的 compile_project.py）═══
+    # 硬编码 GUID 只覆盖常见分类；大工程里编译错误会落到其它分类
+    # （Library Manager、POU 专属、工程树等）。这里枚举运行时暴露的
+    # 每一个分类，全部扫描，防止漏读。已知分类单独标注，未知分类也计入合计。
     cats = {}
     for c in list(system.get_message_categories()):
         cats[unicode(c)] = c
+    if not cats:
+        raise RuntimeError(u"get_message_categories() 返回空，不得当作 0 错误")
+    L(u"=== 消息分类清单（共 %d 个）===" % len(cats))
+    KNOWN = {CAT_PRE: u"预编译", CAT_BUILD: u"编译", CAT_FMT: u"格式检查",
+             CAT_CHECKS: u"附加代码检查"}
+    for guid in sorted(cats.keys()):
+        mark = KNOWN.get(guid, u"")
+        L(u"  %s %s" % (guid, u"← %s" % mark if mark else u""))
 
     def read_cat(guid, label):
         """读一个分类；分类不存在直接抛错（不得当作 0 错误）。"""
@@ -116,13 +134,9 @@ try:
         except Exception:
             return u""
 
-    total_err = 0
-    total_warn = 0
-    for label, guid in ((u"预编译", CAT_PRE), (u"编译", CAT_BUILD), (u"格式检查", CAT_FMT)):
-        objs = read_cat(guid, label)
+    def dump_cat(label, objs):
         ne = 0
         nw = 0
-        L(u"=== %s : total=%d ===" % (label, len(objs)))
         for m in objs:
             sev = msg_sev(m)
             low = sev.lower()
@@ -131,11 +145,52 @@ try:
             elif 'warn' in low:
                 nw += 1
             L(u"  [%s] %s | %s" % (sev, msg_obj(m), msg_text(m)))
+        return ne, nw
+
+    # ① 三个基础分类：缺一个就抛错（本机 SP11 实测必存在）
+    # ② 已知的第 4 个分类 220493a1（附加代码检查）与未知分类：存在才读。
+    #    实测（2026-11-25 本机 SP11）：运行时只暴露 5 个分类，没有 220493a1——
+    #    外部项目 inoproshop-mcp 记录的分类集合与本机不同，GUID 因版本/配置而异，
+    #    所以非基础分类不能设为「缺了就 raise」，否则验收永远过不去。
+    total_err = 0
+    total_warn = 0
+    for label, guid in ((u"预编译", CAT_PRE), (u"编译", CAT_BUILD),
+                        (u"格式检查", CAT_FMT)):
+        objs = read_cat(guid, label)
+        L(u"=== %s : total=%d ===" % (label, len(objs)))
+        ne, nw = dump_cat(label, objs)
         total_err += ne
         total_warn += nw
         L(u"  -> %s errors=%d warnings=%d" % (label, ne, nw))
 
-    L(u"=== 结论 : %s (合计 %d 错误, %d 警告) ===" % (
+    # 可选分类：已知 220493a1 + 其余全部未知分类，存在就读、计入合计
+    optional = [u"附加代码检查"]
+    for guid in sorted(cats.keys()):
+        if guid in (CAT_PRE, CAT_BUILD, CAT_FMT):
+            continue
+        label = optional[0] if guid == CAT_CHECKS else u"未知分类"
+        try:
+            objs = list(system.get_message_objects(cats[guid]))
+        except Exception, e:
+            L(u"=== %s %s : 读取失败 %s（忽略） ===" % (label, guid, e))
+            continue
+        ne, nw = 0, 0
+        for m in objs:
+            sev = msg_sev(m)
+            low = sev.lower()
+            if 'err' in low:
+                ne += 1
+                L(u"  [%s] %s | %s" % (sev, msg_obj(m), msg_text(m)))
+            elif 'warn' in low:
+                nw += 1
+        if ne or nw:
+            L(u"=== %s %s : errors=%d warnings=%d ===" % (label, guid, ne, nw))
+        else:
+            L(u"=== %s %s : total=%d（无错误警告） ===" % (label, guid, len(objs)))
+        total_err += ne
+        total_warn += nw
+
+    L(u"=== 结论 : %s (合计 %d 错误, %d 警告，覆盖全部分类) ===" % (
         u"通过" if total_err == 0 else u"不通过", total_err, total_warn))
 except Exception, e:
     L(u"FATAL %s\n%s" % (e, traceback.format_exc()))
