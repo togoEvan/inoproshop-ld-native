@@ -41,6 +41,29 @@ NetworkList
 | 2 | S 置位 | 线圈置位 |
 | 3 | R 复位 | 线圈复位 |
 
+## AND 框的输入元数：至少 2 个槽
+
+**任何 AND 框（包括每个 NETWORK 顶层 `RValue` 本身就是的那个 AND）都必须有 ≥ 2 个 `InputItems` 槽。**
+
+单条件 rung 是高频踩坑点：
+
+| 阶段 | 结果 |
+|------|------|
+| 预编译 `217bc73e` | **0 错误**（不校验元数） |
+| 构建 `97f48d64` | 报 N 条 `'AND'需要至少'2' 个操作数`，N = 单条件 rung 条数 |
+
+输出映射段（`步标志 → 输出`）、单触点置位段最容易中招。
+
+**修法**：条件数 < 2 时补一个 `TRUE` 触点占位：
+
+```
+Operand="TRUE"  内部 Flags=0  IsContact=True
+```
+
+语义不变（`X AND TRUE = X`），图形上多一个 TRUE 常开点。
+
+> 详细报错对照见 [precompile-errors.md §2b](precompile-errors.md)。
+
 ## MOVE 框标准结构（已验证预编译 0 错误）
 
 ```xml
@@ -276,6 +299,6 @@ Input 若是 AND 框，必须是**完整** AND 框（含 `CallType`/`Instance`/`
 5. `UniqueIdGenerator` 抬到最大 Id + 200
 6. `ipc/import_args.json` 写 `{"path":..., "parent":"Application", "expect":[...]}`
 7. `task_silent_import.py` 静默导入（父对象 `Application`，无同名 → 不弹框）
-8. `task_precompile.py` 验证：预编译分类 `217bc73e` 错误数必须为 0
+8. `task_check.py` 验证：**预编译 `217bc73e` 和编译 `97f48d64` 两个分类错误数都必须为 0**（只跑预编译会漏掉 AND 元数这类构建期错误）
 
 可复用的生成器：`scripts/examples/make_packml_cmd_test.py`

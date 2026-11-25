@@ -13,7 +13,7 @@ description: 汇川 InoProShop（CODESYS V3.5 SP11 系）LD 梯形图 native XML
 
 ## 铁律（违反必踩坑）
 
-1. **验收标准 = 预编译分类 0 错误**（`217bc73e-759b-4a3c-bfa1-991c938a6541`），不是编译分类（`97f48d64-a2a3-4856-b640-75c046e37ea9`，它永远显示 0 错误，build()/rebuild() 只填这个分类）
+1. **验收 = 预编译分类 0 错误 _且_ 编译分类 0 错误**。预编译 `217bc73e-759b-4a3c-bfa1-991c938a6541` 抓结构错误（槽位/IsContact/声明缺失）；编译 `97f48d64-a2a3-4856-b640-75c046e37ea9` 抓语义错误（如 AND 操作数不足）。**只读预编译会漏掉后者**——实测：预编译 0，构建报 N 条 `'AND'需要至少'2' 个操作数`。`task_check.py` 已同时跑「检查程序」+ `build()`
 2. **功能框 InputItems 槽位数必须 == InputParam 参数数**（如 MOVE 的 [EN, IN] = 2 槽）
 3. **值输入引脚（IN 槽）必须 `IsContact=False`** —— 从触点模板克隆时残留 `IsContact=True` 是预编译报 `不允许对类型 'SINT' 进行 'NOT' 操作` 的根因（IDE 把常量当触点做取反逻辑）
 4. **操作数内部 Flags 的 Flags=1 是 NOT（取反）标志**，常量引脚必须清 0；触点取反则用 Flags=1 + IsContact=True
@@ -22,6 +22,7 @@ description: 汇川 InoProShop（CODESYS V3.5 SP11 系）LD 梯形图 native XML
 7. **不关闭 IDE**：改名让位法静默替换（先 `prg_X → prg_X_old_tmp` → import → 删旧）
 8. **校验导出文件每次唯一命名**（如 `silent_after_HHMMSS.native`），否则弹覆盖确认框
 9. **图形里引用的每个符号，声明区必须有一行对应声明**（`Interface/TextDocument/TextLines` 里的 `VAR…END_VAR`）。`import_native` 不会替你补声明；漏一个就报一串 `C0046: 没有定义标识符`，**每个引用点一条**（例：8 个未声明变量共 45 次引用 → 45 个错误）
+10. **AND 框（含 NETWORK 顶层 `RValue` 的 AND）至少 2 个输入槽**。单条件 rung 只给 1 个槽时预编译不报错，但构建报 `'AND'需要至少'2' 个操作数`；补一个 `TRUE` 触点（`Operand=TRUE`、内部 `Flags=0`、`IsContact=True`）即可，语义不变
 
 ## 结构速查（详见 references/）
 
@@ -72,7 +73,7 @@ description: 汇川 InoProShop（CODESYS V3.5 SP11 系）LD 梯形图 native XML
 | ide/task_silent_import.py | 静默导入核心（由 do_replace.py 调用） |
 | ide/task_readnow.py | 不清空直接读全部消息（排查异步） |
 | ide/task_export_fixed.py | 导出指定 POU（学结构用） |
-| examples/make_*.py | 生成脚本范例（读 `PLC_SRC_NATIVE` / `PLC_DST_NATIVE` 环境变量） |
+| examples/make_*.py | 生成脚本范例。`make_full8.py` / `make_fix45.py` 读 `PLC_SRC_NATIVE` / `PLC_DST_NATIVE` 环境变量；`make_packml_cmd_test.py` 用相对路径（含 `contact/coil/and_box/branch/netitem/network` 全套节点构造函数，可改造成任意 POU 生成器） |
 
 `ide/*.py` 是 IronPython 2 语法，`except Exception, e:` 合法，**勿用 Python 3 的 ast 校验**。
 

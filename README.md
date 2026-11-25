@@ -33,7 +33,7 @@ InoProShop 的梯形图存在一个 native XML 结构里。这个仓库提供：
 
 | # | 铁律 |
 |---|------|
-| 1 | **验收标准 = 预编译分类 0 错误**（`217bc73e-759b-4a3c-bfa1-991c938a6541`）。编译分类 `97f48d64-…` **永远显示 0 错误**，拿它验收等于没验收。 |
+| 1 | **验收 = 预编译分类 0 错误 _且_ 编译分类 0 错误**。预编译 `217bc73e-…` 抓结构错误（槽位、IsContact、声明缺失），编译 `97f48d64-…` 抓语义错误（如 AND 操作数不足）。**只读预编译会漏掉后者**——2026-11-25 实测：预编译 0，构建报 N 条 `'AND'需要至少'2' 个操作数`。`task_check.py` 已同时跑「检查程序」+ `build()` 并输出合计结论。 |
 | 2 | 功能框 `InputItems` 槽位数 **必须等于** `InputParam` 参数数（MOVE = `[EN, IN]` 2 槽）。 |
 | 3 | 值输入引脚（IN 槽）必须 `IsContact=False`。从触点克隆残留 `True` → 预编译报 `不允许对类型 'SINT' 进行 'NOT' 操作`。 |
 | 4 | 操作数内部 `Flags/Flags=1` 是 **NOT 取反**标志。常量引脚必须清 0；触点取反才用 1。 |
@@ -42,6 +42,7 @@ InoProShop 的梯形图存在一个 native XML 结构里。这个仓库提供：
 | 7 | 不关 IDE。静默替换用「改名让位法」：`prg_X → prg_X_old_tmp` → import → 删旧。 |
 | 8 | 导出文件名每次唯一（`silent_after_HHMMSS.native`），否则弹覆盖确认框。 |
 | 9 | **图形里引用的每个符号，声明区必须有一行对应声明**。`import_native` 不会替你补声明，漏一个就报一串 `C0046: 没有定义标识符`（每个引用点一条）。 |
+| 10 | **AND 框（含 NETWORK 顶层 RValue 的 AND）至少 2 个输入槽**。单条件 rung 只有 1 个槽时预编译不报错，但构建报 `'AND'需要至少'2' 个操作数`；补一个 `TRUE` 触点即可（语义不变）。 |
 
 完整对照见 [`references/precompile-errors.md`](references/precompile-errors.md)。
 
@@ -100,12 +101,12 @@ python scripts\do_replace.py work\xxx.native Application prg_StartStop
 ```
 
 ```python
-# 触发预编译并读错误（经桥在 IDE 内执行）
+# 触发预编译 + 构建，读两个分类的错误（经桥在 IDE 内执行）
 python -c "import sys; sys.path.insert(0, r'<BASE>'); import bridge; bridge.call('eval_file', path=r'<BASE>\ide\task_check.py')"
-# 然后看 ipc/check.log 的「=== 预编译 : total=0 errors=0 ===」
+# 然后看 ipc/check.log 的「=== 验收结论 : 通过 (预编译+编译合计 0 错误) ===」
 ```
 
-三步闭环：**克隆 → 导入 → 预编译 0 错误**。只要预编译不为 0，就不要声称完成。
+三步闭环：**克隆 → 导入 → 验收（预编译 + 编译都 0 错误）**。只跑预编译不算验收完。
 
 ---
 
@@ -161,7 +162,7 @@ inoproshop-ld-native/
 │   └── iteration.md              # 迭代流程（改什么、怎么验证、怎么发版）
 ├── references/
 │   ├── native-structure.md       # 节点 GUID、层级、槽位、声明区、合法挂载位置
-│   ├── precompile-errors.md      # 错误 → 根因 → 修复（7 类）
+│   ├── precompile-errors.md      # 错误 → 根因 → 修复（8 类，含 2b 单条件 AND）
 │   └── mcp-bridge.md             # 桥的协议、命令、消息分类
 ├── scripts/
 │   ├── bridge.py                 # IPC 客户端（本地 Python 3）
@@ -180,7 +181,8 @@ inoproshop-ld-native/
 │   │   └── task_export_fixed.py  # 导出指定 POU（学结构用）
 │   └── examples/                 # 生成脚本范例（可改环境变量复用）
 │       ├── make_full8.py         # 裸 MOVE 支路批量包装成完整支路
-│       └── make_fix45.py         # 补声明 + 删多余 TRUE
+│       ├── make_fix45.py         # 补声明 + 删多余 TRUE
+│       └── make_packml_cmd_test.py  # 从零生成完整 POU（7 网络 PackML 命令层）
 ├── assets/natives/               # 已验证克隆模板（4 份）
 ├── sync.ps1                      # 一键：校验 CHANGELOG → commit → push
 └── sync.cmd                      # PowerShell 执行策略绕过包装器

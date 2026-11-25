@@ -90,12 +90,23 @@ BASE = D:\plc_mcp (source: derive:D:\plc_mcp\ide)
 
 ```
 预编译分类 217bc73e-759b-4a3c-bfa1-991c938a6541 错误数 == 0
+且
+编译分类   97f48d64-a2a3-4856-b640-75c046e37ea9 错误数 == 0
 ```
+
+两个分类抓不同的错误，缺一不可：
+
+| 分类 | 抓什么 | 典型错误 |
+|------|--------|----------|
+| 预编译 `217bc73e` | 结构错误 | 槽位数不符、`IsContact` 错、`C0046` 声明缺失、红框 |
+| 编译 `97f48d64` | 语义错误 | `'AND'需要至少'2' 个操作数`（单条件 rung 只给 1 个槽） |
+
+**只读预编译会漏掉编译分类的错误**（2026-11-25 实测：预编译 0，构建报 N 条 AND 操作数不足）。
 
 ### 3.2 验收步骤
 
 ```python
-# 经桥在 IDE 内执行检查脚本
+# 经桥在 IDE 内执行检查脚本（内部先「检查程序」，再 build()）
 import bridge
 bridge.call("eval_file", path=r"<BASE>/ide/task_check.py", timeout=120)
 ```
@@ -104,11 +115,14 @@ bridge.call("eval_file", path=r"<BASE>/ide/task_check.py", timeout=120)
 
 ```
 === 预编译 : total=0 errors=0 ===
+=== 编译 : total=3 errors=0 ===
+=== 验收结论 : 通过 (预编译+编译合计 0 错误) ===
 ```
 
 ### 3.3 什么不算验收
 
-- ❌ 编译分类 0 错误（`97f48d64-…` 永远 0）
+- ❌ 只看预编译分类 0 错误（漏掉 AND 元数这类只在构建阶段报的错）
+- ❌ 只看编译分类 0 错误（漏掉槽位/声明这类结构错）
 - ❌ IDE 画面看起来没红框（红框可能延迟渲染）
 - ❌ 导入返回 `ok`（只代表 XML 解析成功，不代表语义正确）
 - ❌ 用户没说报错（用户可能还没看）
@@ -173,10 +187,13 @@ python scripts\do_replace.py <native绝对路径> Application <目标POU名>
 
 | 现象 | 原因 | 处理 |
 |------|------|------|
-| `import_native` 返回非 ok | XML 结构非法 | 用 `inspect_native.py` 对比样本 |
+| `import_native` 抛 `已标识项中有一项的格式无效` | 节点挂错位置，或层级多/少一层 | 见 `references/precompile-errors.md` §4；把生成文件与 `assets/natives/` 里最接近的样本做逐层标签对比 |
 | 导入后对象不存在 | 名称不匹配 | 检查 native 里 `MetaObject/Name` |
 | 弹了确认框 | 导出文件名重复 | 换唯一文件名重试 |
 | 桥超时 | daemon 未注入或 IDE 忙 | 重新跑 `launch_ide_daemon.py` |
+| 预编译 0 但构建报 AND 操作数不足 | 单条件 rung 顶层 AND 只有 1 个槽 | 见 `references/precompile-errors.md` §2b；补一个 `TRUE` 触点 |
+
+**结构对比怎么做**：把生成文件和你克隆的样本各导出一份，按 `Name` 属性提取标签序列做 diff，能快速定位多一层/少一层。`scripts/examples/make_packml_cmd_test.py` 里有可复用的配对扫描函数（注意跳过自闭合标签，否则深度永远配不平）。
 
 ---
 
@@ -187,7 +204,7 @@ python scripts\do_replace.py <native绝对路径> Application <目标POU名>
 | `SetCursorPos` / `mouse_event` / `SetForegroundWindow` | 文件 IPC + PostMessage |
 | 关闭 / 重启 IDE | daemon 常驻，静默操作 |
 | 弹窗让用户确认导入/替换 | 改名让位法 + 唯一文件名 |
-| 用编译分类验收 | 用预编译分类 |
+| 只看单一分类验收 | 预编译 + 编译两个分类都读 |
 | 手写 native GUID | 从 `assets/natives/` 克隆 |
 | 全局 `find_named` | `app.get_children()` 过滤直接子对象 |
 | `system.get_messages()` | `system.get_message_objects(category_guid)` |

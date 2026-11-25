@@ -33,6 +33,15 @@
 - `references/native-structure.md`：重写「挂载位置规则」，补完整支路结构图与补齐前后对照表
 - `.gitignore` / `.gitattributes`：注释从「一句话标签」改写为「为什么 + 挡什么 + 自检命令」。`.gitignore` 补充 gitignore 只对未跟踪文件生效、`git check-ignore -v` 自检、凭据已提交需吊销并清历史的说明；`.gitattributes` 补充跨平台换行根因、`git check-attr` 自检、`*.native` 为何按二进制处理。规则内容本身未变
 - `task_silent_import.py`：全局递归 `find_named`/`walk` 替换为 `find_child()`——只在目标父对象（Application）的**直接子对象**里用 `get_children()` 过滤查找，符 README 铁律「禁止全局 find_named」，避免误命中 Task Configuration 里的同名调用对象
+- **验收标准从「只看预编译」改为「预编译 + 编译双分类」（库内容整理）**。原先 4 处文档（README/SKILL/AGENTS/usage）都写着「编译分类永远 0 错误，拿它验收等于没验收」，但实测证伪：单条件 rung 的顶层 AND 只有 1 个输入槽时，预编译 0 错误而构建报 N 条 `'AND'需要至少'2' 个操作数`。现在统一为「预编译 `217bc73e` 抓结构错误 + 编译 `97f48d64` 抓语义错误，两者都必须为 0」
+- **`scripts/ide/task_check.py` 加 `app.build()`**：原先只执行「检查程序」，不触发构建，导致只在构建期报的错误永远读不到（上面那个矛盾的结构性根源）。现在先「检查程序」再 `build()`，末尾输出 `=== 验收结论 : 通过/不通过 (合计 N 错误) ===`。实测 check 4.42s + build 4.03s，结论正确
+- **`references/native-structure.md` 新增「AND 框的输入元数：至少 2 个槽」一节**：原来只在 `precompile-errors.md §2b` 记了症状，结构文档没有对应规则。现补「任何 AND 框（含 NETWORK 顶层 `RValue` 的那个）都要 ≥2 个 `InputItems` 槽，单条件补 `TRUE`」并交叉引用 §2b
+- **`references/precompile-errors.md` 消息分类表重写**：删掉「编译分类永远 0 错误、不能当验收」的错误结论，改为「两个分类抓不同错误，缺一不可」
+- **`docs/usage.md` §3 验收规范重写**：3.1 改为双分类标准 + 对照表；3.2 输出示例补编译分类与验收结论行；3.3「什么不算验收」补「只看预编译」与「只看编译」两条对称项；§6 禁止事项「用编译分类验收」改为「只看单一分类验收」
+- **`AGENTS.md` §2 验收标准重写**：补两分类对照表与实测案例；铁律条数从「8 条」修正为「10 条」
+- **`README.md`**：铁律表新增第 10 条（AND 至少 2 个输入槽）；`precompile-errors.md` 描述从「7 类」修正为「8 类」；目录结构补 `make_packml_cmd_test.py`
+- **`SKILL.md`**：铁律新增第 10 条；`examples/make_*.py` 说明改为如实描述（`make_full8`/`make_fix45` 读环境变量，`make_packml_cmd_test` 用相对路径）
+- **清理失效引用**：`docs/usage.md` 失败排查表引用的 `inspect_native.py` 仓库里不存在，改为实际可用的「与样本逐层标签 diff」做法；`references/native-structure.md` 引用的 `task_precompile.py` 不存在，改为 `task_check.py`
 
 ### 修复
 - **PLC_PRG 12 段状态机首版构建报 6 条 `'AND'需要至少'2' 个操作数`**：生成器给单条件 rung
