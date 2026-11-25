@@ -33,8 +33,8 @@ description: 汇川 InoProShop（CODESYS V3.5 SP11 系）LD 梯形图 native XML
 - MOVE 框直接挂 `Network/NetworkItems`（不能挂 NETITEM.OutputItems 或 RValue → "已标识项格式无效"）
 - **分支组 Trees 里的「完整支路」= 外层 AND 框包住 `[MOVE 框, 连接器 {505bff94}]`**（用户手改已验证 2026-11-25）。裸 MOVE 框挂 Trees 能过预编译但功能链断头、图形不完整
   - 外层 AND 的 `InputItems` 两槽：`[0]` MOVE 框、`[1]` 连接器（只有 Id 子节点）
-  - 内层嵌套分支组的支路才是裸 MOVE 框
-  - 写树形结构必须从 `assets/natives/user_fixed.native` 克隆
+  - **任何一层（含嵌套分支组内部）都要这样包装**；唯一例外是分支组 `Input` 槽的公共前缀触点
+  - 写树形结构必须从 `assets/natives/user_fixed.native` 克隆（8 支路全完整版）
 - EN 槽放 AND 框（内含条件触点，至少 2 个），IN 槽放常量引脚（IsContact=False + 内部 Flags=0）
 - 触点并联：分支组 `{827b9ec2}` 内 Trees 放多个支路
 - 触点/线圈取反、置位、复位都用 Operand 内部 Flags 位掩码：1=NOT、2=S、3=R

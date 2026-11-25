@@ -95,24 +95,35 @@ MOVE 框（功能框）有两个合法位置：
 
 ### 三层嵌套的完整实例（实测预编译 0 错误）
 
-用户工程 `assets/natives/user_fixed.native` 网络 2 的真实结构：
+用户工程 `assets/natives/user_fixed.native` 网络 2 的真实结构。
+**2026-11-25 已把全部 8 条支路统一成完整形式（每条都带外层 AND + 连接器）：**
 
 ```
 分支组 (3 支路, Input=TRUE 触点)
 ├─ tree0: AND[ MOVE(7) , CONN ]
 ├─ tree1: AND[ MOVE(2) , CONN ]
 └─ tree2: AND[ 分支组(6 支路) , CONN ]
-              ├─ tree0: MOVE(6)
-              ├─ tree1: MOVE(8)
-              ├─ tree2: MOVE(9)
-              ├─ tree3: MOVE(4)
-              ├─ tree4: MOVE(3)
-              └─ tree5: MOVE(5)
+              ├─ tree0: AND[ MOVE(6) , CONN ]
+              ├─ tree1: AND[ MOVE(8) , CONN ]
+              ├─ tree2: AND[ MOVE(9) , CONN ]
+              ├─ tree3: AND[ MOVE(4) , CONN ]
+              ├─ tree4: AND[ MOVE(3) , CONN ]
+              └─ tree5: AND[ MOVE(5) , CONN ]
 ```
 
-**注意内层嵌套分支组的支路是裸 MOVE 框**（不带外层 AND + 连接器），
-只有最外层（直接挂 NetworkItems 的分支组）的支路才需要 AND+连接器包装。
-这是 IDE 手工绘制自然形成的层次，照搬即可。
+**⚠️ 修正（2026-11-25）**：此前记录说「内层嵌套分支组的支路是裸 MOVE 框」——
+那是用户**尚未改完**的中间状态。用户随后要求把 6 个内层支路也补齐，
+补齐后**内层同样需要 AND + 连接器**。
+
+**结论：无论在哪一层，分支组 Trees 里的支路都应该是「AND 框包住 [MOVE 框, 连接器]」。**
+只有一种例外：分支组 `Input` 槽里的公共前缀触点（如 TRUE）是裸触点。
+
+补齐前后的差异（可作为排查依据）：
+
+| 状态 | 内层支路形态 | 预编译 | 图形完整性 |
+|------|-------------|--------|-----------|
+| 补齐前 | 裸 MOVE 框 | 0 错误 | 功能链断头，无连接器 |
+| 补齐后 | AND[MOVE, CONN] | 0 错误 | 完整，可串接 |
 
 ### 为什么需要外层 AND + 连接器
 
