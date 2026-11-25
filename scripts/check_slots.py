@@ -124,9 +124,14 @@ def check(path):
         n_out = slots_of(el, "OutputItems")
 
         # AND 框没有参数名，豁免「槽位 == 参数数」规则（但它至少 2 槽）
+        # 实测依据（2026-11-25 prg_SlotTest）：1 槽 AND → 预编译报
+        #   [Error] 'AND'需要至少'2' 个操作数
+        #   [Error] 检测到不一致元素 (不正确的输入序列)
+        # ⚠ 单条件 rung 不要建 AND 框，触点直挂 NETITEM.RValue（见 native-structure.md）
         if bt == "AND":
             if n_in < 2:
-                rows.append((bt, ct, "AND 只有 %d 个输入槽（必须 >=2）" % n_in))
+                rows.append((bt, ct, "AND 只有 %d 个输入槽（必须 >=2）；"
+                                      "单条件请让触点直挂 RValue" % n_in))
             continue
 
         # Instance.Operand 三态断言（IDE/编译/往返 diff 都查不出来）

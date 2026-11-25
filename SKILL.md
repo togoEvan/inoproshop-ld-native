@@ -22,7 +22,7 @@ description: 汇川 InoProShop（CODESYS V3.5 SP11 系）LD 梯形图 native XML
 7. **不关闭 IDE**：改名让位法静默替换（先 `prg_X → prg_X_old_tmp` → import → 删旧）
 8. **校验导出文件每次唯一命名**（如 `silent_after_HHMMSS.native`），否则弹覆盖确认框
 9. **图形里引用的每个符号，声明区必须有一行对应声明**（`Interface/TextDocument/TextLines` 里的 `VAR…END_VAR`）。`import_native` 不会替你补声明；漏一个就报一串 `C0046: 没有定义标识符`，**每个引用点一条**（例：8 个未声明变量共 45 次引用 → 45 个错误）
-10. **AND 框（含 NETWORK 顶层 `RValue` 的 AND）至少 2 个输入槽**。单条件 rung 只给 1 个槽时预编译不报错，但构建报 `'AND'需要至少'2' 个操作数`；补一个 `TRUE` 触点（`Operand=TRUE`、内部 `Flags=0`、`IsContact=True`）即可，语义不变
+10. **单条件 rung 不要建 AND 框**，触点节点直接作为 `NETITEM.RValue`。AND 框 ≥2 槽约束的是「框」：1 槽 AND 预编译报 `'AND'需要至少'2' 个操作数` + `检测到不一致元素 (不正确的输入序列)`；裸触点直挂 RValue 实测 0 错误、往返结构不变。旧结论「补一个 `TRUE` 触点占位」**已作废**——TRUE 恒通等于没加，是绕过报错而非正解（2026-11-25 用户质疑后三方对照实测纠正）
 11. **分支组 `{827b9ec2}` 的 `Trees` 必须 ≥ 2 条支路**。只有 1 条时**预编译 0 错误、编译 0 错误，但 IDE 绘制该网络直接崩**：「在绘制该网络的时候遇到错误 / 不能显示内容 / 索引超出了数组界限」，堆栈在 `IBoxTreeParallel`。单支路**不要用 `branch()`、不要套 `NETITEM`**，直接把 AND 框挂 `NetworkItems`（act90 网络3 实测形态）
 12. **改声明区必须锚定 `Interface` 再找 `TextLines`，禁止裸 `find('<Array Name="TextLines"')`**。一份 native 里 `TextLines` 至少 2 处：`Interface` 下的 POU 声明区 + EXECUTE 框 `STSnippet` 里的 ST 代码；`find()` 取文档中**靠前**的那个，而网络列表排在 `Interface` 之前，所以只要网络里有 EXECUTE 框，裸 `find` 就会把声明写进 ST 代码块、真正声明区留着骨架旧变量 → 预编译 40+ 条 `符号 'PROGRAM'/'FUNCTION_BLOCK'/'BOOL' 不能识别`（2026-11-25 实测 48 条）。正确：`raw.find('<Array Name="TextLines"', raw.find('<Single Name="Interface"'))`
 13. **验收脚本「读不到消息」必须抛错，绝不能返回空列表当 0 错误**。按 GUID 匹配分类写成 `except Exception: continue` + `return []`，匹配失败就静默输出 `total=0 / 通过` —— **假通过**。实测预编译真实 48 条 Error，旧脚本报 `total=0 errors=0` 并判「通过」。必须 `raise`，并先打印全部分类便于核对

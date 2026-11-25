@@ -7,6 +7,18 @@
 
 ## [Unreleased]
 
+### 修复
+- **【重大纠正】单条件 rung 不该建 AND 框，触点直挂 `NETITEM.RValue`**（2026-11-25，用户质疑触发）：用户在图形界面上看到每个单条件 rung 都有一个 `TRUE` 常开触点，提出「TRUE 一直接通，相当于没加，可以取消掉，多此一举」。**用户完全正确**——旧文档写的「单条件补一个 `TRUE` 触点占位」只是绕过报错的绕行修法，不是正解。三方对照实测（新建 `prg_SlotTest` 三网络 + `prg_BareContactTest` 单独隔离）：
+  | 写法 | 预编译 `217bc73e` |
+  |------|------------------|
+  | 2 槽 AND `AND[触点, TRUE]` | ✅ 0 错误（可用但冗余） |
+  | 1 槽 AND `AND[触点]` | ❌ `'AND'需要至少'2' 个操作数` + `检测到不一致元素 (不正确的输入序列)` |
+  | **裸触点直挂 RValue** | ✅ **0 错误**，往返导出结构完全保留 |
+
+  结论：「AND 框 ≥2 槽」约束的是**框**，单条件 rung 压根不该有框。同时纠正此前另一条错误结论——「RValue 不能是裸触点」也不对：`RValue` 合法值域是 功能框 `{acfc6f68}` / 分支组 `{827b9ec2}` / 连接器 `{5f9848d3}` / **裸触点 `{9de7f100}`**。`make_srcoil_test.py` 的 `single_cond()` 已从 `and_box([contact(var), contact("TRUE")])` 改为直接 `contact(var)`，重新生成 `prg_SrCoilTest` 后**双分类 0 错误**（5 网络全通过，仅剩「可能无意否定分配」合法警告）。`check_slots.py` 的 1 槽 AND 报错文案补上「单条件请让触点直挂 RValue」提示。已回写 `native-structure.md`（整节重写）、`precompile-errors.md §2/§2b`、README 第 10 条、SKILL 第 10 条。
+  - **教训**：文档里凡是「必须补占位 / 必须加冗余元素」这类绕行修法，都要追问一句「不绕行能不能直接不建这个东西」。这次是靠用户看图形才发现的——生成器自检（check_slots / 双分类 0 错误 / 往返 diff / ld_logic）**四层全过**，因为它们校验的都是「结构合法」，没有一层校验「这个结构该不该存在」。
+  - 附带产物：新增 `scripts/ide/task_delete_objects.py`（按名字删 Application 下对象，参数 `ipc/import_args.json` 的 `names` 列表，日志 `ipc/delete_objects.log`），用于清理验证用负样本 POU。⚠ IDE 脚本内不能用 `__file__`（`eval_file` 是 `exec(compile(src, path, "exec"), g)`，全局字典里没有 `__file__`），必须用 `os.path.dirname(os.path.abspath(sys.argv[0]))`。
+
 ### 新增
 - **【补全性扫描：RValue 值域/触点位掩码/网络级字段/文档级转换标志】** 全工程 127 对象扫描补齐四块拼图：①**RValue 容器完整值域**（143 处）：Null 69 / 功能框直挂 52（**最常见**——AND 框直接当 NETITEM 条件，不必先包 `{5f9848d3}` 容器）/ 容器包分支组 6 / 容器包触点 4；②**触点 `Operand.Flags.Flags` 值域仅 0/1**（1295+62 处，无 P/N 边沿形态——边沿检测必须走 R_TRIG/F_TRIG FB）；③**网络级 `Connectors`/`ILLines` 恒空**（429 网络全空，FBD/IL 视图残留字段，生成时写空 List2）；④**LD 文档级转换标志字段群**（`DefaultViewMode=Ld`、`CodesysLDConverted=True` 等 11 个恒定值字段，骨架已含、生成器不用管，读别人工程时别当网络内容解析）。另补值引脚常量类型规律（BOOL 用 `Boolean=True`，数值/时间型用 `Boolean=False`+对应 `Type`）。已回写 `references/native-structure.md`
 - **【端到端验证：FUNCTION 调用框返回值结构】** 新增 `scripts/examples/make_func_return_test.py`（生成 `prg_FuncRetTest`：两个 Function 框并联——`PackMLScCmdInit` 最简形态 + `PackMLSCCmdSum` 带 VAR_OUTPUT 尾参，全部用本 POU 局部变量 + 工程全局实例）。验证结果：check_slots / check_symbols（`PLC_GLOBAL_SYMBOLS=Master,PML0`）全 PASS；静默导入（`do_replace.py <file> Application`——parent 传 `Application` 可挂 Application 直属，此前默认 `prg_EM01_Logic`）后**双分类 0 错误**；往返导出结构保持：`[0]=Null(ENO)`、`[1]=返回值变量`、`[2]=VAR_OUTPUT`，索引严格一一对应。**两个新坑**：① `sUnitScCmd[REF]` 形参类型不是简单可见名，本地声明 `stSumTest : sUnitScCmd` 预编译报「没有定义标识符」——照模板 `act90_ScCmd` 接法直接接全局实例成员 `PML0.stCmd.stSc`；② 首次导入报 1 个真实预编译错误被验收流程准确抓到（证明流程有效）。已回写 `references/native-structure.md`

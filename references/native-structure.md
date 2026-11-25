@@ -48,26 +48,42 @@ NetworkList
 | 2 | S 置位 | 线圈置位 |
 | 3 | R 复位 | 线圈复位 |
 
-## AND 框的输入元数：至少 2 个槽
+## 单条件 rung：**不要 AND 框**，触点直挂 RValue（2026-11-25 实测纠正）
 
-**任何 AND 框（包括每个 NETWORK 顶层 `RValue` 本身就是的那个 AND）都必须有 ≥ 2 个 `InputItems` 槽。**
+⚠ **本节曾写错，现已实测纠正。** 旧结论是「单条件必须补一个 TRUE 触点占位」，用户看图形后指出「TRUE 常开一直接通，相当于没加，多此一举」——**用户是对的**，正确做法是压根不建 AND 框。
 
-单条件 rung 是高频踩坑点：
+### 三方对照实测（prg_SlotTest / prg_BareContactTest）
 
-| 阶段 | 结果 |
-|------|------|
-| 预编译 `217bc73e` | **0 错误**（不校验元数） |
-| 构建 `97f48d64` | 报 N 条 `'AND'需要至少'2' 个操作数`，N = 单条件 rung 条数 |
+| 写法 | XML 形态 | 预编译 `217bc73e` 结果 |
+|------|----------|------------------------|
+| 2 槽 AND | `RValue=AND[触点, TRUE]` | ✅ 0 错误（模板既有写法，可用但不必要） |
+| **1 槽 AND** | `RValue=AND[触点]` | ❌ `'AND'需要至少'2' 个操作数` + `检测到不一致元素 (不正确的输入序列)` |
+| **裸触点直挂** | `RValue=触点{9de7f100}` | ✅ **0 错误**，往返导出结构完全保留 |
 
-输出映射段（`步标志 → 输出`）、单触点置位段最容易中招。
+### 结论
 
-**修法**：条件数 < 2 时补一个 `TRUE` 触点占位：
+- 「AND 框必须 ≥2 槽」约束的是**框**，不是 rung。
+- 单条件 rung **不应该有框**：把触点节点直接作为 `NETITEM.RValue`。
+- `RValue` 的合法值域实测为三种：功能框 `{acfc6f68}`、分支组 `{827b9ec2}`、连接器 `{5f9848d3}`，**外加裸触点 `{9de7f100}`**（此前误记为「RValue 不能是裸触点」）。
 
+### 生成器写法
+
+```python
+# ✅ 正确：单条件直挂触点
+netitem_box_rvalue(contact(u"xCond"), [coil(u"xOut")])
+
+# ❌ 错误：1 槽 AND 框（预编译直接报错）
+netitem_box_rvalue(and_box([contact(u"xCond")]), [coil(u"xOut")])
+
+# ⚠ 可用但冗余：2 槽 AND + TRUE 占位（模板自带 70 处，但没必要学）
+netitem_box_rvalue(and_box([contact(u"xCond"), contact(u"TRUE")]), [coil(u"xOut")])
 ```
-Operand="TRUE"  内部 Flags=0  IsContact=True
-```
 
-语义不变（`X AND TRUE = X`），图形上多一个 TRUE 常开点。
+> `netitem_box_rvalue` 只做「把第一个 `<Single Type="` 改成 `<Single Name="RValue" Type="`」，与节点类型无关，因此传触点也能用。
+
+### 多条件 rung
+
+条件 ≥2 时仍用 AND 框（`and_box([...])`），这是模板 429 个网络的主流形态（2 槽 18 处、4 槽 4 处、5 槽 6 处、6 槽 4 处、7 槽 2 处）。
 
 > 详细报错对照见 [precompile-errors.md §2b](precompile-errors.md)。
 
