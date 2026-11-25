@@ -43,6 +43,7 @@ InoProShop 的梯形图存在一个 native XML 结构里。这个仓库提供：
 | 8 | 导出文件名每次唯一（`silent_after_HHMMSS.native`），否则弹覆盖确认框。 |
 | 9 | **图形里引用的每个符号，声明区必须有一行对应声明**。`import_native` 不会替你补声明，漏一个就报一串 `C0046: 没有定义标识符`（每个引用点一条）。 |
 | 10 | **AND 框（含 NETWORK 顶层 RValue 的 AND）至少 2 个输入槽**。单条件 rung 只有 1 个槽时预编译不报错，但构建报 `'AND'需要至少'2' 个操作数`；补一个 `TRUE` 触点即可（语义不变）。 |
+| 11 | **分支组 `{827b9ec2}` 的 `Trees` 必须 ≥ 2 条支路**。只有 1 条时**预编译 0 错误、编译 0 错误，但 IDE 绘制该网络直接崩**（「在绘制该网络的时候遇到错误 / 不能显示内容 / 索引超出了数组界限」，堆栈在 `IBoxTreeParallel`）。单支路**不要用 `branch()`、不要套 `NETITEM`**，直接把 AND 框挂 `NetworkItems`。 |
 
 完整对照见 [`references/precompile-errors.md`](references/precompile-errors.md)。
 

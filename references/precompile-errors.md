@@ -47,6 +47,27 @@
 - **根因**：MOVE 框挂错位置（NETITEM.OutputItems 或 NETITEM.RValue）
 - **修复**：MOVE 框直接挂 `Network/NetworkItems`
 
+### 4b. `在绘制该网络的时候遇到错误 / 不能显示内容 / 索引超出了数组界限`
+
+- **特征**：**预编译 0 错误、编译 0 错误**，但梯形图编辑器打开该程序段时弹出红色错误条，
+  梯形图区域一片空白，`堆栈跟踪` 里能看到 `IBoxTreeParallel`（`...Visit(IBoxTreeParallel)`）。
+  程序本身能编译、能下载、能运行，只是**编辑器画不出来**。
+- **根因**：分支组 `{827b9ec2}` 的 `Trees` 只有 **1 条**支路。IDE 的分支组绘制器
+  `IBoxTreeParallel` 按「≥2 条支路」计算几何位置，单支路时内部数组越界。
+- **为什么双分类验收抓不到**：这是**纯图形渲染**问题，不参与预编译也不参与构建。
+- **修复**：单支路时**不要用 `branch()`、不要套 `NETITEM`**，直接把 AND 框挂 `NetworkItems`。
+  参考 `scripts/examples/make_fb_call_test.py` 的 `build_networks()`（网络2 就是单支路直挂）。
+- **自检**：枚举所有分支组的 `Trees` 长度，任何一处为 1 都是隐患。
+
+```python
+# 扫描全部网络，找出 Trees < 2 的分支组
+for e in root.iter():
+    if e.tag == 'Single' and (e.get('Type') or '').startswith('{827b9ec2'):
+        trees = [c for c in e if c.get('Name') == 'Trees'][0]
+        if len(list(trees)) < 2:
+            print('BAD branch: Trees =', len(list(trees)))
+```
+
 ### 5. 预编译分类读出来是 0 但其实有错（假象）
 
 - **根因**：`system.clear_messages()` 清空后，预编译由 IDE 后台**异步**填充，立即读会漏

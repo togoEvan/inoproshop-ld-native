@@ -7,7 +7,12 @@
 
 ## [Unreleased]
 
+### 修复
+- **分支组 `Trees` 只有 1 条支路会让 IDE 绘制网络时崩溃**（用户截图报「在绘制该网络的时候遇到错误 / 不能显示内容 / 索引超出了数组界限」，堆栈在 `IBoxTreeParallel`）。`make_fb_call_test.py` 首版给只有一条 FB 调用的网络套了「单支路分支组 + NETITEM.RValue」，**预编译 0 错误、编译 0 错误，但梯形图编辑器打不开这一级网络**。脚本枚举全部样本后确认：act03_PackMLCmd 的 10 个网络、prg_PackMLCmdTest 的 7 个网络，所有分支组 `Trees` 都是 2，工程里从未出现过 `Trees=1`。修法：单支路时**不用 `branch()`、不套 `NETITEM`**，直接把 AND 框挂 `NetworkItems`（照 act90_PackMLManager 网络3）。改后重新导入，导出结构与实测样本一致，预编译 0 + 编译 0，程序段 2 正常显示
+- `scripts/examples/make_fb_call_test.py`：`build_networks()` 改为「多支路 → 分支组直挂；单支路 → AND 框直挂」；`netitem_rvalue()` 标记为**已弃用**并在 docstring 写明踩坑原因，防止后来者照抄
+
 ### 新增
+- `references/native-structure.md` 新增「⚠ 铁律：分支组的 Trees 必须有 ≥ 2 条支路」一节：症状（绘制错误原文 + 堆栈特征）、根因（`IBoxTreeParallel` 按 ≥2 计算几何）、4 行实测证据表（哪些文件哪些网络 Trees=2 / =1 及绘制结果）、正确与错误结构对照图、参考实现指向 `make_fb_call_test.py` 的 `build_networks()`。并在「关键节点类型」表的分支组一行加上「Trees 必须 ≥2」约束
 - **功能块（FB）调用的 native 结构**（act04_Interface + act90_PackMLManager 实测）。FB 框与 MOVE 框同属 `{acfc6f68}`，但 `CallType` 为 `Function`/`Program`/`FunctionBlock`、`BoxType` 填 POU 名、`EN`/`ENO` 是纯 `<Single Type="bool">True</Single>`（不是条件槽）、`Instance.Operand` 只有 `FunctionBlock` 类才填实例名。槽位规则：**`InputItems` 槽位数 == `InputParam` 参数个数（EN 算一个），槽0 恒为连接器 `{5f9848d3}` 且 `Input=Null`，槽1..n 与去掉 EN 后的参数严格一一对应；`OutputItems` 长度 == `OutputParam` 个数，第 0 项恒为 `<Null />`（对应 ENO）**。另记 `InputParam.Names` 填参数名而非操作数、REF 形参在 Types 里带 `[REF]` 后缀
 - **`scripts/examples/make_fb_call_test.py`：FB 调用生成器**。三类 `CallType` 各生成一个调用（`Function` 的 `PackMLScCmdInit`、`Program` 的 `prg_EM00_Logic`、`FunctionBlock` 的 `PackMLUnitManager` 带实例 12 入 12 出），全部用本 POU 局部变量、不依赖工程其它对象。实测静默导入成功、导出往返结构与源完全一致、**预编译 0 错误 + 编译 0 错误**
 - `references/native-structure.md` 新增「功能块（FB）调用标准结构」一节：与 MOVE 框的 8 项差异对照表、三类 CallType 语义、槽位规则、完整 13 槽结构示例、已验证样本清单
@@ -46,7 +51,7 @@
 - **`SKILL.md`**：铁律新增第 10 条；`examples/make_*.py` 说明改为如实描述（`make_full8`/`make_fix45` 读环境变量，`make_packml_cmd_test` 用相对路径）
 - **清理失效引用**：`docs/usage.md` 失败排查表引用的 `inspect_native.py` 仓库里不存在，改为实际可用的「与样本逐层标签 diff」做法；`references/native-structure.md` 引用的 `task_precompile.py` 不存在，改为 `task_check.py`
 
-### 修复
+### 修复（早期）
 - **PLC_PRG 12 段状态机首版构建报 6 条 `'AND'需要至少'2' 个操作数`**：生成器给单条件 rung
   （上电初始化、进入急停、4 段输出映射）只 append 了 1 个输入槽，AND 框退化成单操作数。
   已改为条件数 < 2 时自动补 `TRUE` 触点；修复后预编译 0 错误、编译 0 错误（仅 CmpLog 库警告）

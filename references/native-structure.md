@@ -27,7 +27,7 @@ NetworkList
 | `{acfc6f68-8e3a-4af5-bf81-3dd512095a46}` | 功能框（AND/MOVE 等） | InputItems 槽位数必须 == InputParam 参数数 |
 | `{9de7f100-1b87-424c-a62e-45b0cfc85ed2}` | 触点/引脚节点 | 外层 `IsContact` 决定身份：True=触点，False=值引脚 |
 | `{c9b2f165-48a2-4a45-8326-3952d8a3d708}` | Operand 操作数 | 内含 Boolean/Flags/Operand/Type/IsCoil/SeriesIndex/Id |
-| `{827b9ec2-2032-40da-9f4e-7670ca2d55a8}` | 并联分支组 | 内部 Trees 放多个支路节点，Mode=Sequential |
+| `{827b9ec2-2032-40da-9f4e-7670ca2d55a8}` | 并联分支组 | 内部 Trees 放多个支路节点，Mode=Sequential；**Trees 必须 ≥2 条，否则 IDE 绘制网络崩溃** |
 | `{505bff94-4c90-4e17-ac28-b8ac69d1b9e2}` | 连接器节点（支路输出接点） | 只有 Id 一个子节点；**完整支路必须有它** |
 | `{5f9848d3-568d-4cc5-9e31-8e28e9607ff1}` | 连接器（带 Flags/Input） | |
 | `{d9a99d73-b633-47db-b876-a752acb25871}` | Network 单网络容器 | |
@@ -345,6 +345,70 @@ xStopped(常闭) ─┬─( ) xProduction
 ```
 
 在 `{5f9848d3}` 里再包一层分支组会报 **「已标识项中有一项的格式无效」**。
+
+## ⚠ 铁律：分支组的 Trees 必须有 ≥ 2 条支路
+
+**单支路分支组会让 IDE 绘制网络时崩溃**，而且**预编译和编译都报 0 错误**，
+极易被误判为"验收通过"。
+
+### 症状
+
+```
+程序段 2:
+  在绘制该网络的时候遇到错误。
+  不能显示内容。
+  索引超出了数组界限。
+  堆栈跟踪
+    在 ...OryOpCeA00OG2UaUNhjyWGetg8LTg(IBoxTreeParallel, Point, Int32&, ...)
+    在 ...Visit(IBoxTreeParallel) ...
+```
+
+即：**程序能编译、能下载、能运行，但梯形图编辑器打不开这一级网络**。
+
+### 根因
+
+`IBoxTreeParallel`（分支组绘制器）按「支路数 ≥ 2」计算几何位置。
+`Trees` 只有 1 项时内部数组访问越界。
+
+### 实测证据（全部用脚本枚举 `Trees` 长度）
+
+| 文件 | 网络 | 分支组位置 | Trees 数 | IDE 绘制 |
+|------|------|-----------|---------|---------|
+| act03_PackMLCmd | net1~net10 | 全部 | **2** | 正常 |
+| prg_PackMLCmdTest | net1~net7 | 全部 | **2** | 正常 |
+| prg_FbCallTest（错版） | net1 | RValue | 2 | 正常 |
+| prg_FbCallTest（错版） | **net2** | **RValue** | **1** | **崩：索引越界** |
+
+结论：**工程里从未出现过 `Trees=1` 的分支组**，这是纯粹的非法构造。
+
+### 正确做法
+
+**只有 1 条支路时，不要用分支组包装**，直接把 AND 框 / 图形节点挂上去：
+
+```
+单支路（正确）                     单支路（错误）
+NetworkItems                       NetworkItems
+└─ AND 框 {acfc6f68}          ✗    └─ NETITEM {9873c309}
+   ├─ 功能框                          └─ RValue = 分支组 {827b9ec2}
+   └─ 连接器 {505bff94}                  └─ Trees = [AND 框]   ← 只有 1 项
+```
+
+参考实现（act90_PackMLManager 网络3 就是这个形态）：
+`scripts/examples/make_fb_call_test.py` 的 `build_networks()`
+
+```python
+# 单支路 -> AND 框直挂，不套分支组
+nets.append(network([and_box([fb_call, connector_end()])], u"注释"))
+
+# 多支路 -> 分支组（≥2 条）可以挂在 NETITEM.RValue 里，也可以直挂
+nets.append(network([branch([and_box([...]), and_box([...])])], u"注释"))
+```
+
+### 与 NETITEM/RValue 的关系
+
+- **分支组** 本身合法，`RValue Type={827b9ec2}` 也合法（act03 全工程都这么写）
+- 但 **分支组必须 ≥2 条支路**
+- **单支路** 时：既不要套 `NETITEM`，也不要用 `branch()`，直接挂 AND 框
 
 ## 分支组 Input 槽的公共前缀
 

@@ -278,7 +278,14 @@ def branch(trees):
 
 
 def netitem_rvalue(node):
-    """梯级：RValue 的 Type 直接是分支组（不套 {5f9848d3}），无输出线圈。"""
+    """【已弃用，勿用】梯级：RValue 里放图形节点。
+
+    实测坑：若 node 是「只有 1 条支路」的分支组，导入后预编译/编译都 0 错误，
+    但 IDE 在【绘制该网络】时抛「索引超出了数组界限」（堆栈在 IBoxTreeParallel），
+    表现为程序段显示「不能显示内容」。
+
+    正确做法见 build_networks()：图形节点直接挂 NetworkItems（照 act04 / act90 网络3）。
+    """
     rv = node.replace(u'<Single Type="', u'<Single Name="RValue" Type="', 1)
     return (u'<Single Type="%s" Method="IArchivable">\n'
             u'  %s\n'
@@ -410,22 +417,28 @@ DECL = [
 
 
 def build_networks():
+    """网络结构：图形节点【直接】挂 NetworkItems，不套 NETITEM/RValue。
+
+    - 有 ≥2 条并联支路 -> 直接放分支组 {827b9ec2}（act04 实测）
+    - 只有 1 条支路     -> 直接放 AND 框 {acfc6f68}（act90 网络3 实测）
+
+    **绝不能**给「单支路分支组」套 NETITEM/RValue：预编译和编译都 0 错误，
+    但 IDE 绘制该网络时抛「索引超出了数组界限」（IBoxTreeParallel 按 ≥2 支路取索引）。
+    """
     nets = []
 
-    # 网络1：Function + Program 两类（同一分支组，两条支路并联）
+    # 网络1：Function + Program 两类（2 条并联支路 -> 分支组直挂）
     b1 = branch([
         and_box([call_packml_sc_cmd_init(), connector_end()]),
         and_box([call_prg_em00(), connector_end()]),
     ])
-    nets.append(network([netitem_rvalue(b1)],
+    nets.append(network([b1],
                         u"// ~~~~ Function 类 PackMLScCmdInit + Program 类 prg_EM00_Logic ~~~~"))
 
-    # 网络2：FunctionBlock 类（带实例，12 入 12 出）
-    b2 = branch([
-        and_box([call_packml_unit_manager(), connector_end()]),
-    ])
-    nets.append(network([netitem_rvalue(b2)],
-                        u"// ~~~~ FunctionBlock 类 PackMLUnitManager（实例 fbMgrTest，12 入 12 出）~~~~"))
+    # 网络2：FunctionBlock 类（单支路 -> AND 框直挂，不套分支组）
+    nets.append(network(
+        [and_box([call_packml_unit_manager(), connector_end()])],
+        u"// ~~~~ FunctionBlock 类 PackMLUnitManager（实例 fbMgrTest，12 入 12 出）~~~~"))
 
     return nets
 

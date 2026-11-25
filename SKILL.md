@@ -23,6 +23,7 @@ description: 汇川 InoProShop（CODESYS V3.5 SP11 系）LD 梯形图 native XML
 8. **校验导出文件每次唯一命名**（如 `silent_after_HHMMSS.native`），否则弹覆盖确认框
 9. **图形里引用的每个符号，声明区必须有一行对应声明**（`Interface/TextDocument/TextLines` 里的 `VAR…END_VAR`）。`import_native` 不会替你补声明；漏一个就报一串 `C0046: 没有定义标识符`，**每个引用点一条**（例：8 个未声明变量共 45 次引用 → 45 个错误）
 10. **AND 框（含 NETWORK 顶层 `RValue` 的 AND）至少 2 个输入槽**。单条件 rung 只给 1 个槽时预编译不报错，但构建报 `'AND'需要至少'2' 个操作数`；补一个 `TRUE` 触点（`Operand=TRUE`、内部 `Flags=0`、`IsContact=True`）即可，语义不变
+11. **分支组 `{827b9ec2}` 的 `Trees` 必须 ≥ 2 条支路**。只有 1 条时**预编译 0 错误、编译 0 错误，但 IDE 绘制该网络直接崩**：「在绘制该网络的时候遇到错误 / 不能显示内容 / 索引超出了数组界限」，堆栈在 `IBoxTreeParallel`。单支路**不要用 `branch()`、不要套 `NETITEM`**，直接把 AND 框挂 `NetworkItems`（act90 网络3 实测形态）
 
 ## 结构速查（详见 references/）
 
@@ -38,7 +39,7 @@ description: 汇川 InoProShop（CODESYS V3.5 SP11 系）LD 梯形图 native XML
   - **任何一层（含嵌套分支组内部）都要这样包装**；唯一例外是分支组 `Input` 槽的公共前缀触点
   - 写树形结构必须从 `assets/natives/user_fixed.native` 克隆（8 支路全完整版）
 - EN 槽放 AND 框（内含条件触点，至少 2 个），IN 槽放常量引脚（IsContact=False + 内部 Flags=0）
-- 触点并联：分支组 `{827b9ec2}` 内 Trees 放多个支路
+- 触点并联：分支组 `{827b9ec2}` 内 Trees 放多个支路（**必须 ≥2 条**，单支路见铁律 11）
 - 触点/线圈取反、置位、复位都用 Operand 内部 Flags 位掩码：1=NOT、2=S、3=R
 - **功能链末端的 `ENO` 引脚可以删掉**（不往后连接），实测预编译 0 错误
 - **公共前缀去重**：公共 TRUE 放分支组 `Input` 后，支路 EN 条件框里不要再放 TRUE（否则图形出现两个 TRUE 串联）
