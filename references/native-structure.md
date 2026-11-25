@@ -976,13 +976,38 @@ InputParam.Types  = ['BOOL']
 InputItems        = 1 槽（连接器）
 OutputParam.Names = ['ENO']
 OutputItems       = 1 项 <Null/>
-Instance.Operand  = ''      ← ⚠ 空字符串，不是 <Null/>！与 FB 调用不同
-Instance.Type     = ''      ← 也是空
+Instance.Operand  = <Null/>   ← ⚠ 必须是 Null，不是空 Single！
+Instance.Type     = ''        ← 类型名是空串（<Single Name="Type" Type="string" />）
 IsBoxType         = True
 ```
 
-**⚠ `Action` 调用的 `Instance.Operand` 是空字符串 `""`**（`<Single Name="Operand" Type="string"></Single>`），
-不是 `<Null/>`。FB 调用才是 `Operand="实例名"`。写错时导入能过，但语义不对。
+**⚠⚠ `Action` 调用的 `Instance.Operand` 必须是 `<Null Name="Operand" />`。**
+
+> **纠正错误结论（2026-11-25）**：本文原写「Action 的 `Instance.Operand` 是空字符串
+> `<Single Name="Operand" Type="string"></Single>`，不是 `<Null/>`」——**这是错的**。
+> 该结论是从「自己导入后再导出的文件」里反推出来的，属于**循环论证**：IDE 把自己
+> 写进去的空 `<Single>` 原样导出，于是"验证"通过，实际从没对照过真实模板。
+> 对照 InoPack 真实模板的 **16 个 Action 框，全部是 `<Null Name="Operand" />`**。
+>
+> **写错的现象**：IDE 会在该框**上方多画一个红框的、可填写参数的小方框**。
+> 用户两次反馈：「正常调用没有这个小方块」「actAbs_NOPE 上面还是有小方框可以
+> 填写参数」——后一句是关键，`actAbs_NOPE` 是故意写的**不存在的** BoxType，它也
+> 有方框，说明方框与 BoxType 合法性、与 `Flags.Fixed` **都无关**，纯粹是
+> `Operand` 节点形态问题。
+
+**`Instance.Operand` 三态规律（按 `CallType` 决定，0 例外）**：
+
+| CallType | `Instance.Operand` | 说明 |
+|---|---|---|
+| `FunctionBlock` | `<Single Type="string">实例名</Single>` | 如 `fbPtpV[0]`、`afbCylCtrl[0]` |
+| `Action` | `<Null Name="Operand" />` | 只有 EN/ENO |
+| `Function` | `<Null Name="Operand" />` | 无实例 |
+| `Program` | `<Null Name="Operand" />` | 无实例 |
+| `And` | `<Null Name="Operand" />` | |
+| `Move` | `<Null Name="Operand" />` | |
+
+**只有 FB 才需要实例名**，其余一律 `Null`。写成空 `<Single>` 就会多画一个小方框，
+而**预编译、编译、往返 diff 三关全部通过**——只能靠人眼看图形或静态断言发现。
 
 ### 轴控数据结构
 

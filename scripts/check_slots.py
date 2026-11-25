@@ -21,6 +21,32 @@ import xml.etree.ElementTree as ET
 
 G_BOX = "{acfc6f68-8e3a-4af5-bf81-3dd512095a46}"
 
+# Instance.Operand 三态规律（2026-11-25 实测确认）：
+#   FunctionBlock -> <Single Name="Operand">实例名</Single>
+#   Action / Function / Program        -> <Null Name="Operand" />
+# 写错形态 IDE 不报错，但会在框上方多画一个可填参数的小方框
+# （用户两次截图反馈证实），且往返 diff 查不出来，只能靠这里断言。
+_OP_NULL_CT = {"Action", "Function", "Program"}
+
+
+def check_operand(el, bt, ct):
+    """校验 Instance.Operand 形态与 CallType 匹配。"""
+    inst = child(el, "Instance")
+    if inst is None:
+        return None
+    op = child(inst, "Operand")
+    if op is None:
+        return None
+    is_null = (op.tag == "Null")
+    if ct in _OP_NULL_CT and not is_null:
+        return ("CallType=%s 的 Instance.Operand 必须是 <Null/>，"
+                "实际是 <%s>（空 <Single> 会让 IDE 多画可填参数小方框）"
+                % (ct, op.tag))
+    if ct == "FunctionBlock" and is_null:
+        return ("CallType=FunctionBlock 的 Instance.Operand 必须是"
+                "<Single>实例名</Single>，实际是 <Null/>")
+    return None
+
 
 def child(el, name):
     for c in el:
@@ -81,6 +107,11 @@ def check(path):
             if n_in < 2:
                 rows.append((bt, ct, "AND 只有 %d 个输入槽（必须 >=2）" % n_in))
             continue
+
+        # Instance.Operand 三态断言（IDE/编译/往返 diff 都查不出来）
+        msg = check_operand(el, bt, ct)
+        if msg:
+            rows.append((bt, ct, msg))
 
         if n_in != len(in_names):
             rows.append((bt, ct, "输入槽 %d != InputParam %d %s"

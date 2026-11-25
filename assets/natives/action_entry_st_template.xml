@@ -1,0 +1,109 @@
+<Single Type="{6198ad31-4b98-445c-927f-3258a0e82fe3}" Method="IArchivable">
+      <Single Name="IsRoot" Type="bool">False</Single>
+      <Single Name="MetaObject" Type="{81297157-7ec9-45ce-845e-84cab2b88ade}" Method="IArchivable">
+        <Single Name="Guid" Type="System.Guid">177b08ea-476d-4a16-b314-2f73d684a4da</Single>
+        <Single Name="ParentGuid" Type="System.Guid">75de93dd-b6ff-45ae-b091-7a019e05cacb</Single>
+        <Single Name="Name" Type="string">act00_FirstCycle</Single>
+        <Dictionary Type="{2c41fa04-1834-41c1-816e-303c7aa2c05b}" Name="Properties" />
+        <Single Name="TypeGuid" Type="System.Guid">8ac092e5-3128-4e26-9e7e-11016c6684f2</Single>
+        <Array Name="EmbeddedTypeGuids" Type="System.Guid">
+          <Single Type="System.Guid">3b83b776-fb25-43b8-99f2-3c507c9143fc</Single>
+        </Array>
+        <Single Name="Timestamp" Type="long">638030925967794437</Single>
+      </Single>
+      <Single Name="Object" Type="{8ac092e5-3128-4e26-9e7e-11016c6684f2}" Method="IArchivable">
+        <Single Name="Implementation" Type="{3b83b776-fb25-43b8-99f2-3c507c9143fc}" Method="IArchivable">
+          <Single Name="TextDocument" Type="{f3878285-8e4f-490b-bb1b-9acbb7eb04db}" Method="IArchivable">
+            <Array Name="TextLines" Type="{a5de0b0b-1cb5-4913-ac21-9d70293ec00d}">
+              <Single Type="{a5de0b0b-1cb5-4913-ac21-9d70293ec00d}" Method="IArchivable">
+                <Single Name="Id" Type="long">187</Single>
+                <Null Name="Tag" />
+                <Single Name="Text" Type="string">(* ~~~~~~~~~~~~~~~~~~~~~Header Files~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~</Single>
+              </Single>
+              <Single Type="{a5de0b0b-1cb5-4913-ac21-9d70293ec00d}" Method="IArchivable">
+                <Single Name="Id" Type="long">188</Single>
+                <Null Name="Tag" />
+                <Single Name="Text" Type="string"> * Function： 		任务首个周期执行代码内容</Single>
+              </Single>
+              <Single Type="{a5de0b0b-1cb5-4913-ac21-9d70293ec00d}" Method="IArchivable">
+                <Single Name="Id" Type="long">189</Single>
+                <Null Name="Tag" />
+                <Single Name="Text" Type="string"> * Created：		2022-09-25</Single>
+              </Single>
+              <Single Type="{a5de0b0b-1cb5-4913-ac21-9d70293ec00d}" Method="IArchivable">
+                <Single Name="Id" Type="long">190</Single>
+                <Null Name="Tag" />
+                <Single Name="Text" Type="string"> * Edit History：</Single>
+              </Single>
+              <Single Type="{a5de0b0b-1cb5-4913-ac21-9d70293ec00d}" Method="IArchivable">
+                <Single Name="Id" Type="long">191</Single>
+                <Null Name="Tag" />
+                <Single Name="Text" Type="string"> * </Single>
+              </Single>
+              <Single Type="{a5de0b0b-1cb5-4913-ac21-9d70293ec00d}" Method="IArchivable">
+                <Single Name="Id" Type="long">140</Single>
+                <Null Name="Tag" />
+                <Single Name="Text" Type="string"> *)  </Single>
+              </Single>
+              <Single Type="{a5de0b0b-1cb5-4913-ac21-9d70293ec00d}" Method="IArchivable">
+                <Single Name="Id" Type="long">105</Single>
+                <Null Name="Tag" />
+                <Single Name="Text" Type="string"></Single>
+              </Single>
+              <Single Type="{a5de0b0b-1cb5-4913-ac21-9d70293ec00d}" Method="IArchivable">
+                <Single Name="Id" Type="long">102</Single>
+                <Null Name="Tag" />
+                <Single Name="Text" Type="string">//* 上电给轴使能 ~~~~~</Single>
+              </Single>
+              <Single Type="{a5de0b0b-1cb5-4913-ac21-9d70293ec00d}" Method="IArchivable">
+                <Single Name="Id" Type="long">183</Single>
+                <Null Name="Tag" />
+                <Single Name="Text" Type="string">	SetAryBOut(</Single>
+              </Single>
+              <Single Type="{a5de0b0b-1cb5-4913-ac21-9d70293ec00d}" Method="IArchivable">
+                <Single Name="Id" Type="long">184</Single>
+                <Null Name="Tag" />
+                <Single Name="Text" Type="string">		xFirstPos:= 		EM1.astPtpR[0].xCmdPwr,</Single>
+              </Single>
+              <Single Type="{a5de0b0b-1cb5-4913-ac21-9d70293ec00d}" Method="IArchivable">
+                <Single Name="Id" Type="long">185</Single>
+                <Null Name="Tag" />
+                <Single Name="Text" Type="string">		stFirstSub:= 	EM1.astPtpR[0],</Single>
+              </Single>
+              <Single Type="{a5de0b0b-1cb5-4913-ac21-9d70293ec00d}" Method="IArchivable">
+                <Single Name="Id" Type="long">186</Single>
+                <Null Name="Tag" />
+                <Single Name="Text" Type="string">		diAryNum:= 	EM1.c_iAxisRNum, </Single>
+              </Single>
+              <Single Type="{a5de0b0b-1cb5-4913-ac21-9d70293ec00d}" Method="IArchivable">
+                <Single Name="Id" Type="long">174</Single>
+                <Null Name="Tag" />
+                <Single Name="Text" Type="string">		xValue:= 		TRUE);</Single>
+              </Single>
+              <Single Type="{a5de0b0b-1cb5-4913-ac21-9d70293ec00d}" Method="IArchivable">
+                <Single Name="Id" Type="long">176</Single>
+                <Null Name="Tag" />
+                <Single Name="Text" Type="string"></Single>
+              </Single>
+              <Single Type="{a5de0b0b-1cb5-4913-ac21-9d70293ec00d}" Method="IArchivable">
+                <Single Name="Id" Type="long">177</Single>
+                <Null Name="Tag" />
+                <Single Name="Text" Type="string">	</Single>
+              </Single>
+            </Array>
+          </Single>
+        </Single>
+        <Single Name="UniqueIdGenerator" Type="string">191</Single>
+      </Single>
+      <Single Name="ParentSVNodeGuid" Type="System.Guid">75de93dd-b6ff-45ae-b091-7a019e05cacb</Single>
+      <Array Name="Path" Type="string">
+        <Single Type="string">Device</Single>
+        <Single Type="string">PLC 逻辑</Single>
+        <Single Type="string">Application</Single>
+        <Single Type="string">Main</Single>
+        <Single Type="string">Unit00</Single>
+        <Single Type="string">EM01</Single>
+        <Single Type="string">prg_EM01_Logic</Single>
+      </Array>
+      <Single Name="Index" Type="int">-1</Single>
+    </Single>

@@ -248,3 +248,132 @@ def xml_text(s):
 **为什么不报编译错**：IDE 导入时把多出来的 `Null` 当垃圾丢掉了，
 注释文本本身没丢，功能完全正常。**只有往返 diff 能发现**（而且报的是错位，
 不是直白的「注释有问题」）。
+
+---
+
+## 类型 D：IDE 图形异常（不报错，但画错）
+
+### D-1 框上方多出一个「可填写参数的小方框」
+
+**现象**：LD 网络里的 Action 调用框（`CallType=Action`）上方，多画出一个
+**红框的、内部空白、可以填参数**的小方框。正常调用没有这个方块。
+
+**错在哪**：`Instance/Operand` 写成了空的 `<Single>`：
+
+```xml
+<!-- ❌ 错：IDE 把它当成「一个可填写的操作数槽」画出来 -->
+<Single Name="Operand" Type="string" />
+```
+
+**对的是什么**：按 `CallType` 分三态，只有 FB 才需要实例名：
+
+```xml
+<!-- FunctionBlock：写实例名 -->
+<Single Name="Operand" Type="string">fbPtpV[0]</Single>
+
+<!-- Action / Function / Program / And / Move：一律 Null -->
+<Null Name="Operand" />
+```
+
+全量统计（16 个真实 Action 框 + 各类型样本）：Action→`Null`、Function→`Null`、
+Program→`Null`、And→`Null`、Move→`Null`、FunctionBlock→`Single(实例名)`，0 例外。
+
+**排查过程（记下来，别再走弯路）**：
+1. 第一轮误判为框级 `Flags.Fixed` 问题（`Fixed=False` → 多画占位框）。改了
+   `Fixed=True` 后用户反馈**小方框还在**。
+2. 用户第二句是关键线索：「**actAbs_NOPE 上面还是有小方框可以填写参数**」——
+   `actAbs_NOPE` 是故意写的**不存在的** BoxType，它也有方框，说明方框与
+   BoxType 合法性无关、与 `Fixed` 也无关。
+3. 于是做「真实模板 Action 框 vs 我生成的 Action 框」**全字段 diff**，
+   唯一差异就是 `Operand` 的 `Null` vs 空 `Single`。
+
+**怎么自检**（一行命令）：
+
+```python
+# 遍历 native，所有非 FunctionBlock 的框，Operand 必须是 Null
+for e in walk(root):
+    if e.get('Type') != G_BOX:
+        continue
+    ct = txt(e, 'CallType')
+    op = get(get(e, 'Instance'), 'Operand')
+    if ct != 'FunctionBlock' and op.tag != 'Null':
+        print('BAD', ct, txt(e, 'BoxType'))
+```
+
+**为什么不报编译错**：空 `Single` 是完全合法的 XML，语义上等价于「未填写」，
+编译器不管图形怎么画。**预编译、编译、往返 diff 三关全部通过**，只有人眼看图形
+才能发现——所以生成器里必须用上面的断言自查。
+
+**附带教训（循环论证）**：最初「Action 的 Operand 是空字符串不是 Null」这个
+结论，是从**自己导入后再导出的文件**里反推出来的——IDE 把自己写进去的空
+`Single` 原样导出，于是"验证"通过。**自己验证自己 = 没验证**。正确做法是
+拿**真实模板**（InoPack 导出的原始文件）当基准做 diff。
+
+---
+
+## 类型 E：验收链路本身失效（最坑的一类）
+
+### E-1 所有编译命令都走缓存，报 0 错误
+
+**现象**：工程里放一个必然报错的 POU（如 `BoxType=actAbs_NOPE`），
+执行任何编译命令都报 0 错误、0 警告。
+
+**实测结果（2026-11-25，逐个命令验证）**：
+
+| 命令 | 预编译分类 | 编译分类 |
+|---|---|---|
+| 清理 | 0 条 | 「此应用程序是最新的」 |
+| 重新编译 | 0 条 | 「此应用程序是最新的」 |
+| （旧）编译 | 0 条 | 「此应用程序是最新的」 |
+| （旧）重新编译 | 0 条 | 真跑构建，「编译完成 0 错误」 |
+| 检查所有对象 | 0 条 | 真跑构建，0 错误 |
+| 运行静态分析 | 0 条 | 真跑构建，0 错误 |
+| 生成代码 | 0 条 | 「此应用程序是最新的」 |
+| 生成二进制文件 | 0 条 | 真跑构建，0 错误 |
+| 编译 | 0 条 | 「此应用程序是最新的」 |
+
+**结论**：**没有任何一条编译命令能替代「导入触发的自动检查」**。
+预编译消息只在 `import_native()` 那一刻产生。
+
+**对的做法**：
+
+1. `do_replace.py` 导入
+2. 主机侧 `time.sleep(1.5)`（**不在 IDE 里**）
+3. 调 `task_check.py` **读一次快照**，看 `check.log`
+
+**三个必踩的坑**：
+
+- **绝不能 `clear_messages`**：消息是导入时产生的，清掉就永久消失，
+  后续任何编译都不会重算。
+- **不要用「声明改一个字符再改回」强制变脏**：实测无效，照样读 0 条。
+- **不要在 IDE 脚本里 `sleep` / 轮询**：IDE 脚本跑在主线程，会把界面**冻死**
+  （用户原话：「你在等待的时候软件卡死了」「还是卡死」）。计时重试放主机侧。
+
+### E-2 负样本造错了，误判为「验收链路失效」
+
+**现象**：造负样本 `actAbs_ZZZ` 导入后编译 0 错误，以为验收脚本坏了，
+折腾一轮排查。
+
+**错在哪**：用 `s.replace('>actAbs<', '>actAbs_ZZZ<')` 一次替换了两处——
+`BoxType` **和** action Entry 的 `Name`。于是 `actAbs_ZZZ` 变成一个
+**真实存在的合法 action**，编译 0 错误是**正确结果**。
+
+**对的是什么**：只替换 `BoxType` 那一处：
+
+```python
+old = u'<Single Name="BoxType" Type="string">actAbs</Single>'
+assert s.count(old) == 1
+s = s.replace(old, u'<Single Name="BoxType" Type="string">actAbs_NOPE</Single>')
+```
+
+Entry 的 `Name` 保持 `actAbs`，这样才是「调用了一个不存在的 action」。
+
+**怎么自检**：改完立刻 `grep -c` 数两处：
+
+```
+grep -c "actAbs_NOPE"            → 1（只有 BoxType）
+grep -c 'Name="Name" Type="string">actAbs<'  → 1（Entry 名没动）
+```
+
+**元教训**：反向验证是唯一能证明验收链路有效的手段，但**负样本本身必须造对**。
+负样本报错 ≠ 链路正常；负样本报 0 错误时，先怀疑样本，再怀疑链路。

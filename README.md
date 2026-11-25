@@ -49,11 +49,19 @@ InoProShop 的梯形图存在一个 native XML 结构里。这个仓库提供：
 | 14 | **`OutputItems` 项数必须等于 `OutputParam` 个数，且 `OutputParam` 含不含 `ENO` 由 `EN`/`ENO` 字段决定**。`EN/ENO=True` 的框（Function/Program/常规 FB/EXECUTE）第一项是 `ENO`，之后才是真输出；**`TON` 是 `EN/ENO=False`，`OutputParam=['Q','ET']` 不含 ENO**。别把「第 0 项恒为 `<Null/>` 对应 ENO」当死规矩——照抄会给 TON 少写一个输出项。19/19 样本实测 0 例外。⚠ 这条**预编译、编译、往返 diff 全都查不出来**（IDE 静默接受），只能靠「项数 vs 参数数」比对发现。 |
 | 15 | **往 XML 文本节点里塞自由文本，必须转义 `<` `>` `&`**。网络注释、声明区、ST 代码都是直接拼进 `<Single Name="Comment" Type="string">…</Single>` 的；注释里只要出现 `<Null/>`、`<>` 之类的字面量，XML 解析器就把它当成**真实子节点**。2026-11-25 实测：注释写 `不是 <Null/>`，导入后该 Network 的 `Comment` 下凭空多出一个 `Null` 子节点，节点数 363 vs 362，`rt_diff` 从 #275 起整段错位报 55 处 diff。**排查提示**：`rt_diff` 报「节点数不同 + 从某一处开始整段错位」时，先看那一处的父节点是不是 `Comment`/`Text`——十有八九是没转义。统一用 `make_ld_learn.xml_text()`。 |
 
+| 16 | **`Instance.Operand` 只有 FB 才写实例名，其余一律 `<Null/>`；写成空 `<Single>` 会在框上方多画一个可填写的小方框**。规律（按 `CallType`）：`FunctionBlock` → `<Single Type="string">实例名</Single>`；`Action` / `Function` / `Program` / `And` / `Move` → `<Null Name="Operand" />`。2026-11-25 实测：`action_box()` 写成空 Single，IDE 在 actAbs 框上方画出一个**可填参数的红色小方框**；用户两次指出「正常调用没有这个小方块」「actAbs_NOPE 上面还是有小方框可以填写参数」——第二句正是关键线索：连名字错误的框也带方框，说明与 `Flags.Fixed`、与 BoxType 是否合法**都无关**，纯粹是 Operand 节点形态问题。全量对照 16 个真实 Action 框，**全部是 `<Null/>`**。⚠ 这条预编译/编译/往返 diff 全都查不出来。 |
+| 17 | **不要在 IDE 脚本里 `time.sleep()` 或轮询消息——会把 InoProShop 界面冻住**。IDE 脚本跑在主线程上，`sleep(8)` + `process_messageloop()` 循环直接导致用户反馈「你在等待的时候软件卡死了」「还是卡死」。正确分工：**IDE 侧脚本只做「读一次、写文件、立刻返回」（<1s），计时与重试全部放主机侧 Python**。`scripts/ide/task_check.py` 已改为单次快照、零 sleep、零循环。 |
+| 18 | **验收消息只能靠「导入后立刻读」，任何编译命令都走缓存、都读不到真实错误**。2026-11-25 逐个实测（工程里放必然报错的 `BoxType=actAbs_NOPE`）：`清理` / `重新编译` / `（旧）编译` / `检查所有对象` / `运行静态分析` / `生成代码` / `生成二进制文件` / `编译` → **预编译分类全部 0 条**；只有 `（旧）重新编译` 会真跑构建，但预编译仍是 0。**只有导入动作触发的自动检查会产出真实预编译消息**。⚠ 另有两个致命细节：① **绝不能 `clear_messages`**——错误消息是导入时产生的，清掉就永久丢失；② 不要用「把声明改一个字符再改回」来强制变脏，实测无效。 |
+| 19 | **action 的 ST 体只能引用宿主 POU 声明区里的变量**。action 属于哪个 POU，就只认那个 POU 的 `VAR`。2026-11-25 实测：`prg_AxisCallTest` 的 `actAbs` 写了 `xPtpCond := ...`，而 `xPtpCond` 只在 `fb_AxisSkelTest` 里声明 → 预编译报 `[Error] actAbs | 没有定义标识符'xPtpCond'`。三个特征：① 消息归属对象是 **action 名**不是 POU 名；② 只在**预编译**分类，不在编译分类；③ 编译分类照样报「0 错误,0 警告」。 |
+| 20 | **造负样本必须精确替换目标字段，不能连带改掉同名字段**。2026-11-25 踩坑：用 `s.replace('>actAbs<', '>actAbs_ZZZ<')` 造负样本，结果把 `BoxType` **和** action Entry 的 `Name` 一起改了 → `actAbs_ZZZ` 成了真实存在的合法 action，编译 0 错误是**正确结果**，却被误判为「验收链路失效」，白折腾一轮。正确做法：只改 `<Single Name="BoxType" Type="string">actAbs</Single>` 这一处，Entry 名保持 `actAbs`；改完先 `grep -c` 自查（BoxType 1 处、Entry Name 1 处）。 |
+
 完整对照见 [`references/precompile-errors.md`](references/precompile-errors.md)。
 
 > **铁律 12/13 的元教训**：往返 diff PASS **不等于**内容正确。上次 `rt_diff.py` 两个 POU 都是 `total structural diffs: 0`，但源文件本身就是错的——IDE 把错误原样保留，往返当然一致。**往返一致只能证明「IDE 没改写我的结构」，不能证明「我的结构是对的」**，必须配合双分类 0 错误 + 语义抽查（如打印声明区首行确认是 `PROGRAM xxx` / `FUNCTION_BLOCK xxx`）。
 >
 > **铁律 15 的反向提醒**：这条与 12/13 互补——12/13 说「diff PASS 不算数」，15 说「diff FAIL 可能是自己生成的 XML 不合法」。看到 diff FAIL 先别改结构，**先确认报错位置是不是 `Comment`/`Text` 这类文本节点**。
+>
+> **铁律 18 的元教训（本轮最大教训）**：我连续三轮把「编译命令报 0 错误」当成「代码没问题」，实际上**所有编译命令都在读缓存**。真正的错误消息只在**导入瞬间**产生一次，`clear_messages` 一清就永久消失。所以验收流程必须是：**导入 → 等 1~2 秒（主机侧）→ 单次读快照**，而不是「清消息 → 编译 → 读」。另外，反向验证是唯一能证明验收链路有效的手段——但负样本本身必须造对（铁律 20）。
 
 ---
 
@@ -174,6 +182,8 @@ inoproshop-ld-native/
 │   ├── precompile-errors.md      # 错误 → 根因 → 修复（8 类，含 2b 单条件 AND）
 │   └── mcp-bridge.md             # 桥的协议、命令、消息分类
 ├── scripts/
+│   ├── check_slots.py            # 结构自检：槽位数 vs 参数数 + Operand 三态断言
+│   ├── check_symbols.py          # 符号自检：网络引用 vs 声明区
 │   ├── bridge.py                 # IPC 客户端（本地 Python 3）
 │   ├── do_replace.py             # 静默导入入口（本地 Python 3）
 │   ├── launch_ide_daemon.py      # 启动 IDE + 注入 daemon
@@ -184,7 +194,7 @@ inoproshop-ld-native/
 │   ├── ide/                      # IDE 内 IronPython 2.7 脚本
 │   │   ├── _base.py              # 路径自解析（IDE 内环境变量无效，靠它定位）
 │   │   ├── plc_daemon.py         # 守护进程（命令分发）
-│   │   ├── task_check.py         # 预编译检查（验收必用）
+│   │   ├── task_check.py         # 验收检查（必用，三分类单次快照）
 │   │   ├── task_silent_import.py # 静默导入核心
 │   │   ├── task_readnow.py       # 读当前全部消息（排查异步）
 │   │   └── task_export_fixed.py  # 导出指定 POU（学结构用）

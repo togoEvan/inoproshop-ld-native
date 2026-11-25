@@ -210,7 +210,7 @@ def param_block(name, names, types):
 
 
 def fb_box(box_type, instance, in_items, in_names, in_types,
-           out_names, out_types, out_vars=None, en=True):
+           out_names, out_types, out_vars=None, en=True, fixed=True):
     """通用功能框（FunctionBlock / Function / Program 类）。
 
     参数：
@@ -219,6 +219,20 @@ def fb_box(box_type, instance, in_items, in_names, in_types,
       in_items   —— 已渲染的 InputItems 子节点列表，长度必须 == len(in_names)
       out_vars   —— 已渲染的 OutputItems 子节点列表（第 0 项由本函数自动补 <Null/>）
       en         —— EN/ENO 字段值。FunctionBlock 常见 True；TON 实测 False
+      fixed      —— 框级 Flags.Fixed。**默认 True**，见下方铁律。
+
+    ⚠ 铁律（2026-11-25 用户截图纠正）：框级 `Flags.Fixed` 决定引脚是否「可扩展」。
+      写 False 时 IDE 会在框上多画一个**空的引脚占位小方块**（用户看到的多余方块），
+      真实调用框不会这样。全量样本统计（ipc/*.native 全扫）：
+        Action        → Fixed=True   （act0_Ptp / act00_FirstCycle ... 无一例外）
+        Function      → Fixed=True   （EventRecordV2 / PackMLSCCmdSum ...）
+        FunctionBlock → Fixed=True   （HC_ValveCtrl / HC_MovePtpV / EventManager ...）
+        Program       → Fixed=True   （prg_EM00_Logic / prg_UN00 ...）
+        MOVE          → Fixed=True
+        AND           → Fixed=False  （唯一固定为 False 的常规框）
+        TON           → Fixed=False
+        EXECUTE       → 两种都出现过，均合法
+      所以除 AND/TON 外一律传 fixed=True；漏写就变成 False（旧默认），会出现多余小方块。
     """
     body = u"\n".join(in_items)
     # Instance
@@ -276,7 +290,7 @@ def fb_box(box_type, instance, in_items, in_names, in_types,
             u'  <Null Name="STSnippet" />\n'
             u'  <Single Name="IsBoxType" Type="bool">True</Single>\n'
             u'  <Single Name="Id" Type="long">%d</Single>\n'
-            u'</Single>' % (G_BOX, en_v, en_v, flags_block(0), body,
+            u'</Single>' % (G_BOX, en_v, en_v, flags_block(0, fixed), body,
                             G_CALLTYPE, G_OPERAND, flags_block(0),
                             inst_operand, inst_type, conn_flags_block(), nid(),
                             G_OUTPUTS, out_body,
@@ -394,7 +408,9 @@ def ton_box(instance, in_slot, pt_var):
         # ⚠ TON 的 OutputParam 是 ['Q','ET']，**没有 ENO**，所以不能套「第 0 项恒为 Null」。
         # 两个输出都未接线 → 两项都是 <Null/>（InoPack HC_ValveCtrl 实测 7/7 如此）。
         out_vars=[u'   <Null/>', u'   <Null/>'],
-        en=False)
+        en=False,
+        # ⚠ TON 是仅有的两个 Fixed=False 的框之一（另一个是 AND），别改成 True
+        fixed=False)
 
 
 def netitem_box_rvalue(box_node, coils, inverted=False):
@@ -528,9 +544,76 @@ def find_block_end(s, start, open_tag, close_tag):
     return -1
 
 
-def build_pou(pou_name, decl, nets, out_path):
-    """把骨架改成指定 POU：换名、换 Guid、换网络、换声明区。"""
+G_ENTRY = u"{6198ad31-4b98-445c-927f-3258a0e82fe3}"
+G_METAOBJ = u"{81297157-7ec9-45ce-845e-84cab2b88ade}"
+G_TYPE_ACTION = u"{8ac092e5-3128-4e26-9e7e-11016c6684f2}"
+G_IMPL_ST = u"{3b83b776-fb25-43b8-99f2-3c507c9143fc}"
+
+
+def action_entry(action_name, parent_guid, st_lines, path=None):
+    """action Entry（IsRoot=False、TypeGuid=8ac092e5、没有 Interface）。
+
+    ⚠ 铁律（2026-11-25 实测）：LD 里画一个 `CallType=Action` 的调用框，
+    要求这个 action **在本 POU 的 EntryList 里真实存在**（TypeGuid=8ac092e5
+    的 Entry）。只在网络里写 `BoxType=actAbs` 而不建 Entry，
+    预编译会报 `没有定义标识符'actAbs'`——而且**只有全量「重新编译」才会报**，
+    增量「检查程序」一条消息都没有，极易漏检。
+
+    ⚠ 另一个坑（同一轮踩到）：`Object` 的 Type 属性必须带花括号
+    `{8ac092e5-...}`。少花括号时 XML 仍然合法，但 IDE **静默丢弃整个 Entry**，
+    import_native 返回 no_changes，不报任何错——只能靠对比真实模板发现。
+
+    这里用 ST 实现（Implementation=3b83b776 -> TextDocument -> TextLines），
+    比 LD 实现（25e509de -> NetworkList）简单，且同样合法。
+    """
+    body, next_id = textlines_block(st_lines, nid())
+    path = path or [u"Device", u"PLC 逻辑", u"Application"]
+    path_xml = u"\n".join(
+        u'    <Single Type="string">%s</Single>' % xml_text(p) for p in path)
+    return (u'<Single Type="%s" Method="IArchivable">\n'
+            u'  <Single Name="IsRoot" Type="bool">False</Single>\n'
+            u'  <Single Name="MetaObject" Type="%s" Method="IArchivable">\n'
+            u'    <Single Name="Guid" Type="System.Guid">%s</Single>\n'
+            u'    <Single Name="ParentGuid" Type="System.Guid">%s</Single>\n'
+            u'    <Single Name="Name" Type="string">%s</Single>\n'
+            u'    <Dictionary Type="{2c41fa04-1834-41c1-816e-303c7aa2c05b}" Name="Properties" />\n'
+            u'    <Single Name="TypeGuid" Type="System.Guid">8ac092e5-3128-4e26-9e7e-11016c6684f2</Single>\n'
+            u'    <Array Name="EmbeddedTypeGuids" Type="System.Guid">\n'
+            u'      <Single Type="System.Guid">3b83b776-fb25-43b8-99f2-3c507c9143fc</Single>\n'
+            u'    </Array>\n'
+            u'    <Single Name="Timestamp" Type="long">638040560739002288</Single>\n'
+            u'  </Single>\n'
+            u'  <Single Name="Object" Type="%s" Method="IArchivable">\n'
+            u'    <Single Name="Implementation" Type="%s" Method="IArchivable">\n'
+            u'      <Single Name="TextDocument" Type="%s" Method="IArchivable">\n'
+            u'        %s\n'
+            u'      </Single>\n'
+            u'    </Single>\n'
+            u'    <Single Name="UniqueIdGenerator" Type="string">%d</Single>\n'
+            u'  </Single>\n'
+            u'  <Single Name="ParentSVNodeGuid" Type="System.Guid">%s</Single>\n'
+            u'  <Array Name="Path" Type="string">\n%s\n  </Array>\n'
+            u'  <Single Name="Index" Type="int">-1</Single>\n'
+            u'</Single>' % (G_ENTRY, G_METAOBJ, str(uuid.uuid4()), parent_guid,
+                             action_name, G_TYPE_ACTION, G_IMPL_ST, G_TEXTDOC,
+                             body, next_id + 1, parent_guid, path_xml))
+
+
+
+def build_pou(pou_name, decl, nets, out_path, actions=None):
+    """把骨架改成指定 POU：换名、换 Guid、换网络、换声明区。
+
+    actions: [(action_name, [st_lines]), ...]
+      附加的 action Entry。网络里若有 CallType=Action 的调用框，
+      这里必须给出同名 action，否则预编译报「没有定义标识符」。
+    """
     raw = io.open(SKELETON, "r", encoding="utf-8").read()
+
+    # 0) 先把根 Guid 换掉，后面 action 的 ParentGuid 要用它
+    new_guid = str(uuid.uuid4())
+    raw = raw.replace(
+        u'<Single Name="Guid" Type="System.Guid">aa4f05c0-d089-4b64-89fe-370f00252313</Single>',
+        u'<Single Name="Guid" Type="System.Guid">%s</Single>' % new_guid)
 
     # 1) 网络
     key = u'<List2 Name="NetworkList">'
@@ -556,12 +639,22 @@ def build_pou(pou_name, decl, nets, out_path):
     decl_xml, _ = textlines_block(decl, 900)
     raw = raw[:p2] + decl_xml + raw[end2:]
 
-    # 3) 名字 / Guid
+    # 3) 名字 / Guid（根 Guid 已在步骤 0 换过）
     raw = raw.replace(u'>prg_StartStop<', u'>%s<' % pou_name)
-    new_guid = str(uuid.uuid4())
-    raw = raw.replace(
-        u'<Single Name="Guid" Type="System.Guid">aa4f05c0-d089-4b64-89fe-370f00252313</Single>',
-        u'<Single Name="Guid" Type="System.Guid">%s</Single>' % new_guid)
+
+    # 3.5) 附加 action Entry（追加到 EntryList 末尾）
+    if actions:
+        key3 = u'<List2 Name="EntryList">'
+        p3 = raw.find(key3)
+        assert p3 >= 0, "skeleton has no EntryList"
+        end3 = find_block_end(raw, p3, u"<List2", u"</List2>")
+        assert end3 > 0
+        extra = u"\n".join(
+            action_entry(nm, new_guid, lines,
+                         path=[u"Device", u"PLC 逻辑", u"Application", pou_name])
+            for nm, lines in actions)
+        raw = (raw[:end3 - len(u"</List2>")] + u"\n" + extra + u"\n  "
+               + raw[end3 - len(u"</List2>"):])
 
     # 4) UniqueIdGenerator 抬到最大 Id 之上
     raw = re.sub(u'<Single Name="UniqueIdGenerator" Type="string">\\d+</Single>',

@@ -30,6 +30,12 @@ description: 汇川 InoProShop（CODESYS V3.5 SP11 系）LD 梯形图 native XML
 15. **`OutputItems` 项数 == `OutputParam` 个数；`OutputParam` 含不含 `ENO` 由 `EN`/`ENO` 字段决定**。`EN/ENO=True` 的框（Function/Program/常规 FB/EXECUTE）第一项是 `ENO`；**`TON` 是 `EN/ENO=False`，`OutputParam=['Q','ET']` 不含 ENO**，两个输出不接线就写两个 `<Null/>`。19/19 样本 0 例外。⚠ 这条**预编译/编译/往返 diff 全都查不出来**（IDE 静默接受），只能靠 `scripts/check_slots.py` 或「项数 vs 参数数」比对发现——`fb_box()` 已加 `raise` 断言
 16. **往 XML 文本节点塞自由文本必须转义 `<` `>` `&`**。网络注释/声明区/ST 代码都是直接拼进 `<Single Name="Comment" Type="string">…</Single>` 的，注释里写 `<Null/>` 会被解析成**真实子节点**，导致该 Network 的 `Comment` 下凭空多一个 `Null`，节点数不等、`rt_diff` 从某处起整段错位报几十处 diff（2026-11-25 实测 55 处）。统一走 `make_ld_learn.xml_text()`，且它必须定义在 `textlines_block()` **之前**。**排查提示**：diff 报「节点数不同 + 整段错位」时先看错位处父节点是不是 `Comment`/`Text`/`Title`/`Label`，是就 100% 是转义问题，别去改结构
 
+17. **`Instance.Operand` 只有 FB 才写实例名，其余一律 `<Null/>`；写成空 `<Single>` 会在框上方多画一个可填写的小方框**。规律（按 `CallType`）：`FunctionBlock` → `<Single Type="string">实例名</Single>`；`Action` / `Function` / `Program` / `And` / `Move` → `<Null Name="Operand" />`。2026-11-25 实测：`action_box()` 写成空 Single，IDE 在 actAbs 框上方画出**可填参数的红色小方框**；用户两次指出「正常调用没有这个小方块」「actAbs_NOPE 上面还是有小方框可以填写参数」——第二句是决定性线索：连名字错误的框也带方框，说明与 `Flags.Fixed`、与 BoxType 是否合法**都无关**，纯粹是 Operand 节点形态问题。全量对照 16 个真实 Action 框，**全部 `<Null/>`**。⚠ 这条预编译/编译/往返 diff 全都查不出来
+18. **不要在 IDE 脚本里 `time.sleep()` 或轮询消息——会把 InoProShop 界面冻住**。IDE 脚本跑在主线程上，`sleep(8)` + `process_messageloop()` 循环直接导致用户反馈「你在等待的时候软件卡死了」「还是卡死」。正确分工：**IDE 侧脚本只做「读一次、写文件、立刻返回」（<1s），计时与重试全部放主机侧 Python**。`scripts/ide/task_check.py` 已改为单次快照、零 sleep、零循环
+19. **验收消息只能靠「导入后立刻读」，任何编译命令都走缓存、都读不到真实错误**。2026-11-25 逐个实测（工程里放必然报错的 `BoxType=actAbs_NOPE`）：`清理` / `重新编译` / `（旧）编译` / `检查所有对象` / `运行静态分析` / `生成代码` / `生成二进制文件` / `编译` → **预编译分类全部 0 条**；只有 `（旧）重新编译` 真跑构建，但预编译仍是 0。**只有导入动作触发的自动检查会产出真实预编译消息**。两个致命细节：① **绝不能 `clear_messages`**——消息是导入时产生的，清掉永久丢失；② 「把声明改一个字符再改回」强制变脏实测无效
+20. **action 的 ST 体只能引用宿主 POU 声明区里的变量**。action 属于哪个 POU 就只认那个 POU 的 `VAR`。实测：`prg_AxisCallTest` 的 `actAbs` 写了 `xPtpCond := ...`，而 `xPtpCond` 只在 `fb_AxisSkelTest` 里声明 → 预编译报 `[Error] actAbs | 没有定义标识符'xPtpCond'`。三个特征：① 消息归属对象是 **action 名**不是 POU 名；② 只在**预编译**分类；③ 编译分类照样报「0 错误,0 警告」
+21. **造负样本必须精确替换目标字段，不能连带改掉同名字段**。实测踩坑：用 `s.replace('>actAbs<', '>actAbs_ZZZ<')` 造负样本，把 `BoxType` **和** action Entry 的 `Name` 一起改了 → `actAbs_ZZZ` 成了合法 action，0 错误是**正确结果**，却被误判「验收链路失效」，白折腾一轮。正确做法：只改 `<Single Name="BoxType" Type="string">actAbs</Single>` 一处，Entry 名保持 `actAbs`；改完先 `grep -c` 自查（BoxType 1 处、Entry Name 1 处）
+
 ## 结构速查（详见 references/）
 
 - [native 结构与节点类型](references/native-structure.md)：全部节点 GUID、槽位规则、合法挂载位置
@@ -149,12 +155,13 @@ description: 汇川 InoProShop（CODESYS V3.5 SP11 系）LD 梯形图 native XML
 |------|------|
 | bridge.py | IPC 客户端（本地 Python 3 运行） |
 | do_replace.py | 静默导入入口（本地 Python 3 运行） |
-| check_slots.py | **结构自检**（本地 Python 3 运行）：校验所有功能框「`OutputItems` 项数 == `OutputParam` 个数」与「`InputItems` 槽数 == `InputParam` 个数」，`AND` 框校验至少 2 槽。**唯一能发现「编译器查不出来的结构错误」的手段**（预编译/编译/往返 diff 都查不出来）。退出码 0/1，可当 CI 断言 |
+| check_slots.py | **结构自检**（本地 Python 3 运行）：校验所有功能框「`OutputItems` 项数 == `OutputParam` 个数」与「`InputItems` 槽数 == `InputParam` 个数」，`AND` 框校验至少 2 槽，并断言 **`Instance.Operand` 三态**（`FunctionBlock`→`<Single>实例名</Single>`；`Action`/`Function`/`Program`→`<Null/>`，写空 `<Single>` 会让 IDE 多画可填参数小方框）。**唯一能发现「编译器查不出来的结构错误」的手段**（预编译/编译/往返 diff 都查不出来）。退出码 0/1，可当 CI 断言 |
+| check_symbols.py | **符号自检**（本地 Python 3 运行）：校验 POU 网络里引用的符号是否都在声明区定义过。用于「编译器没报错、消息窗口读不到，但 POU 打开就是红的」这类问题——不依赖 IDE 消息，直接比对操作数与声明 |
 | launch_ide_daemon.py | 启动 IDE + 注入 daemon（本地 Python 3 运行） |
 | ide_trigger.ps1 | UIA 触发 daemon 注入 |
 | ide/_base.py | 路径自解析（IDE 内环境变量无效，靠它从脚本路径反推 BASE） |
 | ide/plc_daemon.py | IDE 内守护（IronPython 2.7） |
-| ide/task_check.py | 预编译检查（**验收必用**，读 `217bc73e` 分类） |
+| ide/task_check.py | 验收检查（**验收必用**，单次快照、零 sleep、零循环——IDE 脚本跑主线程，sleep/轮询会冻死界面，计时全部放主机侧；同时读预编译 `217bc73e` + 编译 `97f48d64` + 格式检查三分类，匹配不到分类必须 `raise` 防假通过） |
 | ide/task_silent_import.py | 静默导入核心（由 do_replace.py 调用） |
 | ide/task_readnow.py | 不清空直接读全部消息（排查异步） |
 | ide/task_export_fixed.py | 导出指定 POU（学结构用） |
