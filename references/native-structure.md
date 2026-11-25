@@ -154,3 +154,50 @@ MOVE 框（功能框）有两个合法位置：
 ## OUT 操作数
 
 - OUT 输出操作数节点自身就是 `{c9b2f165}`（无 Operand 子层），取值用 `child(outop, "Operand")`
+
+### 声明区（Interface/TextDocument/TextLines）
+
+native 文件里除了图形，还有一份 POU 声明文本，位于：
+
+```
+Object
+└─ Interface {a9ed5b7e-75c5-4651-af16-d2c27e98cb94}
+   └─ TextDocument {f3878285-8e4f-490b-bb1b-9acbb7eb04db}
+      └─ TextLines (Array)
+         └─ Single {a5de0b0b-1cb5-4913-ac21-9d70293ec00d}
+            ├─ Id   : long    ← 必须全表唯一、顺序递增
+            ├─ Tag  : Null
+            └─ Text : string  ← 一行声明源码，中文可直接写
+```
+
+**铁律：图形里引用的每一个符号，声明区必须有一行对应声明。**
+`import_native` 只搬「图形 + 声明文本」，不会根据图形自动补声明；
+漏声明就会在预编译阶段得到一堆 `C0046: 没有定义标识符`（每个引用点报一条）。
+
+补声明的最小做法：
+
+1. 克隆任意一条已有声明行节点（deepcopy）
+2. 改 `Id`（新值）与 `Text`（新声明文本）
+3. 插到 `END_VAR` 那一行**之前**
+4. 全部插完后，把 `TextLines` 里所有 `Id` 按数组顺序从 900 重排
+
+### 公共前缀与支路条件的去重
+
+分支组 `{827b9ec2}` 的 `Input` 槽 = 所有支路共享的**公共前缀触点**。
+因此每个支路的 EN 条件框里**不应该再重复放同样的 TRUE**，
+否则图形上会看到「两个 TRUE 串联」（逻辑等价但冗余，且不符合树形画法要求）。
+
+正确形态：
+
+```
+分支组 Input = TRUE          ← 公共前缀，只画一次
+├─ tree0: AND[ MOVE( IN← AND[ xAlarm̄, xAutoMode, xInitDone, xAutoRun̄ ] ), CONN ]
+├─ tree1: AND[ MOVE( IN← AND[ ... ] ), CONN ]
+└─ tree2: AND[ 分支组(6 支路), CONN ]
+```
+
+错误形态（多了第二个 TRUE）：
+
+```
+├─ tree0: AND[ MOVE( IN← AND[ TRUE, xAlarm̄, ... ] ), CONN ]   ← 这个 TRUE 多余
+```

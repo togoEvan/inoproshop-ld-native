@@ -8,6 +8,10 @@
 ## [Unreleased]
 
 ### 新增
+- `references/precompile-errors.md` 追加第 6、7 类问题：C0046 批量未定义标识符、两个 TRUE 串联
+- `references/native-structure.md` 追加「声明区（TextLines）结构」与「公共前缀与支路条件去重」
+- `assets/natives/user_fixed.native` 更新为**修复后版本**（补全 8 个状态机变量声明、去掉 8 个多余 TRUE，预编译 0 错误 0 警告）
+- `plc_mcp/make_fix45.py`：补声明 + 删多余 TRUE 的修复脚本
 - **分支组「完整支路」标准结构**（用户手改已验证）：外层 AND 框包住 `[MOVE 框, 连接器 {505bff94}]`；**任何一层（含嵌套分支组内部）都适用**
 - `assets/natives/user_fixed.native` 更新为**8 支路全部完整版**：3 顶层支路 + 内层 6 支路，每条都是 AND[MOVE, CONN]，预编译 0 错误
 - `plc_mcp/make_full8.py`：把裸 MOVE 支路批量包装成完整支路的生成脚本
@@ -19,6 +23,8 @@
 ### 修复
 - **修正认知**：裸 MOVE 框挂分支组 Trees 虽预编译 0 错误，但功能链断头、图形不完整；任何层级都需外层 AND + 连接器包装
 - 已把用户工程的 6 个裸 MOVE 支路（6/8/9/4/3/5）补齐为完整结构，逻辑不变，预编译 0 错误
+- **C0046 批量未定义标识符**：native 只搬图形+声明，图形引用的符号必须在 `Interface/TextDocument/TextLines` 里逐行声明，漏声明 = 每个引用点报一条错误
+- **两个 TRUE 串联**：分支组 `Input` 已有公共前缀 TRUE 时，支路 EN 条件框里不要再放 TRUE
 
 ## [1.0.0] - 2026-11-24
 

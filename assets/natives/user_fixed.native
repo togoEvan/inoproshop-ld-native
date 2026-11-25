@@ -6,7 +6,7 @@
     <Single Type="{6198ad31-4b98-445c-927f-3258a0e82fe3}" Method="IArchivable">
       <Single Name="IsRoot" Type="bool">True</Single>
       <Single Name="MetaObject" Type="{81297157-7ec9-45ce-845e-84cab2b88ade}" Method="IArchivable">
-        <Single Name="Guid" Type="System.Guid">ede428ab-a19a-4213-b398-53c1207e77aa</Single>
+        <Single Name="Guid" Type="System.Guid">aa4f05c0-d089-4b64-89fe-370f00252313</Single>
         <Single Name="ParentGuid" Type="System.Guid">9b16167a-406a-4fbc-a539-3c09c54b8ff3</Single>
         <Single Name="Name" Type="string">prg_StartStop</Single>
         <Dictionary Type="{2c41fa04-1834-41c1-816e-303c7aa2c05b}" Name="Properties" />
@@ -15,11 +15,11 @@
           <Single Type="System.Guid">a9ed5b7e-75c5-4651-af16-d2c27e98cb94</Single>
           <Single Type="System.Guid">25e509de-33d4-4447-93f8-c9e4ea381c8b</Single>
         </Array>
-        <Single Name="Timestamp" Type="long">639311963682452838</Single>
+        <Single Name="Timestamp" Type="long">639311968447171634</Single>
       </Single>
       <Single Name="Object" Type="{6f9dac99-8de1-4efc-8465-68ac443b7d08}" Method="IArchivable">
         <Single Name="SpecialFunc" Type="{0db3d7bb-cde0-4416-9a7b-ce49a0124323}">None</Single>
-        <Single Name="UniqueIdGenerator" Type="string">96787</Single>
+        <Single Name="UniqueIdGenerator" Type="string">97288</Single>
         <Single Name="Implementation" Type="{25e509de-33d4-4447-93f8-c9e4ea381c8b}" Method="IArchivable">
           <Single Name="ValidIds" Type="bool">True</Single>
           <Single Name="BranchCounter" Type="int">0</Single>
@@ -294,34 +294,6 @@
                               </Single>
                               <Null Name="InputFlags" />
                               <List2 Name="InputItems">
-                                <Single Type="{9de7f100-1b87-424c-a62e-45b0cfc85ed2}" Method="IArchivable">
-                                  <Single Name="Operand" Type="{c9b2f165-48a2-4a45-8326-3952d8a3d708}" Method="IArchivable">
-                                    <Single Name="Boolean" Type="bool">True</Single>
-                                    <Single Name="IsInstance" Type="bool">False</Single>
-                                    <Single Name="LValue" Type="bool">False</Single>
-                                    <Single Name="Flags" Type="{668066f2-6069-46b3-8962-8db8d13d7db2}" Method="IArchivable">
-                                      <Single Name="Extensible" Type="bool">False</Single>
-                                      <Single Name="Fixed" Type="bool">False</Single>
-                                      <Single Name="Flags" Type="int">0</Single>
-                                    </Single>
-                                    <Single Name="Address" Type="string"></Single>
-                                    <Single Name="Comment" Type="string"></Single>
-                                    <Single Name="Operand" Type="string">TRUE</Single>
-                                    <Single Name="SymbolComment" Type="string"></Single>
-                                    <Single Name="Type" Type="string">BOOL</Single>
-                                    <Single Name="IsCoil" Type="bool">False</Single>
-                                    <Single Name="IsSeriesCoil" Type="bool">False</Single>
-                                    <Single Name="SeriesIndex" Type="int">-1</Single>
-                                    <Single Name="ConnectorFlags" Type="{668066f2-6069-46b3-8962-8db8d13d7db2}" Method="IArchivable">
-                                      <Single Name="Extensible" Type="bool">False</Single>
-                                      <Single Name="Fixed" Type="bool">False</Single>
-                                      <Single Name="Flags" Type="int">0</Single>
-                                    </Single>
-                                    <Single Name="Id" Type="long">96612</Single>
-                                  </Single>
-                                  <Single Name="IsContact" Type="bool">True</Single>
-                                  <Single Name="Id" Type="long">96611</Single>
-                                </Single>
                                 <Single Type="{9de7f100-1b87-424c-a62e-45b0cfc85ed2}" Method="IArchivable">
                                   <Single Name="Operand" Type="{c9b2f165-48a2-4a45-8326-3952d8a3d708}" Method="IArchivable">
                                     <Single Name="Boolean" Type="bool">True</Single>
@@ -665,34 +637,6 @@
                               </Single>
                               <Null Name="InputFlags" />
                               <List2 Name="InputItems">
-                                <Single Type="{9de7f100-1b87-424c-a62e-45b0cfc85ed2}" Method="IArchivable">
-                                  <Single Name="Operand" Type="{c9b2f165-48a2-4a45-8326-3952d8a3d708}" Method="IArchivable">
-                                    <Single Name="Boolean" Type="bool">True</Single>
-                                    <Single Name="IsInstance" Type="bool">False</Single>
-                                    <Single Name="LValue" Type="bool">False</Single>
-                                    <Single Name="Flags" Type="{668066f2-6069-46b3-8962-8db8d13d7db2}" Method="IArchivable">
-                                      <Single Name="Extensible" Type="bool">False</Single>
-                                      <Single Name="Fixed" Type="bool">False</Single>
-                                      <Single Name="Flags" Type="int">0</Single>
-                                    </Single>
-                                    <Single Name="Address" Type="string"></Single>
-                                    <Single Name="Comment" Type="string"></Single>
-                                    <Single Name="Operand" Type="string">TRUE</Single>
-                                    <Single Name="SymbolComment" Type="string"></Single>
-                                    <Single Name="Type" Type="string">BOOL</Single>
-                                    <Single Name="IsCoil" Type="bool">False</Single>
-                                    <Single Name="IsSeriesCoil" Type="bool">False</Single>
-                                    <Single Name="SeriesIndex" Type="int">-1</Single>
-                                    <Single Name="ConnectorFlags" Type="{668066f2-6069-46b3-8962-8db8d13d7db2}" Method="IArchivable">
-                                      <Single Name="Extensible" Type="bool">False</Single>
-                                      <Single Name="Fixed" Type="bool">False</Single>
-                                      <Single Name="Flags" Type="int">0</Single>
-                                    </Single>
-                                    <Single Name="Id" Type="long">96632</Single>
-                                  </Single>
-                                  <Single Name="IsContact" Type="bool">True</Single>
-                                  <Single Name="Id" Type="long">96631</Single>
-                                </Single>
                                 <Single Type="{9de7f100-1b87-424c-a62e-45b0cfc85ed2}" Method="IArchivable">
                                   <Single Name="Operand" Type="{c9b2f165-48a2-4a45-8326-3952d8a3d708}" Method="IArchivable">
                                     <Single Name="Boolean" Type="bool">True</Single>
@@ -1115,34 +1059,6 @@
                                             <Single Name="Flags" Type="{668066f2-6069-46b3-8962-8db8d13d7db2}" Method="IArchivable">
                                               <Single Name="Extensible" Type="bool">False</Single>
                                               <Single Name="Fixed" Type="bool">False</Single>
-                                              <Single Name="Flags" Type="int">0</Single>
-                                            </Single>
-                                            <Single Name="Address" Type="string"></Single>
-                                            <Single Name="Comment" Type="string"></Single>
-                                            <Single Name="Operand" Type="string">TRUE</Single>
-                                            <Single Name="SymbolComment" Type="string"></Single>
-                                            <Single Name="Type" Type="string">BOOL</Single>
-                                            <Single Name="IsCoil" Type="bool">False</Single>
-                                            <Single Name="IsSeriesCoil" Type="bool">False</Single>
-                                            <Single Name="SeriesIndex" Type="int">-1</Single>
-                                            <Single Name="ConnectorFlags" Type="{668066f2-6069-46b3-8962-8db8d13d7db2}" Method="IArchivable">
-                                              <Single Name="Extensible" Type="bool">False</Single>
-                                              <Single Name="Fixed" Type="bool">False</Single>
-                                              <Single Name="Flags" Type="int">0</Single>
-                                            </Single>
-                                            <Single Name="Id" Type="long">96656</Single>
-                                          </Single>
-                                          <Single Name="IsContact" Type="bool">True</Single>
-                                          <Single Name="Id" Type="long">96655</Single>
-                                        </Single>
-                                        <Single Type="{9de7f100-1b87-424c-a62e-45b0cfc85ed2}" Method="IArchivable">
-                                          <Single Name="Operand" Type="{c9b2f165-48a2-4a45-8326-3952d8a3d708}" Method="IArchivable">
-                                            <Single Name="Boolean" Type="bool">True</Single>
-                                            <Single Name="IsInstance" Type="bool">False</Single>
-                                            <Single Name="LValue" Type="bool">False</Single>
-                                            <Single Name="Flags" Type="{668066f2-6069-46b3-8962-8db8d13d7db2}" Method="IArchivable">
-                                              <Single Name="Extensible" Type="bool">False</Single>
-                                              <Single Name="Fixed" Type="bool">False</Single>
                                               <Single Name="Flags" Type="int">1</Single>
                                             </Single>
                                             <Single Name="Address" Type="string"></Single>
@@ -1542,34 +1458,6 @@
                                             <Single Name="Flags" Type="{668066f2-6069-46b3-8962-8db8d13d7db2}" Method="IArchivable">
                                               <Single Name="Extensible" Type="bool">False</Single>
                                               <Single Name="Fixed" Type="bool">False</Single>
-                                              <Single Name="Flags" Type="int">0</Single>
-                                            </Single>
-                                            <Single Name="Address" Type="string"></Single>
-                                            <Single Name="Comment" Type="string"></Single>
-                                            <Single Name="Operand" Type="string">TRUE</Single>
-                                            <Single Name="SymbolComment" Type="string"></Single>
-                                            <Single Name="Type" Type="string">BOOL</Single>
-                                            <Single Name="IsCoil" Type="bool">False</Single>
-                                            <Single Name="IsSeriesCoil" Type="bool">False</Single>
-                                            <Single Name="SeriesIndex" Type="int">-1</Single>
-                                            <Single Name="ConnectorFlags" Type="{668066f2-6069-46b3-8962-8db8d13d7db2}" Method="IArchivable">
-                                              <Single Name="Extensible" Type="bool">False</Single>
-                                              <Single Name="Fixed" Type="bool">False</Single>
-                                              <Single Name="Flags" Type="int">0</Single>
-                                            </Single>
-                                            <Single Name="Id" Type="long">96680</Single>
-                                          </Single>
-                                          <Single Name="IsContact" Type="bool">True</Single>
-                                          <Single Name="Id" Type="long">96679</Single>
-                                        </Single>
-                                        <Single Type="{9de7f100-1b87-424c-a62e-45b0cfc85ed2}" Method="IArchivable">
-                                          <Single Name="Operand" Type="{c9b2f165-48a2-4a45-8326-3952d8a3d708}" Method="IArchivable">
-                                            <Single Name="Boolean" Type="bool">True</Single>
-                                            <Single Name="IsInstance" Type="bool">False</Single>
-                                            <Single Name="LValue" Type="bool">False</Single>
-                                            <Single Name="Flags" Type="{668066f2-6069-46b3-8962-8db8d13d7db2}" Method="IArchivable">
-                                              <Single Name="Extensible" Type="bool">False</Single>
-                                              <Single Name="Fixed" Type="bool">False</Single>
                                               <Single Name="Flags" Type="int">1</Single>
                                             </Single>
                                             <Single Name="Address" Type="string"></Single>
@@ -1941,34 +1829,6 @@
                                             <Single Name="Flags" Type="{668066f2-6069-46b3-8962-8db8d13d7db2}" Method="IArchivable">
                                               <Single Name="Extensible" Type="bool">False</Single>
                                               <Single Name="Fixed" Type="bool">False</Single>
-                                              <Single Name="Flags" Type="int">0</Single>
-                                            </Single>
-                                            <Single Name="Address" Type="string"></Single>
-                                            <Single Name="Comment" Type="string"></Single>
-                                            <Single Name="Operand" Type="string">TRUE</Single>
-                                            <Single Name="SymbolComment" Type="string"></Single>
-                                            <Single Name="Type" Type="string">BOOL</Single>
-                                            <Single Name="IsCoil" Type="bool">False</Single>
-                                            <Single Name="IsSeriesCoil" Type="bool">False</Single>
-                                            <Single Name="SeriesIndex" Type="int">-1</Single>
-                                            <Single Name="ConnectorFlags" Type="{668066f2-6069-46b3-8962-8db8d13d7db2}" Method="IArchivable">
-                                              <Single Name="Extensible" Type="bool">False</Single>
-                                              <Single Name="Fixed" Type="bool">False</Single>
-                                              <Single Name="Flags" Type="int">0</Single>
-                                            </Single>
-                                            <Single Name="Id" Type="long">96702</Single>
-                                          </Single>
-                                          <Single Name="IsContact" Type="bool">True</Single>
-                                          <Single Name="Id" Type="long">96701</Single>
-                                        </Single>
-                                        <Single Type="{9de7f100-1b87-424c-a62e-45b0cfc85ed2}" Method="IArchivable">
-                                          <Single Name="Operand" Type="{c9b2f165-48a2-4a45-8326-3952d8a3d708}" Method="IArchivable">
-                                            <Single Name="Boolean" Type="bool">True</Single>
-                                            <Single Name="IsInstance" Type="bool">False</Single>
-                                            <Single Name="LValue" Type="bool">False</Single>
-                                            <Single Name="Flags" Type="{668066f2-6069-46b3-8962-8db8d13d7db2}" Method="IArchivable">
-                                              <Single Name="Extensible" Type="bool">False</Single>
-                                              <Single Name="Fixed" Type="bool">False</Single>
                                               <Single Name="Flags" Type="int">1</Single>
                                             </Single>
                                             <Single Name="Address" Type="string"></Single>
@@ -2304,34 +2164,6 @@
                                       </Single>
                                       <Null Name="InputFlags" />
                                       <List2 Name="InputItems">
-                                        <Single Type="{9de7f100-1b87-424c-a62e-45b0cfc85ed2}" Method="IArchivable">
-                                          <Single Name="Operand" Type="{c9b2f165-48a2-4a45-8326-3952d8a3d708}" Method="IArchivable">
-                                            <Single Name="Boolean" Type="bool">True</Single>
-                                            <Single Name="IsInstance" Type="bool">False</Single>
-                                            <Single Name="LValue" Type="bool">False</Single>
-                                            <Single Name="Flags" Type="{668066f2-6069-46b3-8962-8db8d13d7db2}" Method="IArchivable">
-                                              <Single Name="Extensible" Type="bool">False</Single>
-                                              <Single Name="Fixed" Type="bool">False</Single>
-                                              <Single Name="Flags" Type="int">0</Single>
-                                            </Single>
-                                            <Single Name="Address" Type="string"></Single>
-                                            <Single Name="Comment" Type="string"></Single>
-                                            <Single Name="Operand" Type="string">TRUE</Single>
-                                            <Single Name="SymbolComment" Type="string"></Single>
-                                            <Single Name="Type" Type="string">BOOL</Single>
-                                            <Single Name="IsCoil" Type="bool">False</Single>
-                                            <Single Name="IsSeriesCoil" Type="bool">False</Single>
-                                            <Single Name="SeriesIndex" Type="int">-1</Single>
-                                            <Single Name="ConnectorFlags" Type="{668066f2-6069-46b3-8962-8db8d13d7db2}" Method="IArchivable">
-                                              <Single Name="Extensible" Type="bool">False</Single>
-                                              <Single Name="Fixed" Type="bool">False</Single>
-                                              <Single Name="Flags" Type="int">0</Single>
-                                            </Single>
-                                            <Single Name="Id" Type="long">96722</Single>
-                                          </Single>
-                                          <Single Name="IsContact" Type="bool">True</Single>
-                                          <Single Name="Id" Type="long">96721</Single>
-                                        </Single>
                                         <Single Type="{9de7f100-1b87-424c-a62e-45b0cfc85ed2}" Method="IArchivable">
                                           <Single Name="Operand" Type="{c9b2f165-48a2-4a45-8326-3952d8a3d708}" Method="IArchivable">
                                             <Single Name="Boolean" Type="bool">True</Single>
@@ -2683,34 +2515,6 @@
                                             <Single Name="Flags" Type="{668066f2-6069-46b3-8962-8db8d13d7db2}" Method="IArchivable">
                                               <Single Name="Extensible" Type="bool">False</Single>
                                               <Single Name="Fixed" Type="bool">False</Single>
-                                              <Single Name="Flags" Type="int">0</Single>
-                                            </Single>
-                                            <Single Name="Address" Type="string"></Single>
-                                            <Single Name="Comment" Type="string"></Single>
-                                            <Single Name="Operand" Type="string">TRUE</Single>
-                                            <Single Name="SymbolComment" Type="string"></Single>
-                                            <Single Name="Type" Type="string">BOOL</Single>
-                                            <Single Name="IsCoil" Type="bool">False</Single>
-                                            <Single Name="IsSeriesCoil" Type="bool">False</Single>
-                                            <Single Name="SeriesIndex" Type="int">-1</Single>
-                                            <Single Name="ConnectorFlags" Type="{668066f2-6069-46b3-8962-8db8d13d7db2}" Method="IArchivable">
-                                              <Single Name="Extensible" Type="bool">False</Single>
-                                              <Single Name="Fixed" Type="bool">False</Single>
-                                              <Single Name="Flags" Type="int">0</Single>
-                                            </Single>
-                                            <Single Name="Id" Type="long">96742</Single>
-                                          </Single>
-                                          <Single Name="IsContact" Type="bool">True</Single>
-                                          <Single Name="Id" Type="long">96741</Single>
-                                        </Single>
-                                        <Single Type="{9de7f100-1b87-424c-a62e-45b0cfc85ed2}" Method="IArchivable">
-                                          <Single Name="Operand" Type="{c9b2f165-48a2-4a45-8326-3952d8a3d708}" Method="IArchivable">
-                                            <Single Name="Boolean" Type="bool">True</Single>
-                                            <Single Name="IsInstance" Type="bool">False</Single>
-                                            <Single Name="LValue" Type="bool">False</Single>
-                                            <Single Name="Flags" Type="{668066f2-6069-46b3-8962-8db8d13d7db2}" Method="IArchivable">
-                                              <Single Name="Extensible" Type="bool">False</Single>
-                                              <Single Name="Fixed" Type="bool">False</Single>
                                               <Single Name="Flags" Type="int">1</Single>
                                             </Single>
                                             <Single Name="Address" Type="string"></Single>
@@ -3046,34 +2850,6 @@
                                       </Single>
                                       <Null Name="InputFlags" />
                                       <List2 Name="InputItems">
-                                        <Single Type="{9de7f100-1b87-424c-a62e-45b0cfc85ed2}" Method="IArchivable">
-                                          <Single Name="Operand" Type="{c9b2f165-48a2-4a45-8326-3952d8a3d708}" Method="IArchivable">
-                                            <Single Name="Boolean" Type="bool">True</Single>
-                                            <Single Name="IsInstance" Type="bool">False</Single>
-                                            <Single Name="LValue" Type="bool">False</Single>
-                                            <Single Name="Flags" Type="{668066f2-6069-46b3-8962-8db8d13d7db2}" Method="IArchivable">
-                                              <Single Name="Extensible" Type="bool">False</Single>
-                                              <Single Name="Fixed" Type="bool">False</Single>
-                                              <Single Name="Flags" Type="int">0</Single>
-                                            </Single>
-                                            <Single Name="Address" Type="string"></Single>
-                                            <Single Name="Comment" Type="string"></Single>
-                                            <Single Name="Operand" Type="string">TRUE</Single>
-                                            <Single Name="SymbolComment" Type="string"></Single>
-                                            <Single Name="Type" Type="string">BOOL</Single>
-                                            <Single Name="IsCoil" Type="bool">False</Single>
-                                            <Single Name="IsSeriesCoil" Type="bool">False</Single>
-                                            <Single Name="SeriesIndex" Type="int">-1</Single>
-                                            <Single Name="ConnectorFlags" Type="{668066f2-6069-46b3-8962-8db8d13d7db2}" Method="IArchivable">
-                                              <Single Name="Extensible" Type="bool">False</Single>
-                                              <Single Name="Fixed" Type="bool">False</Single>
-                                              <Single Name="Flags" Type="int">0</Single>
-                                            </Single>
-                                            <Single Name="Id" Type="long">96762</Single>
-                                          </Single>
-                                          <Single Name="IsContact" Type="bool">True</Single>
-                                          <Single Name="Id" Type="long">96761</Single>
-                                        </Single>
                                         <Single Type="{9de7f100-1b87-424c-a62e-45b0cfc85ed2}" Method="IArchivable">
                                           <Single Name="Operand" Type="{c9b2f165-48a2-4a45-8326-3952d8a3d708}" Method="IArchivable">
                                             <Single Name="Boolean" Type="bool">True</Single>
@@ -3516,6 +3292,51 @@
               </Single>
               <Single Type="{a5de0b0b-1cb5-4913-ac21-9d70293ec00d}" Method="IArchivable">
                 <Single Name="Id" Type="long">906</Single>
+                <Null Name="Tag" />
+                <Single Name="Text" Type="string">    (* 状态机 *)</Single>
+              </Single>
+              <Single Type="{a5de0b0b-1cb5-4913-ac21-9d70293ec00d}" Method="IArchivable">
+                <Single Name="Id" Type="long">907</Single>
+                <Null Name="Tag" />
+                <Single Name="Text" Type="string">    iState     : INT;    // 当前状态字（0=Init 2=Ready 3=Running 4=Paused 5=Done 6..9 其他）</Single>
+              </Single>
+              <Single Type="{a5de0b0b-1cb5-4913-ac21-9d70293ec00d}" Method="IArchivable">
+                <Single Name="Id" Type="long">908</Single>
+                <Null Name="Tag" />
+                <Single Name="Text" Type="string">    xAlarm     : BOOL;   // 报警（TRUE 时禁止状态迁移）</Single>
+              </Single>
+              <Single Type="{a5de0b0b-1cb5-4913-ac21-9d70293ec00d}" Method="IArchivable">
+                <Single Name="Id" Type="long">909</Single>
+                <Null Name="Tag" />
+                <Single Name="Text" Type="string">    xAutoMode  : BOOL;   // 自动模式</Single>
+              </Single>
+              <Single Type="{a5de0b0b-1cb5-4913-ac21-9d70293ec00d}" Method="IArchivable">
+                <Single Name="Id" Type="long">910</Single>
+                <Null Name="Tag" />
+                <Single Name="Text" Type="string">    xInitDone  : BOOL;   // 初始化完成</Single>
+              </Single>
+              <Single Type="{a5de0b0b-1cb5-4913-ac21-9d70293ec00d}" Method="IArchivable">
+                <Single Name="Id" Type="long">911</Single>
+                <Null Name="Tag" />
+                <Single Name="Text" Type="string">    xIniting   : BOOL;   // 初始化中</Single>
+              </Single>
+              <Single Type="{a5de0b0b-1cb5-4913-ac21-9d70293ec00d}" Method="IArchivable">
+                <Single Name="Id" Type="long">912</Single>
+                <Null Name="Tag" />
+                <Single Name="Text" Type="string">    xAutoRun   : BOOL;   // 自动运行中</Single>
+              </Single>
+              <Single Type="{a5de0b0b-1cb5-4913-ac21-9d70293ec00d}" Method="IArchivable">
+                <Single Name="Id" Type="long">913</Single>
+                <Null Name="Tag" />
+                <Single Name="Text" Type="string">    xStopClear : BOOL;   // 停止/清除</Single>
+              </Single>
+              <Single Type="{a5de0b0b-1cb5-4913-ac21-9d70293ec00d}" Method="IArchivable">
+                <Single Name="Id" Type="long">914</Single>
+                <Null Name="Tag" />
+                <Single Name="Text" Type="string">    xStepMode  : BOOL;   // 单步模式</Single>
+              </Single>
+              <Single Type="{a5de0b0b-1cb5-4913-ac21-9d70293ec00d}" Method="IArchivable">
+                <Single Name="Id" Type="long">915</Single>
                 <Null Name="Tag" />
                 <Single Name="Text" Type="string">END_VAR</Single>
               </Single>
