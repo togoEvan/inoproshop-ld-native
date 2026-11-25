@@ -157,11 +157,20 @@ def main():
     if len(sys.argv) < 2:
         print(__doc__)
         sys.exit(1)
-    # 可选的全局符号白名单：环境变量 PLC_GLOBAL_SYMBOLS="Master,IO.xEmergencyStop"
+    # 全局符号白名单，两级合并：
+    #   ① 内置默认（工程级全局对象，不属于任何 POU 的声明区）——实测漏配会造成误报
+    #   ② 环境变量 PLC_GLOBAL_SYMBOLS="Master,IO.xEmergencyStop" 追加
+    # ⚠ 内置默认的来历：prg_AxisCallTest 的 AXIS_REF_SM3[REF] 引脚直接写轴名
+    #   `Master`（轴是全局设备对象），check_symbols 曾把它误报成「未定义符号」。
+    DEFAULT_GLOBALS = set([
+        u"Master",   # 全局虚轴名（InoProShop 轴配置里定义的轴对象）
+    ])
     globals_raw = os.environ.get("PLC_GLOBAL_SYMBOLS", "")
     globs = set(x.strip() for x in globals_raw.split(",") if x.strip())
-    if globs:
-        print(u"全局符号白名单: %s" % u", ".join(sorted(globs)))
+    globs |= DEFAULT_GLOBALS
+    print(u"全局符号白名单（内置 %d + 环境变量 %d）: %s"
+          % (len(DEFAULT_GLOBALS), len(globs - DEFAULT_GLOBALS),
+             u", ".join(sorted(globs))))
     bad = 0
     for p in sys.argv[1:]:
         bad += check(p, globs)

@@ -94,15 +94,23 @@ python "$BASE\launch_ide_daemon.py" --project="E:\你的工程\xxx.project"
 
 工程路径也可以不写（只开 IDE 空窗口，自己手动打开工程）。IDE 路径会自动搜索常见安装位置，找不到时用 `--ide=<完整路径>` 指定。
 
-**IDE 已经开着（你自己打开的工作工程）** —— 直接双击或用命令行跑：
+**IDE 已经开着（你自己打开的工作工程）** —— 在 IDE 里人工点一次菜单：
 
 ```
-scripts\start_daemon.cmd
+工具 → 脚本 → 执行脚本文件... → 选 <BASE>\ide\boot_daemon.py
 ```
 
-它只用 UIA 的 `InvokePattern` 去点「工具 → 脚本 → 执行脚本文件」，**不移动鼠标、不抢键盘焦点、不激活窗口**，注入完打印 `[OK] 守护已就绪`。这也是「不打扰用户」的关键：日常写入全程走 IPC 文件，IDE 界面不会跳到前台。
+**为什么不能自动点**：InoProShop 的菜单栏是**自绘**的，UIA 枚举整个窗口树拿到 `MenuBar` = 0、`MenuItem` = 0，Win32 `GetMenu` 也返回 0（2026-11-25 实测）。所以 `ide_trigger.ps1` / `start_daemon.cmd` 走 UIA 的这条路在 InoProShop 上**根本不可能成功**，会报 `Tools not found`。这一次人工点击是唯一入口，注入之后全程静默——日常写入走 IPC 文件，IDE 界面不会跳到前台。
 
-首次会出现「执行脚本文件」确认框。**后续调用 `bridge.py` 时会自动用 UIA 点掉它**（`ide_trigger.ps1`），不需要人工介入；只有 IDE 完全没启动时才需要你手动点。
+注入完跑一下诊断确认：
+
+```
+python scripts\ide\probe_daemon.py
+```
+
+它会打印 IDE 进程、各候选 BASE 的 `ready.flag` 与心跳年龄、`bridge` 解析到的 BASE，最后 ping 一次。
+
+> **看到 `Tools not found` 不要以为是权限问题。** 十有八九是「守护挂错目录」：如果你之前手工执行过别处的 `plc_daemon.py`，`sys.argv[0]` 就固定成那条旧路径，守护把 `ready.flag` 写进旧目录，`bridge.py` 在 `<BASE>\ipc` 找不到就误判「未启动」，转去点菜单、点不到，于是报 `Tools not found`。先跑 `probe_daemon.py` 看第 2 段「候选 BASE」，哪个心跳是新的、而 `bridge` 用的是哪个，一对就出来了。
 
 命令行调用也可以走 `scripts\bridge.cmd`（自动挑一个能跑的 Python 3，避开 Windows 应用商店的 0 字节 python.exe 存根）：
 
@@ -189,11 +197,13 @@ inoproshop-ld-native/
 │   ├── do_replace.py             # 静默导入入口（本地 Python 3）
 │   ├── launch_ide_daemon.py      # 启动 IDE + 注入 daemon
 │   ├── pack_skill.py             # 打包 .skill 分发件（清单取自 git ls-files）
-│   ├── ide_trigger.ps1           # UIA 触发注入（不动鼠标）
-│   ├── start_daemon.cmd          # 一键给「已运行的 IDE」注入守护
+│   ├── ide_trigger.ps1           # UIA 触发注入（⚠ 对 InoProShop 无效，菜单自绘）
+│   ├── start_daemon.cmd          # ⚠ 已失效，改用 IDE 菜单 + ide/boot_daemon.py
 │   ├── bridge.cmd                # 命令行入口（自动挑可用的 Python 3）
 │   ├── ide/                      # IDE 内 IronPython 2.7 脚本
 │   │   ├── _base.py              # 路径自解析（IDE 内环境变量无效，靠它定位）
+│   │   ├── boot_daemon.py        # 守护注入入口（人工点菜单执行本文件）
+│   │   ├── probe_daemon.py       # 守护诊断（卡住时先跑它）
 │   │   ├── plc_daemon.py         # 守护进程（命令分发）
 │   │   ├── task_check.py         # 验收检查（必用，三分类单次快照）
 │   │   ├── task_silent_import.py # 静默导入核心

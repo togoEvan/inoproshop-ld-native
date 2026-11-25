@@ -17,6 +17,23 @@ daemon 轮询发现 `cmd.json` 后，先**原子改名为 `running.json`** 再�
 - 全局对象：`projects` / `online` / `system`
 - 脚本内用 IronPython 2 语法（`print` 无括号、`except Exception, e`、`unicode()`）
 
+### ⚠ IronPython 里 `except Exception` 兜不住的三类异常（2026-11-25 实测，血亏）
+
+**`SystemExit`、`KeyboardInterrupt`、`SystemError` 都不继承 `Exception`，只继承 `BaseException`。**
+
+这意味着 `except Exception:` 拦不住它们，异常会一路穿透到宿主。在守护进程里这是致命的：
+
+| 场景 | 表现 | 根因 |
+|---|---|---|
+| 重复注入 daemon | 注入后 **0.7 秒内心跳停摆**，`bridge` 全部超时；`daemon_boot.log` 里只有一行 `skip: another daemon alive`，**完全看不出是异常穿透** | `_acquire_instance()` 判定「已有实例存活」时 `raise SystemExit`；`loop()` 的命令执行层只写了 `except Exception`，`SystemExit` 穿过它、穿过 `exec`，**把整个轮询线程干掉** |
+| `status` 命令 | 整个 `status` 返回 `{"ok": false, "error": "堆栈为空。"}`，工程路径等本来能拿到的信息全丢 | `online.create_online_application(app)` 在**非主线程**调用抛 `SystemError("堆栈为空。")`；`execute_on_primary_thread` 失败时 fallback inline 到后台线程，于是必然触发 |
+| 任何 `eval_file` 被执行的脚本 | 宿主守护跟着一起死 | 同上，脚本里任何 `raise SystemExit` / `sys.exit()` 都会穿透 |
+
+**规则**：
+1. 守护循环（`plc_daemon.loop()`）的循环体和命令执行层**必须兜 `BaseException`**，且要单独 `except SystemExit` 记一行日志，否则排查时看不到任何线索。
+2. 「附加信息」类调用（在线状态、网关列表等）**单独 try 并降级成字段**（如 `online_error`），绝不能让整个命令失败。
+3. 用 `eval_file` 跑任何脚本前先想一遍：它会不会 `sys.exit()`。
+
 ### 换环境时必查的 6 项（新配置触发点）
 
 换机器 / 换 IDE 版本 / 换工程路径 / 换凭据方式后，逐项跑下面的自检命令，**不要凭"我这边能用"下结论**。
@@ -106,6 +123,39 @@ python bridge.py eval_file '{\"path\": \"D:\\\\plc_mcp\\\\ide\\\\task_check.py\"
   `NetworkList`（12 段图形），逐段还原「条件串 + S/R 线圈」做校验
 - **写**：照旧用 `import_native`（不依赖文本接口）
 - 需要文本编辑能力时，改用 `--desktop` 隐藏桌面启动的实例（那里文本接口正常）
+
+## 守护注入：为什么只能人工点菜单（2026-11-25 实测）
+
+`ide_trigger.ps1` / `start_daemon.cmd` 走 UIA `InvokePattern` 去点「工具 → 脚本 → 执行脚本文件...」，
+**在 InoProShop 上根本不可能成功**。实测证据：
+
+```
+root class = WindowsForms10.Window.8.app.0.13965fa_r6_ad1
+Descendants 里 ControlType.MenuBar   数量 = 0
+Descendants 里 ControlType.MenuItem  数量 = 0
+Win32 GetMenu(hwnd) = 0
+按 Alt 激活菜单后，顶层窗口只多出 tooltips_class32 和 SysShadow，没有弹出菜单窗口
+```
+
+菜单栏是**自绘**的（画在 `SandBarDock` 的子窗口上，不对 UIA 暴露控件树），所以任何
+`FindByName("Tools")` / `FindByName("工具")` 都返回 None —— **改语言没用，放弃 UIA**。
+
+**唯一入口**：IDE 里人工点一次
+`工具 → 脚本 → 执行脚本文件... → 选 <BASE>\ide\boot_daemon.py`
+
+`boot_daemon.py` 相对「直接选 `plc_daemon.py`」多做的事：
+
+| 做的事 | 为什么必须 |
+|---|---|
+| 自解析 IDE 目录（`PLC_IDE_DIR` > `sys.argv[0]` > 已加载 `plc_daemon.__file__`，优先选同时含 `boot_daemon.py` 与 `plc_daemon.py` 的目录） | 通过 `eval_file` 通道执行时 `sys.argv[0]` 仍是旧守护的路径，会推导到错误的 BASE |
+| 强制改写 `sys.argv[0]` 为 `<BASE>/ide/plc_daemon.py` | `_base.resolve_base()` 最高优先级是「从 `sys.argv[0]` 反推」。IDE 里执行过别处的 daemon 后，`sys.argv[0]` 固定成旧路径，守护把 `ready.flag` 写进旧目录 → `bridge` 误判「未启动」→ 转去点菜单 → 报 `Tools not found` |
+| 检查心跳年龄，超过 8s 就清理 `heartbeat`/`instance.lock`/`daemon.pid`/`ready.flag`/`cmd.json`/`running.json`/`result.json` | `_acquire_instance()` 只看心跳 mtime，上一次守护异常退出或 IDE 重开时心跳文件还留着，新实例会误判「已有实例」直接 `SystemExit` |
+| 把 exec 命名空间钉到 `sys._plc_mcp_keep` | 命名空间被回收 → `_logf` 关闭、线程对象被 GC → 守护静默死掉（症状：`daemon.log` 0 字节、没有 `heartbeat`） |
+| 单独 `except SystemExit` | 见上一节。重复注入时不掀掉正在跑的线程 |
+| 显式注入 `projects` / `online` / `system` | 用 `import plc_daemon` 加载时这三个名字不在模块命名空间里，`a_eval_file` 自己会 `NameError` |
+
+**排错顺序**（别乱猜）：`python scripts/ide/probe_daemon.py` → 看第 2 段「候选 BASE」哪个心跳是新的、
+第 3 段 `bridge` 用的是哪个，两者不一致就是挂错目录；全都没心跳就是没注入。
 
 ## 找对象（勿用全局 find_named）
 

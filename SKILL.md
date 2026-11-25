@@ -159,9 +159,11 @@ description: 汇川 InoProShop（CODESYS V3.5 SP11 系）LD 梯形图 native XML
 | check_symbols.py | **符号自检**（本地 Python 3 运行）：校验 POU 网络里引用的符号是否都在声明区定义过。用于「编译器没报错、消息窗口读不到，但 POU 打开就是红的」这类问题——不依赖 IDE 消息，直接比对操作数与声明 |
 | ld_logic.py | **逻辑层验收**（本地 Python 3 运行）：把 native 图形拓扑还原成布尔表达式并 DNF 规范化。单文件打印逻辑签名 / 双文件逻辑等价比对。**第四层验收**，补前三层盲区：双分类 0 错误只证明「编译器不报错」、往返 diff 只证明「IDE 没改写结构」、check_slots 只证明「槽位数对得上」——都不证明「画的是你要的逻辑」。学自 `Wayan123/multi-plc-agent`（`The verification compares logic, not XML`）：Id 重编号、节点顺序变化都不影响比对。已知局限：分支组内 MOVE 框 / EXECUTE 块无法还原成布尔式，显示为 `TRUE` 或 `BLOCK:类型(实例)` |
 | launch_ide_daemon.py | 启动 IDE + 注入 daemon（本地 Python 3 运行） |
-| ide_trigger.ps1 | UIA 触发 daemon 注入 |
+| ide/boot_daemon.py | **守护注入的唯一推荐入口**（IDE 内 IronPython 2.7）。`ide_trigger.ps1` 的 UIA 自动注入在 InoProShop 上**根本不可能成功**——菜单是自绘的，UIA 枚举整个窗口树 `MenuBar`=0、`MenuItem`=0，Win32 `GetMenu` 也返回 0（2026-11-25 实测）。所以必须人工点一次菜单：`工具 → 脚本 → 执行脚本文件... → 选本文件`。它解决三个坑：① 自解析目录（`PLC_IDE_DIR` > `sys.argv[0]` > 已加载 `plc_daemon.__file__`），避开「守护挂到历史遗留的 `D:\plc_mcp` 导致 bridge 误判未启动」；② 强制改写 `sys.argv[0]` 让 BASE 恒等于本技能包；③ 命名空间钉在 `sys._plc_mcp_keep` 防止被 GC、并单独捕获 `SystemExit` 防止重复注入掀掉正在跑的线程 |
+| ide/probe_daemon.py | **守护诊断**（本地 Python 3）：一次打印 IDE 进程 / 各候选 BASE 的 `ready.flag` 与心跳年龄 / `bridge` 解析到的 BASE / `ping` 结果。**卡住时先跑它**，能直接判出「没注入」还是「注入了但挂错目录」 |
+| ide_trigger.ps1 | UIA 触发 daemon 注入（⚠ **对 InoProShop 无效**，菜单自绘不暴露 UIA；保留仅供其它 CODESYS 系 IDE 参考） |
 | ide/_base.py | 路径自解析（IDE 内环境变量无效，靠它从脚本路径反推 BASE） |
-| ide/plc_daemon.py | IDE 内守护（IronPython 2.7） |
+| ide/plc_daemon.py | IDE 内守护（IronPython 2.7）。⚠ **循环与命令执行层必须兜 `BaseException`**：IronPython 里 `SystemExit`/`KeyboardInterrupt`/`SystemError` 都**不继承 `Exception`**，只写 `except Exception` 会让一个 `raise SystemExit` 穿透并杀死整个轮询线程（实测现象：注入后 0.7s 心跳停摆、bridge 全超时，日志里却只有一行无关信息） |
 | ide/task_check.py | 验收检查（**验收必用**，单次快照、零 sleep、零循环——IDE 脚本跑主线程，sleep/轮询会冻死界面，计时全部放主机侧；同时读预编译 `217bc73e` + 编译 `97f48d64` + 格式检查三分类，匹配不到分类必须 `raise` 防假通过） |
 | ide/task_silent_import.py | 静默导入核心（由 do_replace.py 调用） |
 | ide/task_readnow.py | 不清空直接读全部消息（排查异步） |
@@ -190,10 +192,13 @@ description: 汇川 InoProShop（CODESYS V3.5 SP11 系）LD 梯形图 native XML
 1. 安装本 .skill（或复制整个技能目录到目标 skills/）
 2. 选定工作目录（如 `D:/plc_mcp`），把 scripts/ 里 ide/ 结构照原样复制过去
 3. **不用设环境变量**——路径会自动从脚本位置反推。若铺在奇怪位置，写个 `base_path.txt`
-4. 用 `launch_ide_daemon.py --project=<工程路径>` 启动 IDE 注入 daemon
-5. 之后全程静默：do_replace.py 导入 → task_check.py 验证预编译
+4. 打开 InoProShop 并打开工程，**人工点一次菜单注入守护**：
+   `工具 → 脚本 → 执行脚本文件... → 选 <BASE>\ide\boot_daemon.py`
+   （菜单是自绘的，UIA 读不到，`ide_trigger.ps1` 走不通，只能人工点这一次）
+5. 跑 `python ide/probe_daemon.py` 确认 `ping` 通
+6. 之后全程静默：do_replace.py 导入 → task_check.py 验证预编译
 
-首次「执行脚本文件」对话框：IDE 已启动时 `bridge.py` 会自动用 UIA 点掉；只有 IDE 未启动才需人工点一次。
+**卡住时先跑 `ide/probe_daemon.py`**，它会直接告诉你是「守护没起」还是「守护起在别的 BASE 上了」。后者是换机部署最常见的问题：如果之前手工执行过别处的 `plc_daemon.py`，`sys.argv[0]` 会固定成那条旧路径，守护就把 `ready.flag` 写进旧目录，`bridge.py` 找不到就误判「未启动」，转去点菜单（而菜单点不到），最终报 `Tools not found`——**看到 `Tools not found` 不要以为是权限问题，先查 BASE 一致性**。
 
 ### assets/natives/（克隆模板样本）
 

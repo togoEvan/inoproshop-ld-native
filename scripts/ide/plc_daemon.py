@@ -301,16 +301,29 @@ def a_status(proj, cmd):
         u"device": obj_path(dev) if dev is not None else None,
     }
     if app is not None:
-        oa = online.create_online_application(app)
+        # ⚠ 在线接口必须在 IDE 主线程调用。handle_on_main() 正常情况下
+        #   会派发到主线程，但 execute_on_primary_thread 失败时会 fallback
+        #   inline（在后台线程执行），此时 create_online_application()
+        #   抛 SystemError("堆栈为空。")。
+        #   在线状态只是 status 的附加信息，绝不能因此让整个 status 失败
+        #   —— 离线开发时（没连设备）本来也拿不到。
         try:
-            r[u"logged_in"] = bool(oa.is_logged_in())
-            r[u"application_state"] = unicode(oa.application_state())
+            oa = online.create_online_application(app)
             try:
-                r[u"operation_state"] = unicode(oa.operation_state())
-            except Exception:
-                pass
-        finally:
-            oa.dispose()
+                r[u"logged_in"] = bool(oa.is_logged_in())
+                r[u"application_state"] = unicode(oa.application_state())
+                try:
+                    r[u"operation_state"] = unicode(oa.operation_state())
+                except Exception:
+                    pass
+            finally:
+                try:
+                    oa.dispose()
+                except Exception:
+                    pass
+        except BaseException, e:
+            # SystemError 不继承 Exception，必须兜 BaseException
+            r[u"online_error"] = u"%s: %s" % (type(e).__name__, e)
     try:
         r[u"gateways"] = [unicode(g.name) for g in online.gateways]
     except Exception:
@@ -811,6 +824,19 @@ def loop():
                         except Exception, e:
                             res = {u"ok": False, u"error": unicode(e),
                                    u"traceback": traceback.format_exc()}
+                        except BaseException, e:
+                            # ⚠ 关键：IronPython 里 SystemExit / KeyboardInterrupt
+                            #   不继承 Exception。被 eval_file 执行的脚本若
+                            #   raise SystemExit（例如再注入一次 daemon 时
+                            #   _acquire_instance() 判定「已有实例存活」），
+                            #   会穿透 except Exception 一路抛出，把本守护
+                            #   的轮询线程直接干掉 —— 实测 2026-11-25：
+                            #   注入后心跳 0.7s 内停摆、bridge 全部超时。
+                            #   所以命令执行层必须兜到 BaseException。
+                            res = {u"ok": False,
+                                   u"error": u"%s: %s" % (type(e).__name__, e),
+                                   u"traceback": traceback.format_exc()}
+                            log(u"CMD raised %s: %s" % (type(e).__name__, e))
                         try:
                             dump_json(RES_FILE, res)
                             log(u"RESULT written ok=%s" % res.get(u"ok"))
@@ -822,6 +848,9 @@ def loop():
                             pass
         except Exception, e:
             log(u"loop err: %s" % e)
+        except BaseException, e:
+            # 轮询线程绝不能死：任何 BaseException 都吞掉继续跑
+            log(u"loop BaseException %s: %s" % (type(e).__name__, e))
         try:
             system.delay(150)
         except Exception:
