@@ -8,6 +8,9 @@
 ## [Unreleased]
 
 ### 新增
+- **功能块（FB）调用的 native 结构**（act04_Interface + act90_PackMLManager 实测）。FB 框与 MOVE 框同属 `{acfc6f68}`，但 `CallType` 为 `Function`/`Program`/`FunctionBlock`、`BoxType` 填 POU 名、`EN`/`ENO` 是纯 `<Single Type="bool">True</Single>`（不是条件槽）、`Instance.Operand` 只有 `FunctionBlock` 类才填实例名。槽位规则：**`InputItems` 槽位数 == `InputParam` 参数个数（EN 算一个），槽0 恒为连接器 `{5f9848d3}` 且 `Input=Null`，槽1..n 与去掉 EN 后的参数严格一一对应；`OutputItems` 长度 == `OutputParam` 个数，第 0 项恒为 `<Null />`（对应 ENO）**。另记 `InputParam.Names` 填参数名而非操作数、REF 形参在 Types 里带 `[REF]` 后缀
+- **`scripts/examples/make_fb_call_test.py`：FB 调用生成器**。三类 `CallType` 各生成一个调用（`Function` 的 `PackMLScCmdInit`、`Program` 的 `prg_EM00_Logic`、`FunctionBlock` 的 `PackMLUnitManager` 带实例 12 入 12 出），全部用本 POU 局部变量、不依赖工程其它对象。实测静默导入成功、导出往返结构与源完全一致、**预编译 0 错误 + 编译 0 错误**
+- `references/native-structure.md` 新增「功能块（FB）调用标准结构」一节：与 MOVE 框的 8 项差异对照表、三类 CallType 语义、槽位规则、完整 13 槽结构示例、已验证样本清单
 - `scripts/start_daemon.cmd`：给**已经开着的** IDE 注入守护的一键入口。用 UIA `InvokePattern` 点「工具 → 脚本 → 执行脚本文件」，不移动鼠标、不抢键盘焦点、不激活窗口；注入完自检 `ipc/ready.flag` 并打印 `[OK]`/`[FAIL]`
 - `scripts/bridge.cmd`：命令行调用入口，按 `PLC_PYTHON` → `py -3` → `python` 顺序挑一个真能跑的 Python 3，避开 Windows 应用商店那个 0 字节的 `python.exe` 存根
 - **`scripts/examples/make_packml_cmd_test.py`：从零生成一个完整 LD POU 的可复用生成器**。以 `assets/natives/user_fixed.native` 为骨架，生成 7 网络 PackML 命令层测试程序 `prg_PackMLCmdTest`（模式切换 + Start/Stop/Abort/Clear/Reset/Hold），实测静默导入成功、**预编译 0 错误 0 警告**。脚本内含 `contact/coil/and_box/branch/netitem/network` 全套节点构造函数，可直接改造成任意 POU 生成器

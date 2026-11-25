@@ -13,7 +13,7 @@ InoProShop 的梯形图存在一个 native XML 结构里。这个仓库提供：
 
 1. **已验证的结构知识**（`references/`）：节点 GUID、槽位规则、预编译错误对照表。所有结论都经过实测，不是猜的。
 2. **可运行的桥接脚本**（`scripts/`）：通过文件 IPC 向**已经打开的** InoProShop 进程注入 IronPython 脚本，实现导入 / 导出 / 预编译检查。
-3. **克隆模板**（`assets/natives/`）：4 份已验证的 native 样本，生成新结构时从这里克隆，不要凭空构造。
+3. **克隆模板**（`assets/natives/`）：5 份已验证的 native 样本，生成新结构时从这里克隆，不要凭空构造。
    写**树形/分支组**结构时，必须从 `assets/natives/user_fixed.native` 克隆（见下方「已验证的合法模式」）。
 
 **能做什么**
@@ -182,8 +182,9 @@ inoproshop-ld-native/
 │   └── examples/                 # 生成脚本范例（可改环境变量复用）
 │       ├── make_full8.py         # 裸 MOVE 支路批量包装成完整支路
 │       ├── make_fix45.py         # 补声明 + 删多余 TRUE
-│       └── make_packml_cmd_test.py  # 从零生成完整 POU（7 网络 PackML 命令层）
-├── assets/natives/               # 已验证克隆模板（4 份）
+│       ├── make_packml_cmd_test.py  # 从零生成完整 POU（7 网络 PackML 命令层）
+│       └── make_fb_call_test.py     # FB 调用（Function/Program/FunctionBlock 三类）
+├── assets/natives/               # 已验证克隆模板（5 份，含 fb_call_test.native）
 ├── sync.ps1                      # 一键：校验 CHANGELOG → commit → push
 └── sync.cmd                      # PowerShell 执行策略绕过包装器
 ```

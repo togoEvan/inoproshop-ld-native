@@ -73,7 +73,7 @@ description: 汇川 InoProShop（CODESYS V3.5 SP11 系）LD 梯形图 native XML
 | ide/task_silent_import.py | 静默导入核心（由 do_replace.py 调用） |
 | ide/task_readnow.py | 不清空直接读全部消息（排查异步） |
 | ide/task_export_fixed.py | 导出指定 POU（学结构用） |
-| examples/make_*.py | 生成脚本范例。`make_full8.py` / `make_fix45.py` 读 `PLC_SRC_NATIVE` / `PLC_DST_NATIVE` 环境变量；`make_packml_cmd_test.py` 用相对路径（含 `contact/coil/and_box/branch/netitem/network` 全套节点构造函数，可改造成任意 POU 生成器） |
+| examples/make_*.py | 生成脚本范例。`make_full8.py` / `make_fix45.py` 读 `PLC_SRC_NATIVE` / `PLC_DST_NATIVE` 环境变量；`make_packml_cmd_test.py` / `make_fb_call_test.py` 用相对路径（前者含 `contact/coil/and_box/branch/netitem/network` 全套节点构造函数；后者含 `fb_box/pin/connector_input/output_target` FB 调用构造函数） |
 
 `ide/*.py` 是 IronPython 2 语法，`except Exception, e:` 合法，**勿用 Python 3 的 ast 校验**。
 
@@ -110,5 +110,6 @@ description: 汇川 InoProShop（CODESYS V3.5 SP11 系）LD 梯形图 native XML
 | `ss_manual_142651.native` | 用户手画并联起保停基线（触点/分支组最小样本） |
 | `prg_EM01_Logic.native` | 旧工程完整 LD（功能框/多线圈/连接器样本） |
 | `startstop_state3.native` | 早期 MOVE 状态字版本（历史对照，新写请用 `user_fixed.native`） |
+| `fb_call_test.native` | **FB 调用模板**。三类 CallType（Function/Program/FunctionBlock）各一个，含 REF 形参、实例调用、12 入 12 出；双分类 0 错误 |
 
 生成新 native 时**必须从这些已验证样本克隆节点**，不要凭空构造。

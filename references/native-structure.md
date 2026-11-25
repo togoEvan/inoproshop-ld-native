@@ -78,6 +78,84 @@ Operand="TRUE"  内部 Flags=0  IsContact=True
 </Single>
 ```
 
+## 功能块（FB）调用标准结构（act04 / act90 实测，2026-11-25）
+
+**FB 调用与 MOVE 框同属 `{acfc6f68}` 功能框，但关键字段全不一样。**
+
+### 与 MOVE 框的差异对照
+
+| 字段 | MOVE 框 | FB 调用 |
+|------|---------|---------|
+| `CallType` | `Move` | `Function` / `Program` / `FunctionBlock` |
+| `BoxType` | `MOVE` | **POU 名**（`prg_EM00_Logic`、`PackMLUnitManager`、`PackMLScCmdInit`） |
+| `IsBoxType` | `True` | `True`（两者相同） |
+| `EN` / `ENO` | 条件槽（AND 框或常量引脚） | **`<Single Name="EN" Type="bool">True</Single>`**（纯布尔，不是图形节点） |
+| `Instance.Operand` | — | `FunctionBlock` 类**必填实例名**；`Program` / `Function` 类写 `<Null Name="Operand" />` |
+| `Instance.Type` | — | 实例的类型名（如 `PackMLUnitManager`）；无名实例写空串 `''` |
+| `Instance.IsInstance` | — | 恒为 `True` |
+
+`CallType` 三取值对应的图形语义：
+
+| CallType | 图形 | 实例 | 例 |
+|----------|------|------|-----|
+| `Function` | FUN 框 | 无 | `PackMLScCmdInit(stScCmd := ...)` |
+| `Program` | PRG 框 | 无 | `prg_EM00_Logic(uiEmID := 0)` |
+| `FunctionBlock` | FB 框 | **有** | `fbPackMLManager(...)` |
+
+### 槽位规则（核心）
+
+```
+InputItems 槽位数 == InputParam 参数个数（EN 也算一个）
+  槽0      = 连接器 {5f9848d3}，Input=Null    ← EN 引脚的来源；Null = 由框自身 EN 字段决定
+  槽1..n   = 参数引脚 {9de7f100}，IsContact=False
+             与 InputParam **去掉 EN 之后**严格一一对应，顺序不可乱
+
+OutputItems 长度 == OutputParam 参数个数
+  第 0 项恒为 <Null />                        ← 对应 ENO
+  之后每项 = Operand 节点 {c9b2f165}，LValue=True, IsCoil=False，Operand=目标变量
+```
+
+**注意 `InputParam.Names` 填的是参数名，不是操作数。**
+`Names=['EN','stScCmd']`，`Types=['BOOL','sPmlSCCmd[REF]']` —— REF 形参在 Types 里
+带 `[REF]` 后缀；而引脚 `Operand.Type` 写去掉后缀的实际类型（`sPmlSCCmd`）。
+
+### 完整结构示例（FunctionBlock 类，带实例）
+
+```
+功能框 {acfc6f68}
+├─ EN  = <Single Name="EN" Type="bool">True</Single>
+├─ ENO = <Single Name="ENO" Type="bool">True</Single>
+├─ InputItems (13 槽 = InputParam 13 个参数)
+│   ├─ [0] 连接器 {5f9848d3}  Input=Null            ← EN
+│   ├─ [1] 引脚 {9de7f100}    Operand=PML0.stPackMLCfg   Type=sPmlCfg     ← stCfg
+│   ├─ [2] 引脚             Operand=...xRemModeReq    Type=BOOL         ← xRemModeReq
+│   └─ ... 依次到第 12 个参数
+├─ CallType  = FunctionBlock
+├─ Instance  = {c9b2f165}  IsInstance=True  Operand=fbPackMLManager  Type=PackMLUnitManager
+├─ OutputItems (13 项 = OutputParam 13 个参数)
+│   ├─ [0] <Null />                                 ← ENO
+│   ├─ [1] Operand=PML0.stStat.stModeCmd  Type=sPmlMode  LValue=True
+│   └─ ... 依次到第 12 个输出
+├─ InputParam   Names/Types 各 13 项
+├─ OutputParam  Names/Types 各 13 项
+├─ BoxType   = PackMLUnitManager
+└─ IsBoxType = True
+```
+
+### 挂载位置
+
+与 MOVE 框相同：直接挂 `Network/NetworkItems`，或作为分支组支路里的
+`AND[FB框, 连接器{505bff94}]`。act04 网络2 就是后者（两条并联支路各一个 FB 框）。
+
+### 已验证样本
+
+| 文件 | 覆盖 |
+|------|------|
+| `ipc/act04_Interface.native` | `Program` 类（无名实例、单参数） |
+| `ipc/act90_PackMLManager.native` | `FunctionBlock` 类（带实例、12 入 12 出）+ `Function` 类（REF 形参）+ MOVE 框包 FB 框 |
+| `assets/natives/fb_call_test.native` | **可直接克隆的 FB 调用模板**（上述三类合并成一个 POU） |
+| 生成器 `scripts/examples/make_fb_call_test.py` | 三类 CallType 各一个，全部往返一致、双分类 0 错误 |
+
 ## 挂载位置规则
 
 MOVE 框（功能框）有两个合法位置：
