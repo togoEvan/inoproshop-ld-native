@@ -1,4 +1,4 @@
-# sync.ps1 — 一键同步：校验 CHANGELOG → commit → push
+﻿# sync.ps1 — 一键同步：校验 CHANGELOG → commit → push
 #
 # 用法：
 #   .\sync.ps1 -Message "fix: 修正 IN 引脚 Type 说明"
