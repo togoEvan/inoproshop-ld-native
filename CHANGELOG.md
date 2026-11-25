@@ -10,6 +10,8 @@
 ### 新增
 - `scripts/start_daemon.cmd`：给**已经开着的** IDE 注入守护的一键入口。用 UIA `InvokePattern` 点「工具 → 脚本 → 执行脚本文件」，不移动鼠标、不抢键盘焦点、不激活窗口；注入完自检 `ipc/ready.flag` 并打印 `[OK]`/`[FAIL]`
 - `scripts/bridge.cmd`：命令行调用入口，按 `PLC_PYTHON` → `py -3` → `python` 顺序挑一个真能跑的 Python 3，避开 Windows 应用商店那个 0 字节的 `python.exe` 存根
+- **`scripts/examples/make_packml_cmd_test.py`：从零生成一个完整 LD POU 的可复用生成器**。以 `assets/natives/user_fixed.native` 为骨架，生成 7 网络 PackML 命令层测试程序 `prg_PackMLCmdTest`（模式切换 + Start/Stop/Abort/Clear/Reset/Hold），实测静默导入成功、**预编译 0 错误 0 警告**。脚本内含 `contact/coil/and_box/branch/netitem/network` 全套节点构造函数，可直接改造成任意 POU 生成器
+- `references/native-structure.md` 新增 4 节：**NETITEM.Flags 整级输出取反**、**RValue 类型可以是分支组本身**、**分支组 Input 槽公共前缀的两种合法形态**、**新建 POU 的完整 8 步流程**
 - `scripts/pack_skill.py`：打包 `.skill` 分发件。文件清单严格取自 `git ls-files`，只打 `SKILL.md` + `references/` + `scripts/` + `assets/`，保证包里永远是已提交版本，不会混入本地改动或已删除的旧文件
 - `references/precompile-errors.md` 第 6、7 类问题：C0046 批量未定义标识符、两个 TRUE 串联
 - `references/precompile-errors.md` 第 2b 类问题：单条件 rung 的顶层 AND 只有 1 个输入——**预编译 0 错误，构建却报 N 条 `'AND'需要至少'2' 个操作数`**

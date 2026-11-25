@@ -201,3 +201,81 @@ Object
 ```
 ├─ tree0: AND[ MOVE( IN← AND[ TRUE, xAlarm̄, ... ] ), CONN ]   ← 这个 TRUE 多余
 ```
+
+## NETITEM 的 Flags 位：整级输出取反
+
+`NETITEM.Flags`（`{668066f2}` 容器里的 `Flags` int）的 **bit 0 = 该梯级输出取反**，
+图形上表现为线圈前的小圆圈 `○`。
+
+```
+<NETITEM Flags=0>  →  条件 ──────( )线圈        正常
+<NETITEM Flags=1>  →  条件 ──○──( )线圈        输出取反
+```
+
+注意与 **Operand 内部 Flags bit0 = NOT**（常闭触点）区分：
+
+| 位置 | 含义 | 图形表现 |
+|------|------|---------|
+| `Operand.Flags` bit0 | 该触点取反 | `\|/\|` 常闭触点 |
+| `NETITEM.Flags` bit0 | 整个梯级输出取反 | 线圈前 `○` |
+
+**典型用法**：一条条件同时驱动两个互斥输出，只画一次条件。
+
+```
+xStopped(常闭) ─┬─( ) xProduction
+                └─○─( ) xManual        ← 第二个 NETITEM 的 Flags=1
+```
+
+## RValue 的类型可以是分支组本身
+
+`NETITEM.RValue` 的 `Type` **不一定是** `{5f9848d3 RValue 容器}`：
+
+- 条件是**单个触点/AND 框** → `RValue Type={5f9848d3}`，内部再放图形节点
+- 条件是**并联分支组** → `RValue Type={827b9ec2}`（分支组），**直接**当 RValue
+
+```
+<!-- 正确：RValue 类型就是分支组 -->
+<Single Name="RValue" Type="{827b9ec2}">
+  <Null Name="Input" />
+  <List2 Name="Trees"> ... </List2>
+  <Single Name="Mode" Type="{3b9474d0}">Sequential</Single>
+  <Single Name="Id" ... />
+</Single>
+```
+
+在 `{5f9848d3}` 里再包一层分支组会报 **「已标识项中有一项的格式无效」**。
+
+## 分支组 Input 槽的公共前缀
+
+分支组 `Input` 槽（`<Single Name="Input" Type=...>`）放公共前缀时，有两种合法形态：
+
+| 公共前缀内容 | `Input` 的 Type | 说明 |
+|-------------|----------------|------|
+| 单一分支组 | `{827b9ec2}` 分支组 | Input 本身就是分支组 |
+| 分支组 + 触点（串联） | `{acfc6f68}` AND 框 | Input 是**完整** AND 框 |
+
+**关键**：`Input` 属性必须带 `Name="Input"`。直接把 `and_box()` / `branch()` 的输出
+塞进去而忘了改外层标签名，会报同样的「格式无效」错误。
+
+```python
+# 正确
+inp = prefix.replace('<Single Type="', '<Single Name="Input" Type="', 1)
+```
+
+Input 若是 AND 框，必须是**完整** AND 框（含 `CallType`/`Instance`/`BoxType`/`Id`），
+不能只写 `ContainsExtensibleInputs…InputItems` 的截断版本。
+
+## 新建 POU 的完整流程（实测通过）
+
+以 `prg_PackMLCmdTest` 为例，7 网络、预编译 0 错误：
+
+1. 取一个**已知可导入**的 native 骨架（如 `assets/natives/user_fixed.native`）
+2. 替换 `NetworkList` 内容为生成的网络（按 `<List2>` 配对扫描，**跳过自闭合标签**）
+3. 替换 `TextLines` 为新的声明文本，Id 从 900 起顺序重排
+4. 改 `MetaObject/Name` 与 `MetaObject/Guid`（新 uuid4）
+5. `UniqueIdGenerator` 抬到最大 Id + 200
+6. `ipc/import_args.json` 写 `{"path":..., "parent":"Application", "expect":[...]}`
+7. `task_silent_import.py` 静默导入（父对象 `Application`，无同名 → 不弹框）
+8. `task_precompile.py` 验证：预编译分类 `217bc73e` 错误数必须为 0
+
+可复用的生成器：`scripts/examples/make_packml_cmd_test.py`
