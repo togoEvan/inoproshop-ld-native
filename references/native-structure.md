@@ -447,6 +447,50 @@ xStopped(常闭) ─┬─( ) xProduction
 
 在 `{5f9848d3}` 里再包一层分支组会报 **「已标识项中有一项的格式无效」**。
 
+## RValue 容器的完整值域（2026-11-25 全工程 127 对象扫描）
+
+NETITEM 的 `RValue` 字段首节点形态统计（143 处，全工程实测）：
+
+| RValue 首节点形态 | 处数 | 含义 |
+|---|---|---|
+| `Null` | 69 | 空条件（占位） |
+| 功能框 `{acfc6f68}` | 52 | AND 框/其他框直接当条件 |
+| 容器 `{5f9848d3}`（内含分支组/连接器 EN、ENO、Input） | ~17 | 单条件容器（分支组时见下） |
+| 分支组 `{827b9ec2}` 作为容器 Input | 6 | 分支组嵌进容器 |
+| 触点 `{9de7f100}` 作为容器 Input | 4 | 单触点直接当条件 |
+
+**要点**：功能框是最常见的 RValue 形态（52 处）——NETITEM 条件直接放 AND/比较框，
+不一定先包 `{5f9848d3}` 容器。生成时保持现有「AND 框当 RValue」写法即可。
+
+## 触点取反位掩码与网络级字段（2026-11-25 全工程实测补充）
+
+- **触点 `Operand.Flags.Flags` 值域仅 0/1**（1295 处 =0 正开、62 处 =1 常闭取反）——
+  本机 IDE 的 LD 不用其它位（无 P/N 边沿形态；边沿检测要用 R_TRIG/F_TRIG FB）
+- **网络级 `Connectors` / `ILLines` 恒空**（429 个网络全空）——LD 生成时写空 List2 即可，
+  不要往里塞东西（这两者是 FBD/IL 视图的残留字段）
+- **值引脚常量类型**：`IsContact=False` 的引脚 `Type` 可为 BOOL/UINT/INT/TIME/
+  RTS_SYSTIMEDATE/结构体名等（306 处 BOOL 最常见）；`Boolean` 字段：BOOL 常量 True 时
+  为 True（307 处），其余为 False——生成常量引脚时 BOOL 用 `Boolean=True`，
+  数值/时间型用 `Boolean=False` + `Type=INT/UINT/TIME`
+
+## LD 文档级转换标志字段群（2026-11-25 全工程实测）
+
+每个 LD `NetworkList` 所在的文档节点（`{25e509de...}` Implementation 容器内）还带
+一批**转换标志字段**（127 对象 × 恒定值；`user_fixed.native` 骨架已含，生成器不用管）：
+
+| 字段 | 恒定值 | 含义推测 |
+|---|---|---|
+| `DefaultViewMode` | `Ld` | 默认视图 LD |
+| `CodesysLDConverted` / `CodesysLDConverted1` | `True` | CODESYS LD 转换标志 |
+| `AssigmentToBranched` / `BoxWithoutInputsConverted` / `_executeIdsRepaired` / `DemuxToParalleled` | `True` | 各类拓扑修复标志 |
+| `BoxTreeSymbolInfoUpdated` | `False` | 符号信息更新标志 |
+| `ValidIds` | `True` | Id 有效性 |
+| `BranchCounter` | `0` | 分支计数器 |
+| `NetworkListComment` | 空 | 网络列表注释 |
+
+**生成新 POU 不需要写这些字段**——骨架 `user_fixed.native` 已带，改 NetworkList/TextLines
+时不碰它们。列在这里是为了：读别人工程时知道这些字段是**文档级元数据**，别当网络内容解析。
+
 ## ⚠ 铁律：分支组的 Trees 必须有 ≥ 2 条支路
 
 **单支路分支组会让 IDE 绘制网络时崩溃**，而且**预编译和编译都报 0 错误**，
