@@ -24,6 +24,9 @@
 - `references/native-structure.md`：重写「挂载位置规则」，补完整支路结构图与补齐前后对照表
 
 ### 修复
+- **同步时弹「选择凭据助手」窗口**：Git for Windows 的系统级配置是 `credential.helper=helper-selector`，
+  每次联网都会弹窗。`sync.ps1` 现在会自动把仓库级凭据助手设为 `wincred`（纯命令行读 Windows 凭据管理器，零弹窗），
+  并强制 `GIT_TERMINAL_PROMPT=0` + `GCM_INTERACTIVE=never`；凭据失效时直接报错而不是弹窗等待
 - **C0046 批量未定义标识符**（45 个错误的真实根因）：native 只搬「图形 + 声明文本」，图形引用的符号必须在 `Interface/TextDocument/TextLines` 里逐行声明；漏声明 = 每个引用点报一条错误。已为 `prg_StartStop` 补全 8 个状态机变量声明，45 → 0
 - **两个 TRUE 串联**：分支组 `Input` 已有公共前缀 TRUE 时，支路 EN 条件框里不要再放 TRUE。已删除 8 条支路里多余的 TRUE
 - **修正认知**：裸 MOVE 框挂分支组 Trees 虽预编译 0 错误，但功能链断头、图形不完整；任何层级都需外层 AND + 连接器包装

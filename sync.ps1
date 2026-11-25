@@ -33,6 +33,24 @@ if (-not (Test-Path "CHANGELOG.md")) { Fail "缺少 CHANGELOG.md" }
 $gitDir = (& git rev-parse --is-inside-work-tree 2>$null)
 if ($gitDir -ne "true") { Fail "git 仓库状态异常" }
 
+# --- 0.1 禁止任何交互弹窗 ----------------------------------------------------
+# Git for Windows 的系统级配置是 credential.helper=helper-selector，
+# 每次联网都会弹「选择凭据助手」的窗口。这里强制：
+#   1) 仓库级用 wincred（纯命令行，直接从 Windows 凭据管理器读，零弹窗）
+#   2) GIT_TERMINAL_PROMPT=0（终端也不许问）
+#   3) GCM_INTERACTIVE=never（万一走到 GCM 也不许开浏览器/对话框）
+$env:GIT_TERMINAL_PROMPT = "0"
+$env:GCM_INTERACTIVE     = "never"
+
+$currentHelper = (& git config --local --get-all credential.helper 2>$null) -join ","
+if ($currentHelper -notmatch "wincred") {
+    Info "配置仓库级凭据助手为 wincred（避免弹窗）"
+    & git config --local --unset-all credential.helper 2>$null | Out-Null
+    & git config --local --add credential.helper ""      | Out-Null  # 清掉系统级继承的 helper-selector
+    & git config --local --add credential.helper wincred | Out-Null
+    Ok "已设置 credential.helper=wincred"
+}
+
 if (-not $Branch) {
     $Branch = (& git rev-parse --abbrev-ref HEAD).Trim()
     if (-not $Branch) { Fail "无法确定当前分支" }
@@ -148,8 +166,11 @@ for ($i = 1; $i -le 5; $i++) {
 
     if ($i -lt 5) {
         # 网络类错误：退避后重试；其他错误（如被拒绝）不重试
-        if ($out -match "Could not connect|Failed to connect|Connection reset|timed out|unable to access|Could not resolve") {
+        if ($out -match "Could not connect|Failed to connect|Connection reset|timed out|unable to access|Could not resolve|Connection was reset") {
             Start-Sleep -Seconds (3 * $i)
+        } elseif ($out -match "Authentication failed|terminal prompts disabled|could not read Username|403") {
+            Write-Host ""
+            Fail "凭据失效或不可用（已禁用交互，不会弹窗）。请在 Windows 凭据管理器里重新登录 GitHub，或手动 git push 一次完成登录。"
         } else {
             Write-Host ""
             Fail "推送失败（非网络原因，不重试）。请检查凭据或先 git pull --rebase。"
