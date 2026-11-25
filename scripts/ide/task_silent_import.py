@@ -1,11 +1,12 @@
 # -*- coding: utf-8 -*-
 # 静默导入 native（绝不弹确认框）：改名让位 -> 导入 -> 校验 -> 删旧 -> 保存
 # 参数从 ipc/import_args.json 读取: {"path": "...", "parent": "prg_EM01_Logic", "expect": ["kw1","kw2"]}
-import io, os, time, traceback
+import io, os, sys, time, traceback
 
-import os
-BASE = os.environ.get("PLC_MCP_BASE") or r"D:\plc_mcp"
-IPC = os.path.join(BASE, "ipc")
+sys.path.insert(0, os.path.dirname(os.path.abspath(sys.argv[0])))
+import _base
+BASE = _base.resolve_base()
+IPC = _base.ensure_ipc(BASE)
 LOG = os.path.join(IPC, "silent_import.log")
 ARGS = os.path.join(IPC, "import_args.json")
 _lf = io.open(LOG, "w", encoding="utf-8")
@@ -16,26 +17,23 @@ def L(m):
     _lf.flush()
 
 
-def walk(root, limit=200000):
-    out = []
-    stack = [root]
-    while stack and len(out) < limit:
-        o = stack.pop()
-        out.append(o)
-        try:
-            kids = o.get_children()
-        except Exception:
-            kids = None
-        if kids:
-            for k in kids:
-                stack.append(k)
-    return out
+def find_child(parent, name):
+    """只在 parent 的【直接子对象】里按名字找。
 
-
-def find_named(root, name):
-    for o in walk(root):
+    为什么不递归：全局递归会误命中 Task Configuration 里的调用对象
+    （见 README 铁律「禁止全局 find_named」）。
+    """
+    if parent is None:
+        return None
+    try:
+        kids = parent.get_children()
+    except Exception:
+        return None
+    if not kids:
+        return None
+    for o in kids:
         try:
-            if o.get_name() == name:
+            if unicode(o.get_name()) == unicode(name):
                 return o
         except Exception:
             continue
@@ -76,19 +74,30 @@ def main():
         return
 
     proj = projects.primary
-    parent = find_named(proj, parent_name)
-    if parent is None:
-        L(u"FATAL: parent %s not found" % parent_name)
-        return
-    L(u"children before: %s" % u", ".join([k.get_name() for k in parent.get_children()]))
-    L(u"total objects before: %d" % len(walk(proj)))
+    app = proj.active_application
 
-    old = find_named(proj, src_name)
+    # 父对象：在 Application 的直接子对象里找（不递归）
+    parent = find_child(app, parent_name)
+    if parent is None:
+        # 兜底：允许 parent_name 就是 Application 自身
+        try:
+            if unicode(app.get_name()) == unicode(parent_name):
+                parent = app
+        except Exception:
+            pass
+    if parent is None:
+        L(u"FATAL: parent %s not found under %s" % (parent_name, app.get_name()))
+        return
+    L(u"parent = %s" % parent.get_name())
+    L(u"children before: %s" % u", ".join([k.get_name() for k in parent.get_children()]))
+
+    # 待替换对象：只在 parent 的直接子对象里找，避免误命中 Task Configuration
+    old = find_child(parent, src_name)
     tmp = None
     t0 = time.time()
     if old is not None:
         tmp = u"%s_old_tmp" % src_name
-        leftover = find_named(proj, tmp)
+        leftover = find_child(parent, tmp)
         if leftover is not None:
             leftover.remove()
             L(u"removed leftover %s" % tmp)
@@ -100,7 +109,7 @@ def main():
     dt = time.time() - t0
     L(u"import_native -> %r  (%.2fs)" % (r, dt))
 
-    newobj = find_named(proj, src_name)
+    newobj = find_child(parent, src_name)
     L(u"new object exists: %s" % (newobj is not None))
     if newobj is None:
         if old is not None:
@@ -133,7 +142,6 @@ def main():
         L(u"removed old (%s)" % tmp)
 
     L(u"children after: %s" % u", ".join([k.get_name() for k in parent.get_children()]))
-    L(u"total objects after: %d" % len(walk(proj)))
 
     proj.save()
     L(u"saved")

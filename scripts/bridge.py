@@ -6,8 +6,29 @@ import subprocess
 import sys
 import time
 
-BASE = os.path.dirname(os.path.abspath(__file__))
-IPC = os.path.join(BASE, "ipc")
+def _resolve_base():
+    """工作根目录解析，与 ide/_base.py 保持一致的优先级：
+       环境变量 PLC_MCP_BASE > <本目录>/base_path.txt > 本目录
+    """
+    env = (os.environ.get("PLC_MCP_BASE") or "").strip().strip('"')
+    if env:
+        return os.path.abspath(env)
+    here = os.path.dirname(os.path.abspath(__file__))
+    cfg = os.path.join(here, "base_path.txt")
+    if os.path.isfile(cfg):
+        try:
+            with open(cfg, "r", encoding="utf-8") as f:
+                for line in f:
+                    line = line.strip().strip('"')
+                    if line and not line.startswith("#"):
+                        return os.path.abspath(line)
+        except Exception:
+            pass
+    return here
+
+
+BASE = _resolve_base()
+IPC = os.environ.get("PLC_MCP_IPC") or os.path.join(BASE, "ipc")
 CMD = os.path.join(IPC, "cmd.json")
 RES = os.path.join(IPC, "result.json")
 READY = os.path.join(IPC, "ready.flag")

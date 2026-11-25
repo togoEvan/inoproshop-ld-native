@@ -11,7 +11,13 @@ import sys
 import time
 import traceback
 
-CMD_DIR = os.environ.get("PLC_MCP_IPC") or r"D:\plc_mcp\ipc"
+# 路径自解析：IDE 内读不到 shell 设的环境变量，必须从 sys.argv[0] 反推。
+# 详见同目录 _base.py 顶部说明。
+sys.path.insert(0, os.path.dirname(os.path.abspath(sys.argv[0])))
+import _base
+
+BASE = _base.resolve_base()
+CMD_DIR = _base.ensure_ipc(BASE)
 CMD_FILE = os.path.join(CMD_DIR, "cmd.json")
 RES_FILE = os.path.join(CMD_DIR, "result.json")
 STOP_FILE = os.path.join(CMD_DIR, "stop.flag")
@@ -74,7 +80,21 @@ if not _ok:
         pass
     raise SystemExit
 
-_logf = io.open(LOG_FILE, "a", encoding="utf-8")
+def _open_log():
+    """打开日志文件。daemon.log 被上一个实例的句柄锁住时（IDE 进程未释放），
+    退化为带时间戳的日志名，绝不让「打不开日志」把整个守护进程搞死。
+    """
+    for name in ("daemon.log",
+                 "daemon_%s.log" % time.strftime("%Y%m%d_%H%M%S")):
+        p = os.path.join(CMD_DIR, name)
+        try:
+            return io.open(p, "a", encoding="utf-8"), p
+        except Exception:
+            continue
+    return None, None
+
+
+_logf, _logpath = _open_log()
 
 
 def _boot(msg):
@@ -86,11 +106,20 @@ def _boot(msg):
         pass
 
 
+if _logf is None:
+    _boot(u"WARN: 无法打开任何日志文件（目录权限或句柄占用）")
+else:
+    _boot(u"log file = %s" % _logpath)
+
+
 _boot(u"script start, pid-file acquired")
+_boot(u"BASE = %s (source: %s)" % (BASE, _base.SOURCE))
 
 
 
 def log(msg):
+    if _logf is None:
+        return
     try:
         _logf.write(u"[%s] %s\n" % (time.strftime("%H:%M:%S"), unicode(msg)))
         _logf.flush()
@@ -511,19 +540,6 @@ def a_write_value(proj, cmd):
     return {u"result": done}
 
 
-ACTIONS = {
-    u"ping": None,  # 特殊处理：存活探测
-    u"eval_file": None,  # 特殊处理：热执行脚本
-    u"status": a_status, u"list_pous": a_list_pous,
-    u"get_pou": a_get_pou, u"set_pou": a_set_pou,
-    u"get_decl": a_get_decl, u"set_decl": a_set_decl,
-    u"build": a_build, u"login": a_login, u"logout": a_logout,
-    u"start": a_start, u"stop": a_stop,
-    u"read_value": a_read_value, u"write_value": a_write_value,
-    u"import_native": a_import_native,
-    u"open_project": None,  # 特殊处理：主线程打开工程
-}
-
 
 def a_import_native(proj, cmd):
     """静默导入 native 文件（绝不弹交互对话框）。
@@ -619,6 +635,20 @@ def a_import_native(proj, cmd):
             u"seconds": round(dt, 2), u"replaced": old_obj is not None,
             u"old_removed": removed, u"old_name": (tmp_name if keep_old and old_obj is not None else None),
             u"children_before": before, u"children_after": after}
+
+
+ACTIONS = {
+    u"ping": None,  # 特殊处理：存活探测
+    u"eval_file": None,  # 特殊处理：热执行脚本
+    u"status": a_status, u"list_pous": a_list_pous,
+    u"get_pou": a_get_pou, u"set_pou": a_set_pou,
+    u"get_decl": a_get_decl, u"set_decl": a_set_decl,
+    u"build": a_build, u"login": a_login, u"logout": a_logout,
+    u"start": a_start, u"stop": a_stop,
+    u"read_value": a_read_value, u"write_value": a_write_value,
+    u"import_native": a_import_native,
+    u"open_project": None,  # 特殊处理：主线程打开工程
+}
 
 
 def a_open_project(path):

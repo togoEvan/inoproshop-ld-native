@@ -19,8 +19,8 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import bridge
 
-BASE = os.path.dirname(os.path.abspath(__file__))
-IPC = os.path.join(BASE, "ipc")
+BASE = bridge.BASE
+IPC = bridge.IPC
 ARGS = os.path.join(IPC, "import_args.json")
 LOG = os.path.join(IPC, "silent_import.log")
 TASK = os.path.join(BASE, "ide", "task_silent_import.py")

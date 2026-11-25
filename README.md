@@ -51,39 +51,36 @@ InoProShop 的梯形图存在一个 native XML 结构里。这个仓库提供：
 
 ### 0. 前置
 
-- Windows + InoProShop 已安装且**工程已打开**
+- Windows + InoProShop 已安装
 - Python 3（跑桥接客户端）
-- 目标机器有 `ipc/` 目录可写
+- 目标机器有可写目录存放 `ipc/`
 
-### 1. 部署
+### 1. 部署（只需铺文件，不用配环境变量）
 
 ```powershell
-# 1) 选一个工作目录，把 scripts/ 原样铺过去
+# 选一个工作目录，把 scripts/ 原样铺过去
 $BASE = "D:\plc_mcp"
 New-Item -ItemType Directory -Force -Path "$BASE\ipc" | Out-Null
 Copy-Item -Recurse .\scripts\* $BASE\
-
-# 2) 设环境变量（换机部署的关键）
-$env:PLC_MCP_BASE  = $BASE
-$env:PLC_MCP_IPC   = "$BASE\ipc"
-$env:INOPROSHOP_EXE = "C:\Program Files\Inovance\InoProShop\InoProShop.exe"
 ```
 
-> 也可以直接改脚本里的默认值，环境变量优先级更高。
+**就这一步。** 路径是自动解析的，不需要设环境变量——详见下方「路径怎么解析」。
 
-### 2. 注入 daemon（每次开机/重开 IDE 做一次）
+### 2. 启动 IDE 并注入 daemon（每次开机/重开 IDE 做一次）
 
 ```powershell
-python "$BASE\launch_ide_daemon.py"
+python "$BASE\launch_ide_daemon.py" --project="E:\你的工程\xxx.project"
 ```
 
-首次需要在 IDE 里手动确认一次「执行脚本文件」。之后 daemon 常驻，全程静默。
+工程路径也可以不写（只开 IDE 空窗口，自己手动打开工程）。IDE 路径会自动搜索常见安装位置，找不到时用 `--ide=<完整路径>` 指定。
+
+首次会出现「执行脚本文件」确认框。**后续调用 `bridge.py` 时会自动用 UIA 点掉它**（`ide_trigger.ps1`），不需要人工介入；只有 IDE 完全没启动时才需要你手动点。
 
 ### 3. 生成 native → 导入 → 验收
 
 ```python
 # 从 assets/natives/ 克隆节点，改内容，写到 work/xxx.native
-python scripts/do_replace.py work\xxx.native Application prg_StartStop
+python scripts\do_replace.py work\xxx.native Application prg_StartStop
 ```
 
 ```python
@@ -93,6 +90,42 @@ python -c "import sys; sys.path.insert(0, r'<BASE>'); import bridge; bridge.call
 ```
 
 三步闭环：**克隆 → 导入 → 预编译 0 错误**。只要预编译不为 0，就不要声称完成。
+
+---
+
+## 路径怎么解析（部署前必读）
+
+**IDE 内脚本读不到你在 shell 里设的环境变量。** 这是实测结论：daemon 跑在 InoProShop 进程里，继承的是 IDE 启动那一刻的环境，`os.environ.get("PLC_MCP_BASE")` 永远是 `None`。
+
+所以路径按这个顺序解析（`scripts/ide/_base.py`）：
+
+| 优先级 | 来源 | 何时生效 |
+|--------|------|----------|
+| 1 | 环境变量 `PLC_MCP_BASE` | **仅当 IDE 由 `launch_ide_daemon.py` 启动**（子进程继承环境） |
+| 2 | `<BASE>/base_path.txt` 第一行 | 手工兜底，适合 IDE 手动开、脚本放在奇怪位置的情况 |
+| 3 | 从脚本自身路径反推 `scripts/ide/xxx.py → scripts/` | **默认路径，铺好文件就能用** |
+| 4 | `D:\plc_mcp` | 最后兜底 |
+
+`bridge.py` 用同一套规则。日志里会打印实际解析结果和来源：
+
+```
+BASE = D:\plc_mcp (source: derive:D:\plc_mcp\ide)
+```
+
+看到 `source: fallback` 说明自动解析失败，此时写一个 `base_path.txt` 即可：
+
+```powershell
+Set-Content -Path "$BASE\base_path.txt" -Value $BASE -Encoding UTF8
+```
+
+### 相关环境变量
+
+| 变量 | 用途 | 说明 |
+|------|------|------|
+| `PLC_MCP_BASE` | 工作根目录 | 只在 `launch_ide_daemon.py` 启动 IDE 时对 IDE 内脚本生效 |
+| `PLC_MCP_IPC` | IPC 目录 | 一般不用设，默认 `<BASE>/ipc` |
+| `INOPROSHOP_EXE` | IDE 可执行文件 | 给 `launch_ide_daemon.py` 用 |
+| `PLC_PROJECT` | 工程文件 | 给 `launch_ide_daemon.py` 用，等价于 `--project=` |
 
 ---
 
@@ -119,6 +152,7 @@ inoproshop-ld-native/
 │   ├── pack_skill.py             # 打包 .skill 分发件（清单取自 git ls-files）
 │   ├── ide_trigger.ps1           # UIA 触发注入
 │   ├── ide/                      # IDE 内 IronPython 2.7 脚本
+│   │   ├── _base.py              # 路径自解析（IDE 内环境变量无效，靠它定位）
 │   │   ├── plc_daemon.py         # 守护进程（命令分发）
 │   │   ├── task_check.py         # 预编译检查（验收必用）
 │   │   ├── task_silent_import.py # 静默导入核心

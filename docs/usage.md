@@ -17,13 +17,33 @@
 
 ### 环境变量
 
-| 变量 | 含义 | 缺省 |
-|------|------|------|
-| `PLC_MCP_BASE` | 桥接工作根目录（含 `ipc/`、`ide/`） | 脚本内硬编码路径 |
-| `PLC_MCP_IPC` | daemon 的 IPC 目录（`cmd.json` / `result.json`） | `<BASE>/ipc` |
-| `INOPROSHOP_EXE` | `InoProShop.exe` 完整路径 | 脚本内硬编码路径 |
+> ⚠️ **重要：IDE 内脚本读不到你在 shell 里设的环境变量。**
+> daemon 跑在 InoProShop 进程内，继承的是 IDE 启动那一刻的环境。
+> 实测在 IDE 内执行 `os.environ.get("PLC_MCP_BASE")` 恒为 `None`。
 
-换机器部署时**必须**设这三个变量，或改脚本内默认值。
+| 变量 | 含义 | 对谁生效 |
+|------|------|----------|
+| `PLC_MCP_BASE` | 工作根目录（含 `ipc/`、`ide/`） | 本地 Python 脚本 + **仅当 IDE 由 `launch_ide_daemon.py` 启动时**才对 IDE 内脚本生效 |
+| `PLC_MCP_IPC` | daemon 的 IPC 目录（`cmd.json` / `result.json`） | 同上 |
+| `INOPROSHOP_EXE` | `InoProShop.exe` 完整路径 | 仅 `launch_ide_daemon.py` |
+| `PLC_PROJECT` | 工程文件路径 | 仅 `launch_ide_daemon.py` |
+
+**所以不要靠环境变量部署。** 路径按下面顺序自动解析（`scripts/ide/_base.py` 与 `scripts/bridge.py` 用同一套规则）：
+
+| 优先级 | 来源 | 说明 |
+|--------|------|------|
+| 1 | 环境变量 `PLC_MCP_BASE` | 仅 `launch_ide_daemon.py` 启动 IDE 时有效 |
+| 2 | `<BASE>/base_path.txt` 第一行 | 手工兜底 |
+| 3 | 从脚本自身路径反推 `scripts/ide/x.py → scripts/` | **默认，铺好文件即可用** |
+| 4 | `D:\plc_mcp` | 最后兜底 |
+
+`ipc/check.log`、`ipc/daemon_boot.log` 第一行会打印实际解析结果：
+
+```
+BASE = D:\plc_mcp (source: derive:D:\plc_mcp\ide)
+```
+
+看到 `source: fallback` 就是自动解析失败，写个 `base_path.txt` 即可。
 
 ---
 
@@ -42,11 +62,13 @@
 │   ├── silent_import.log     # 导入过程日志
 │   └── <唯一名>.native       # 导出快照
 ├── ide/                      # IDE 内 IronPython 脚本
+│   ├── _base.py              # 路径自解析（IDE 内环境变量无效，靠它定位）
 │   ├── plc_daemon.py         # 守护进程
 │   ├── task_check.py         # 预编译检查（验收必用）
 │   ├── task_silent_import.py # 静默导入核心
 │   ├── task_readnow.py       # 读全部消息
 │   └── task_export_fixed.py  # 导出指定 POU
+├── base_path.txt             # 可选：手工指定 BASE（第 2 优先级）
 └── work/                     # 生成的 native（可 gitignore）
 ```
 

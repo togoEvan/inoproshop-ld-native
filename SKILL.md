@@ -66,6 +66,7 @@ description: 汇川 InoProShop（CODESYS V3.5 SP11 系）LD 梯形图 native XML
 | do_replace.py | 静默导入入口（本地 Python 3 运行） |
 | launch_ide_daemon.py | 启动 IDE + 注入 daemon（本地 Python 3 运行） |
 | ide_trigger.ps1 | UIA 触发 daemon 注入 |
+| ide/_base.py | 路径自解析（IDE 内环境变量无效，靠它从脚本路径反推 BASE） |
 | ide/plc_daemon.py | IDE 内守护（IronPython 2.7） |
 | ide/task_check.py | 预编译检查（**验收必用**，读 `217bc73e` 分类） |
 | ide/task_silent_import.py | 静默导入核心（由 do_replace.py 调用） |
@@ -75,18 +76,30 @@ description: 汇川 InoProShop（CODESYS V3.5 SP11 系）LD 梯形图 native XML
 
 `ide/*.py` 是 IronPython 2 语法，`except Exception, e:` 合法，**勿用 Python 3 的 ast 校验**。
 
-**环境变量**（换机部署时设置）：
-- `PLC_MCP_BASE`：桥接工作目录（含 ipc/、ide/）
+**路径解析**（换机部署必读）：**IDE 内脚本读不到 shell 设的环境变量**（daemon 跑在 IDE 进程内，继承的是 IDE 启动那一刻的环境，实测恒为 `None`）。`ide/_base.py` 与 `bridge.py` 按此顺序自动定位：
+
+1. 环境变量 `PLC_MCP_BASE`（仅当 IDE 由 `launch_ide_daemon.py` 启动时有效）
+2. `<BASE>/base_path.txt` 第一行（手工兜底）
+3. 从脚本自身路径反推 `scripts/ide/x.py → scripts/`（**默认，铺好文件即可用**）
+4. `D:\plc_mcp`（最后兜底）
+
+`ipc/check.log` 第一行会打印 `BASE = ... (source: ...)`，出现 `source: fallback` 就是解析失败，写个 `base_path.txt` 即可。
+
+**环境变量**（可选）：
+- `PLC_MCP_BASE`：工作根目录（含 ipc/、ide/）
 - `PLC_MCP_IPC`：daemon 的 IPC 目录（cmd.json/result.json 所在地）
 - `INOPROSHOP_EXE`：InoProShop.exe 完整路径（launch_ide_daemon.py 用）
+- `PLC_PROJECT`：工程文件路径（launch_ide_daemon.py 用，等价 `--project=`）
 
 ### 新机器部署步骤
 
 1. 安装本 .skill（或复制整个技能目录到目标 skills/）
 2. 选定工作目录（如 `D:/plc_mcp`），把 scripts/ 里 ide/ 结构照原样复制过去
-3. 设环境变量 `PLC_MCP_BASE`、`PLC_MCP_IPC`（或改脚本内默认值）
-4. 用 launch_ide_daemon.py 启动 IDE 注入 daemon（首次需一次「执行脚本文件」确认）
+3. **不用设环境变量**——路径会自动从脚本位置反推。若铺在奇怪位置，写个 `base_path.txt`
+4. 用 `launch_ide_daemon.py --project=<工程路径>` 启动 IDE 注入 daemon
 5. 之后全程静默：do_replace.py 导入 → task_check.py 验证预编译
+
+首次「执行脚本文件」对话框：IDE 已启动时 `bridge.py` 会自动用 UIA 点掉；只有 IDE 未启动才需人工点一次。
 
 ### assets/natives/（克隆模板样本）
 

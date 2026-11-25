@@ -17,7 +17,7 @@
 
 ### 修改
 - `assets/natives/user_fixed.native` 更新为**修复后最终版**：8 支路完整结构（3 顶层 + 内层 6）+ 声明区齐全，预编译 0 错误 0 警告；并在文档中标记为树形结构**首选克隆模板**
-- **全部脚本去掉硬编码的用户目录**：`task_check.py` / `task_readnow.py` / `task_export_fixed.py` / `task_silent_import.py` / `plc_daemon.py` / `launch_ide_daemon.py` 的兜底路径统一为占位符 `D:\plc_mcp`（仍优先读 `PLC_MCP_BASE` / `PLC_MCP_IPC`）；`examples/make_full8.py` 改用 `PLC_SRC_NATIVE` / `PLC_DST_NATIVE`
+- **全部脚本去掉硬编码的用户目录 + 路径自解析**：新增 `scripts/ide/_base.py` 统一路径解析——**环境变量对 IDE 内脚本无效**（daemon 跑在 IDE 进程内，继承的是 IDE 启动那一刻的环境，实测恒为 `None`），且含中文的路径经 `subprocess` 环境变量传给 IDE 会按 GBK 解码损坏。解析优先级改为：`scripts/ide/xxx.py → scripts/` 自身路径反推（`sys.argv[0]` 走 Windows UTF-16 命令行，中文无损，**最可靠**）> `<BASE>/base_path.txt`(手工兜底) > 环境变量(仅 `launch_ide_daemon.py` 启动且路径真实存在时) > `D:\plc_mcp`。`bridge.py` / `do_replace.py` 用同一套规则。日志打印 `BASE = ... (source: ...)` 便于排错
 - `README.md`：目录结构补全到实际文件（含 `scripts/examples/`、`sync.cmd`、各 `task_*.py` 用途）；铁律表新增第 9 条；「已验证的合法模式」补公共前缀去重与声明区
 - `SKILL.md`：`assets/natives/` 与 `scripts/` 表格按实际用途重排；铁律新增第 9 条；合法模式补两条
 - `docs/usage.md`：目录约定补全实际文件；快速排错索引补 §6 与 §7
@@ -25,6 +25,7 @@
 - `references/mcp-bridge.md`：修正 `bridge.py` 的 PowerShell 示例（原引号不匹配、路径末尾多一个 `/`），改为推荐 Python 调用 + 正确的 CLI 转义写法
 - `references/native-structure.md`：重写「挂载位置规则」，补完整支路结构图与补齐前后对照表
 - `.gitignore` / `.gitattributes`：注释从「一句话标签」改写为「为什么 + 挡什么 + 自检命令」。`.gitignore` 补充 gitignore 只对未跟踪文件生效、`git check-ignore -v` 自检、凭据已提交需吊销并清历史的说明；`.gitattributes` 补充跨平台换行根因、`git check-attr` 自检、`*.native` 为何按二进制处理。规则内容本身未变
+- `task_silent_import.py`：全局递归 `find_named`/`walk` 替换为 `find_child()`——只在目标父对象（Application）的**直接子对象**里用 `get_children()` 过滤查找，符 README 铁律「禁止全局 find_named」，避免误命中 Task Configuration 里的同名调用对象
 
 ### 修复
 - **同步时弹「选择凭据助手」窗口**：Git for Windows 的系统级配置是 `credential.helper=helper-selector`，
@@ -34,6 +35,9 @@
 - **两个 TRUE 串联**：分支组 `Input` 已有公共前缀 TRUE 时，支路 EN 条件框里不要再放 TRUE。已删除 8 条支路里多余的 TRUE
 - **修正认知**：裸 MOVE 框挂分支组 Trees 虽预编译 0 错误，但功能链断头、图形不完整；任何层级都需外层 AND + 连接器包装
 - `SKILL.md` / `README.md`：修正「内层是裸 MOVE 框」的表述——那是用户未改完的中间状态
+- **`plc_daemon.py` 加载即崩（NameError: a_import_native）**：`ACTIONS` 字典引用了在它之后才定义的 `a_import_native` 函数，前向引用导致模块级加载失败、daemon 永远起不来。已把 `a_import_native` 移到 `ACTIONS` 之前
+- **daemon 日志文件被锁导致整个守护崩死**：`daemon.log` 被上一个实例的句柄锁住时，`io.open` 抛异常直接中断 daemon 启动。已改为 `_open_log()`：打不开 `daemon.log` 就用带时间戳的日志名降级，绝不让日志问题拖垮守护
+- **`task_check.py` 读预编译报 category null**：`get_message_objects` 不能传字符串/GUID 分类，需先枚举 `get_message_categories()` 按 GUID 匹配到分类对象再取消息。已改 `_objs_by_guid`
 
 ### 删除
 - `docs/github-新手操作手册.md` —— 一次性的对话式操作记录，不属于工具文档
