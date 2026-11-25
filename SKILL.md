@@ -36,6 +36,12 @@ description: 汇川 InoProShop（CODESYS V3.5 SP11 系）LD 梯形图 native XML
 20. **action 的 ST 体只能引用宿主 POU 声明区里的变量**。action 属于哪个 POU 就只认那个 POU 的 `VAR`。实测：`prg_AxisCallTest` 的 `actAbs` 写了 `xPtpCond := ...`，而 `xPtpCond` 只在 `fb_AxisSkelTest` 里声明 → 预编译报 `[Error] actAbs | 没有定义标识符'xPtpCond'`。三个特征：① 消息归属对象是 **action 名**不是 POU 名；② 只在**预编译**分类；③ 编译分类照样报「0 错误,0 警告」
 21. **造负样本必须精确替换目标字段，不能连带改掉同名字段**。实测踩坑：用 `s.replace('>actAbs<', '>actAbs_ZZZ<')` 造负样本，把 `BoxType` **和** action Entry 的 `Name` 一起改了 → `actAbs_ZZZ` 成了合法 action，0 错误是**正确结果**，却被误判「验收链路失效」，白折腾一轮。正确做法：只改 `<Single Name="BoxType" Type="string">actAbs</Single>` 一处，Entry 名保持 `actAbs`；改完先 `grep -c` 自查（BoxType 1 处、Entry Name 1 处）
 
+22. **FB 类框（TON / FB_xxx）的 `Instance.Type` 必须填 BoxType 名，`Instance.Operand` 必须填实例名**。给 TON 写空 `Instance.Type` → `import_native` 抛 **「已标识项中有一项的格式无效。」**，而且是**模态弹窗**：主线程阻塞 → 守护心跳停止 → `bridge.py` 全部 180s 超时（看起来像「API 挂了」）→ 导入日志停在 `children before:` 没有 FATAL 行。判断：枚举该 PID 可见窗口，主窗口 `IsWindowEnabled=False` + 另有窗口挂 `确定` 按钮即是；解除：`SendMessage(hButton, BM_CLICK=0x00F5, 0, 0)`。⚠ `ET.parse()` 只验 XML 合法性，验不出这类语义错误
+
+23. **`check_slots.py` 不能按「输入槽数 == InputParam 名数」校验比较框 / MOVE / 算术框**。真实产线工程实测（911 处比较框）：`InputParam` 只有 `['EN']` 一个名字，但 `InputItems` **恒 3 槽**（槽0=EN 触点、槽1/2=左右操作数）；MOVE 恒 2 槽；ADD 恒 3 槽。旧版会把**模板原生 POU 全部误报**。已加 `_input_exempt(el, bt)`。**元教训**：校验脚本的「规则」本身也要拿真实工程回归
+
+24. **从未构建过的工程，编译分类 `97f48d64` 根本不存在**。`get_message_categories()` 只返回 2 个（预编译 + 导出/导入）；必须先跑一次 `app.build()`（**不 clear_messages**）才出现第 3 个。`scripts/ide/task_build_check.py` 专做此事。**不要**因分类不存在就当 0 错误通过。真实工程构建后剩下的错误不一定是你的——先 `grep 你的 POU 名`，为 0 即无关，结论须如实区分「模板原有」与「本次新增」
+
 ## 结构速查（详见 references/）
 
 - [native 结构与节点类型](references/native-structure.md)：全部节点 GUID、槽位规则、合法挂载位置

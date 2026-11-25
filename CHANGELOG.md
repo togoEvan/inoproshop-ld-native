@@ -7,6 +7,9 @@
 
 ## [Unreleased]
 
+### 文档
+- **铁律扩到 24 条**：新增第 21（FB 类框 `Instance.Type` 必填，否则模态弹窗冻死 IDE）、第 22（`check_slots.py` 不能按槽数==参数数校验比较框/MOVE/算术框）、第 23（未构建过的工程编译分类不存在，须先 `build()`）三条，README + SKILL.md 双写。`check_slots.py` 已加 `_input_exempt(el, bt)` 并对 154 个历史样本做全量回归（无新增 FAIL）。
+
 ### 新增
 - **【真实产线工程全量结构普查 + 端到端复现】**（2026-11-25）对「除油倒盘-擦拭机-PLCV20261124」真实工程做全量导出（400 entries / 403 对象 / 5804 个功能框 / 940 个分支组）逐字段统计，校正了一批「小样本推出来的一般规律」，并新增 `scripts/examples/make_repro_study.py` 生成 `prg_ReproStudy`（9 个网络，覆盖该工程全部主流写法）做端到端验证：**预编译 0 错误；编译仅剩模板自带的 1 条 `E3_SystemTime` 多任务错误（日志里 `prg_ReproStudy` 出现 0 次）；往返导出 9 个网络结构签名逐行一致**。核心修正与新发现：
   - **`NetworkItems` 的直接子节点里分支组才是主流**：分支组 `{827b9ec2}` 679 个网络、空网络 540、AND 55、FB 调用 20+、**NETITEM 仅 18**、MOVE 11、EXECUTE 4。真实程序的主结构是 `NetworkItems → 分支组 → Trees`，`NETITEM` 直挂只是少数写法。生成复杂逻辑应优先用分支组。
