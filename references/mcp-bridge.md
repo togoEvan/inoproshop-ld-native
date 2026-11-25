@@ -53,6 +53,22 @@ python bridge.py eval_file '{\"path\": \"D:\\\\plc_mcp\\\\ide\\\\task_check.py\"
 | task_export_fixed.py | 导出工程内指定 POU → ipc/user_fixed.native（学结构用） |
 | task_silent_import.py | 静默导入核心（由 do_replace.py 调用，一般不直接跑） |
 
+## textual_* 接口不可用时的退路（实测）
+
+用户手工启动的 IDE 实例里，`get_children()` 拿到的对象全是 `ExtendedObject[IScriptObject]`，
+**没有** `textual_declaration` / `textual_implementation` 属性
+（`has_textual_declaration` / `has_textual_implementation` 恒为 False，直接访问抛
+`'ExtendedObject[IScriptObject]' object has no attribute 'textual_implementation'`）。
+此时 `a_get_pou` / `a_get_decl` / `a_list_pous` 全部失效
+（`list_pous` 返回 `count=0`，`get_pou` 返回 `POU not found`）——**不是工程坏了，别去修工程**。
+
+退路：
+
+- **读**：`pou.export_native(path)` 导出 XML，再用 Python 侧解析 `TextLines`（声明区）与
+  `NetworkList`（12 段图形），逐段还原「条件串 + S/R 线圈」做校验
+- **写**：照旧用 `import_native`（不依赖文本接口）
+- 需要文本编辑能力时，改用 `--desktop` 隐藏桌面启动的实例（那里文本接口正常）
+
 ## 找对象（勿用全局 find_named）
 
 - 全局 `find_named` 会递归命中 Task Configuration 里的调用对象

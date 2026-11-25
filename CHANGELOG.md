@@ -12,6 +12,8 @@
 - `scripts/bridge.cmd`：命令行调用入口，按 `PLC_PYTHON` → `py -3` → `python` 顺序挑一个真能跑的 Python 3，避开 Windows 应用商店那个 0 字节的 `python.exe` 存根
 - `scripts/pack_skill.py`：打包 `.skill` 分发件。文件清单严格取自 `git ls-files`，只打 `SKILL.md` + `references/` + `scripts/` + `assets/`，保证包里永远是已提交版本，不会混入本地改动或已删除的旧文件
 - `references/precompile-errors.md` 第 6、7 类问题：C0046 批量未定义标识符、两个 TRUE 串联
+- `references/precompile-errors.md` 第 2b 类问题：单条件 rung 的顶层 AND 只有 1 个输入——**预编译 0 错误，构建却报 N 条 `'AND'需要至少'2' 个操作数`**
+- `references/mcp-bridge.md`「textual_* 接口不可用时的退路」：用户手工启动的 IDE 实例里对象全是 `ExtendedObject[IScriptObject]`，文本接口失效（`list_pous` 恒 0、`get_pou` 报 POU not found），只能 `export_native` 读、`import_native` 写
 - `references/native-structure.md`「声明区（TextLines）结构」与「公共前缀与支路条件去重」两节
 - `scripts/examples/make_fix45.py`：补声明 + 删多余 TRUE 的修复脚本
 - **分支组「完整支路」标准结构**（用户手改已验证）：外层 AND 框包住 `[MOVE 框, 连接器 {505bff94}]`；**任何一层（含嵌套分支组内部）都适用**
@@ -31,6 +33,9 @@
 - `task_silent_import.py`：全局递归 `find_named`/`walk` 替换为 `find_child()`——只在目标父对象（Application）的**直接子对象**里用 `get_children()` 过滤查找，符 README 铁律「禁止全局 find_named」，避免误命中 Task Configuration 里的同名调用对象
 
 ### 修复
+- **PLC_PRG 12 段状态机首版构建报 6 条 `'AND'需要至少'2' 个操作数`**：生成器给单条件 rung
+  （上电初始化、进入急停、4 段输出映射）只 append 了 1 个输入槽，AND 框退化成单操作数。
+  已改为条件数 < 2 时自动补 `TRUE` 触点；修复后预编译 0 错误、编译 0 错误（仅 CmpLog 库警告）
 - **同步时弹「选择凭据助手」窗口**：Git for Windows 的系统级配置是 `credential.helper=helper-selector`，
   每次联网都会弹窗。`sync.ps1` 现在会自动把仓库级凭据助手设为 `wincred`（纯命令行读 Windows 凭据管理器，零弹窗），
   并强制 `GIT_TERMINAL_PROMPT=0` + `GCM_INTERACTIVE=never`；凭据失效时直接报错而不是弹窗等待
