@@ -47,10 +47,13 @@ InoProShop 的梯形图存在一个 native XML 结构里。这个仓库提供：
 | 12 | **改声明区必须锚定 `Interface` 再找 `TextLines`，禁止裸 `find('<Array Name="TextLines"')`**。一份 native 里 `TextLines` 至少有 2 处：`Interface` 下的 POU 声明区，以及 EXECUTE 框 `STSnippet` 里的 ST 代码。`find()` 取到的是**文档中靠前的那个**——只要网络里有 EXECUTE 框（在网络列表里排在 Interface 前面），裸 `find` 就会把 POU 声明写进 ST 代码块、真正的声明区留着骨架旧变量，**预编译报 40+ 条 `符号 'PROGRAM'/'FUNCTION_BLOCK'/'BOOL' 不能识别` + `应该用';' 替换'...'`**（2026-11-25 实测 48 条）。正确写法：`p = raw.find('<Array Name="TextLines"', raw.find('<Single Name="Interface"'))`。 |
 | 13 | **验收脚本「读不到消息」必须抛错，绝不能返回空列表当 0 错误**。`get_message_objects` 需要分类对象；按 GUID 匹配分类时若写成 `except Exception: continue` + `return []`，一旦匹配失败就静默输出 `total=0 / 验收通过`——**这是假通过**。2026-11-25 实测：预编译真实有 48 条 Error，脚本却报 `预编译 : total=0 errors=0` 并判「通过」。`task_check.py` 已改为匹配不到分类即 `raise`，并先打印全部 5 个分类便于核对。 |
 | 14 | **`OutputItems` 项数必须等于 `OutputParam` 个数，且 `OutputParam` 含不含 `ENO` 由 `EN`/`ENO` 字段决定**。`EN/ENO=True` 的框（Function/Program/常规 FB/EXECUTE）第一项是 `ENO`，之后才是真输出；**`TON` 是 `EN/ENO=False`，`OutputParam=['Q','ET']` 不含 ENO**。别把「第 0 项恒为 `<Null/>` 对应 ENO」当死规矩——照抄会给 TON 少写一个输出项。19/19 样本实测 0 例外。⚠ 这条**预编译、编译、往返 diff 全都查不出来**（IDE 静默接受），只能靠「项数 vs 参数数」比对发现。 |
+| 15 | **往 XML 文本节点里塞自由文本，必须转义 `<` `>` `&`**。网络注释、声明区、ST 代码都是直接拼进 `<Single Name="Comment" Type="string">…</Single>` 的；注释里只要出现 `<Null/>`、`<>` 之类的字面量，XML 解析器就把它当成**真实子节点**。2026-11-25 实测：注释写 `不是 <Null/>`，导入后该 Network 的 `Comment` 下凭空多出一个 `Null` 子节点，节点数 363 vs 362，`rt_diff` 从 #275 起整段错位报 55 处 diff。**排查提示**：`rt_diff` 报「节点数不同 + 从某一处开始整段错位」时，先看那一处的父节点是不是 `Comment`/`Text`——十有八九是没转义。统一用 `make_ld_learn.xml_text()`。 |
 
 完整对照见 [`references/precompile-errors.md`](references/precompile-errors.md)。
 
 > **铁律 12/13 的元教训**：往返 diff PASS **不等于**内容正确。上次 `rt_diff.py` 两个 POU 都是 `total structural diffs: 0`，但源文件本身就是错的——IDE 把错误原样保留，往返当然一致。**往返一致只能证明「IDE 没改写我的结构」，不能证明「我的结构是对的」**，必须配合双分类 0 错误 + 语义抽查（如打印声明区首行确认是 `PROGRAM xxx` / `FUNCTION_BLOCK xxx`）。
+>
+> **铁律 15 的反向提醒**：这条与 12/13 互补——12/13 说「diff PASS 不算数」，15 说「diff FAIL 可能是自己生成的 XML 不合法」。看到 diff FAIL 先别改结构，**先确认报错位置是不是 `Comment`/`Text` 这类文本节点**。
 
 ---
 

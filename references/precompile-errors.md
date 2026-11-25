@@ -208,3 +208,43 @@ for e in root.iter():
   - 所以「槽位数 == 参数数」对 `AND` **不适用**——它按条件个数自由伸缩，但**至少 2 槽**
   - `AND` 的 `IsBoxType=False`；功能框是 `True`
 - **怎么自检**：按 `BoxType` 分支处理，别用一套模板套所有 `{acfc6f68}`
+### C. 网络注释里的 `<` `>` 未转义 → 凭空多出 XML 子节点
+
+**现象**：预编译 0 错误、编译 0 错误、**导入完全正常**，但往返 diff 报
+`节点数不同` + 「从 #275 起整段错位」+ `total structural diffs: 55`。
+
+**根因**：网络注释是直接拼进 XML 文本节点的：
+
+```xml
+<Single Name="Comment" Type="string">// 网络2：CallType=Action —— 不是 <Null/></Single>
+```
+
+XML 解析器看到 `<Null/>` 就当成**真实子节点**，于是这个 Network 的
+`Comment` 下多了一个 `Null` 节点，节点数 363 → 362（dst 少 1，因为
+IDE 重新导出时把非法子节点丢掉了）。
+
+**错在哪**：`make_ld_learn.network()` 直接把 `comment` 变量拼进模板，
+没有做 XML 转义。
+
+**对的是什么**：所有塞进 XML 文本节点的自由文本都必须转义：
+
+```python
+def xml_text(s):
+    return (s.replace(u"&", u"&amp;")
+             .replace(u"<", u"&lt;")
+             .replace(u">", u"&gt;"))
+```
+
+`network()` 的 `comment`、`textlines_block()` 的每一行（声明区 + ST 代码）
+都要过 `xml_text()`。**注意函数定义顺序**：`xml_text` 必须在
+`textlines_block` 之前定义，否则模块级调用会 `NameError`。
+
+**怎么自检**：
+1. 生成后 `grep` 注释行，确认 `<` 已变成 `&lt;`
+2. `rt_diff.py` 报「节点数不同 + 整段错位」时，**先看错位那一处的父节点名**——
+   是 `Comment` / `Text` / `Title` / `Label` 这类文本节点，就 100% 是转义问题
+3. 不要一看到 diff FAIL 就去改结构，先排除「自己的 XML 不合法」
+
+**为什么不报编译错**：IDE 导入时把多出来的 `Null` 当垃圾丢掉了，
+注释文本本身没丢，功能完全正常。**只有往返 diff 能发现**（而且报的是错位，
+不是直白的「注释有问题」）。

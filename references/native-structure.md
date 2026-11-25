@@ -727,3 +727,297 @@ END_VAR
 **自检**：导入后再导出，与源文件做结构 diff，`Operand` 节点的 `Name` 属性对不上就是这个问题。
 
 **对的是什么**：`coil()` / `out_operand()` 生成的 Operand 一律 `name=None`。
+
+---
+
+## 轴控指令（InoPack HC_MovePtpV / HC_MovePtpR 实测，2026-11-25）
+
+InoPack 模板的轴控封装是**两层结构**：
+
+```
+① 轴控 FB（HC_MovePtpV / HC_MovePtpR）—— 内部用 ST 写，8~9 个 action 各管一种运动
+② 调用点（act0_Ptp）—— 用 LD 里的功能框调 ①
+```
+
+**轴控指令（MC_Power / MC_MoveAbsolute / MC_MoveRelative / MC_Stop / MC_Halt /
+MC_SetPosition / MC_Reset / HMC_MoveVelocity / HMC_MoveJog / HMC_Home）全部写在
+FB 内部的 ST 里**，LD 里只出现「调用封装好的 FB」这一个框。所以 LD native 里
+**没有 MC_xxx 的功能框**——想在 LD 里画运动指令框是走不通的。
+
+### 两种轴类型（虚轴 vs 实轴）
+
+| 封装 FB | 轴变量类型 | 用途 |
+|---|---|---|
+| `HC_MovePtpV` | `AXIS_REF_SM3` | **虚轴**点位控制（仿真/无实驱） |
+| `HC_MovePtpR` | `AXIS_REF_ETC_DS402_CS` | **实轴**点位控制（EtherCAT DS402 伺服） |
+
+两个 FB 的接口形态一致，区别在轴类型和实轴多出来的 `Servo : ETCSlave` 引脚、
+`actHome` / `actHalt` / `Srch` 三个额外 action。
+
+### `HC_MovePtpV` 声明区（可直接抄的骨架）
+
+```pascal
+FUNCTION_BLOCK HC_MovePtpV
+VAR_INPUT
+    {attribute 'hide'}
+    wsName:         WSTRING := "";        // 伺服名称
+    {attribute 'hide'}
+    xSafety:        BOOL := TRUE;         // TRUE = 安全条件满足
+    xCondition :    BOOL;                 // TRUE = 动作条件满足
+END_VAR
+VAR_OUTPUT
+END_VAR
+VAR_IN_OUT
+    stInfo :        HC_sPtpInfo;          // PLC 数据接口（命令 + 状态）
+    VirtualAxis:    AXIS_REF_SM3;         // 轴引用（VAR_IN_OUT，不是 VAR）
+END_VAR
+VAR
+    fbSetPosition:  MC_SetPosition;
+    fbRelative:     MC_MoveRelative;
+    fbPower:        MC_Power;
+    fbStop:         MC_Stop;
+    fbReset:        MC_Reset;
+    fbAbsolute:     MC_MoveAbsolute;
+    fbVelocity:     HMC_MoveVelocity;
+    fbJog:          HMC_MoveJog;
+    fSetVel  :      LREAL;
+    fSetAcc  :      LREAL;
+    fSetDec  :      LREAL;
+    fSetJerk :      LREAL;
+    fSetMaxDec :    LREAL;
+    fSetMaxJerk :   LREAL;
+    xPtpCond :      BOOL;                 // 运动条件满足
+END_VAR
+```
+
+**要点**：
+- 轴引用必须放 `VAR_IN_OUT`（`AXIS_REF_SM3` 是结构体，放 `VAR_INPUT` 会复制一份，指令不动真实轴）
+- 每个运动指令一个**独立的 FB 实例**（`fbPower` / `fbStop` / ... 各自一个），不能共用一个
+- 实轴版 `HC_MovePtpR` 用 `ARRAY [0..1] OF MC_MoveAbsolute` 这类**实例数组**，支持双通道（示教 + 定位并行）
+
+### 8 个轴控指令的标准调用写法（ST，全部带形参）
+
+模板一律用「实例名(形参 := 值, 输出 => 变量);」的**标准形参调用**，不用赋值方式。
+
+```pascal
+// ① 使能 —— MC_Power（注意是 bRegulatorOn / bDriveStart 两个 BOOL，不是 Enable）
+fbPower(
+    Axis:=              VirtualAxis,
+    Enable:=            TRUE,
+    bRegulatorOn:=      stInfo.xCmdPwr,
+    bDriveStart:=       stInfo.xCmdPwr,
+    Status=>            stInfo.xStsPwrDone,
+    Error=>             stInfo.xStsPwrError);
+
+// ② 快速停止 —— MC_Stop（Deceleration / Jerk 是必填）
+fbStop(
+    Axis:=              VirtualAxis,
+    Execute:=           stInfo.xCmdStop OR (NOT xPtpCond AND stInfo.xStsPtpActive),
+    Deceleration:=      fSetMaxDec,
+    Jerk:=              fSetMaxJerk,
+    Done=>              stInfo.xStsStopDone,
+    Error=>             stInfo.xStsStopError,
+    Busy=>              stInfo.xStsStopBusy);
+
+// ③ 绝对定位 —— MC_MoveAbsolute（Direction 用 MC_Direction 枚举）
+fbAbsolute(
+    Axis:=              VirtualAxis,
+    Execute:=           stInfo.xCmdAbs,
+    Position:=          stInfo.fSetPos,
+    Velocity:=          fSetVel,
+    Acceleration:=      fSetAcc,
+    Deceleration:=      fSetDec,
+    Jerk:=              fSetJerk,
+    Direction:=         stInfo.eSetDir,
+    CommandAborted=>    stInfo.xStsAbsAborted,
+    Error=>             stInfo.xStsAbsError,
+    Busy=>              stInfo.xStsAbsBusy,
+    Done=>              stInfo.xStsAbsDone);
+
+// ④ 相对定位 —— MC_MoveRelative（Distance 而不是 Position）
+fbRelative(
+    Axis:=              VirtualAxis,
+    Execute:=           stInfo.xCmdRel,
+    Distance:=          stInfo.fSetDist,
+    Velocity:=          fSetVel,
+    Acceleration:=      fSetAcc,
+    Deceleration:=      fSetDec,
+    Jerk:=              fSetJerk,
+    CommandAborted=>    stInfo.xStsRelAborted,
+    Error=>             stInfo.xStsRelError,
+    Busy=>              stInfo.xStsRelBusy,
+    Done=>              stInfo.xStsRelDone);
+
+// ⑤ 设置轴位置 —— MC_SetPosition（Mode=FALSE 表示相对当前位置偏移）
+fbSetPosition(
+    Axis:=              VirtualAxis,
+    Execute:=           stInfo.xCmdSetPos,
+    Position:=          stInfo.fSetHPos,
+    Mode:=              FALSE,
+    Error=>             stInfo.xStsSetPosError,
+    Busy=>              stInfo.xStsSetPosBusy,
+    Done=>              stInfo.xStsSetPosDone);
+
+// ⑥ 故障复位 —— MC_Reset（Execute 要防抖：已 Done/Error 且轴仍故障时才允许再次触发）
+fbReset(
+    Axis:=              VirtualAxis,
+    Execute:=           stInfo.xCmdReset AND NOT ((fbReset.Done OR fbReset.Error)
+                            AND (VirtualAxis.nAxisState=1)),
+    Error=>             stInfo.xStsResetError,
+    Busy=>              stInfo.xStsResetBusy,
+    Done=>              stInfo.xStsResetDone);
+
+// ⑦ 恒速 —— HMC_MoveVelocity（汇川扩展，形参是小写 f 开头，不是标准 MC 的大写）
+fbVelocity(
+    Axis:=              VirtualAxis,
+    xEnable:=           stInfo.xCmdVel OR fbVelocity.xBusy,
+    fVelocity:=         fSetVel,
+    fAcceleration:=     fSetAcc,
+    fDeceleration:=     fSetDec,
+    fJerk:=             fSetJerk,
+    eDirection:=        stInfo.eSetDir,
+    xAborted=>          stInfo.xStsVelAborted,
+    xError=>            stInfo.xStsVelError,
+    xBusy=>             stInfo.xStsVelBusy,
+    xInVelocity=>       stInfo.xStsVelDone);
+
+// ⑧ 点动 —— HMC_MoveJog（汇川扩展，正/反两个 BOOL 同时给）
+fbJog(
+    Axis:=              VirtualAxis,
+    xJogForward:=       stInfo.xCmdJogFor,
+    xJogBackward:=      stInfo.xCmdJogBack,
+    fVelocity:=         fSetVel,
+    fAcceleration:=     fSetAcc,
+    fDeceleration:=     fSetDec,
+    fJerk:=             fSetJerk,
+    xAborted=>          stInfo.xStsJogAborted,
+    xBusy=>             stInfo.xStsJogBusy,
+    xError=>            stInfo.xStsJogError);
+```
+
+**关键差异（标准 MC vs 汇川 HMC）**：
+
+| 指令 | 形参风格 | 差异 |
+|---|---|---|
+| `MC_Power` | 大写 `Enable/bRegulatorOn/bDriveStart` | 标准库 |
+| `MC_MoveAbsolute` / `MC_MoveRelative` / `MC_Stop` / `MC_Halt` / `MC_SetPosition` / `MC_Reset` | 大写 `Axis/Execute/Velocity/...` | 标准库，输出 `Done/Error/Busy/CommandAborted` |
+| `HMC_MoveVelocity` | **小写** `xEnable/fVelocity/fAcceleration/...` | 汇川扩展，输出 `xBusy/xError/xInVelocity/xAborted` |
+| `HMC_MoveJog` | **小写** `xJogForward/xJogBackward/fVelocity/...` | 汇川扩展，无 `Execute`，靠两个 BOOL 电平控制 |
+| `HMC_Home` | 小写 `xHomeType/uiHomeMode/fHmoeVelocity/...` | 注意模板里 `fHmoeVelocity` 是**拼写错误**（原样如此），照抄才不会编译报错 |
+
+⚠ **`HMC_Home` 的形参名 `fHmoeVelocity` 是 InoPack 的原始拼写错误**（Home 拼成 Hmoe）。
+这是库里的真实名字，不是笔误——写 `fHomeVelocity` 会编译报错。
+
+### 错误码统一收集
+
+每个指令后面都跟一段错误码归集，模板统一写到 `stInfo.eStsFbErrorID`（类型 `HMC_ERROR`）：
+
+```pascal
+IF stInfo.xStsAbsError THEN
+    stInfo.eStsFbErrorID := UINT_TO_DWORD(fbAbsolute.ErrorID);
+END_IF
+```
+
+注意标准 MC 的 `ErrorID` 是 `UINT`，要 `UINT_TO_DWORD` 转；`HMC_` 系列的 `eErrorID`
+本身已是 `HMC_ERROR` 类型，直接赋（`fbVelocity.eErrorID`），不用转。
+
+### 轴状态读法（不靠指令，直接读轴结构体）
+
+```pascal
+stInfo.fStsAxisPos      := VirtualAxis.fSetPosition;      // 实时位置
+stInfo.fStsAxisVel      := VirtualAxis.fSetVelocity;      // 实时速度
+stInfo.fStsAxisTrq      := VirtualAxis.fActTorque;        // 实时力矩
+stInfo.xStsAxisBusy     := VirtualAxis.nAxisState > 3
+                           OR (VirtualAxis.nAxisState = 2 AND VirtualAxis.fSetVelocity <> 0);
+stInfo.xStsAxisStandstill := VirtualAxis.nAxisState = 3
+                           OR (VirtualAxis.nAxisState = 2 AND VirtualAxis.fSetVelocity = 0);
+stInfo.xStsAxisError    := VirtualAxis.nAxisState = 1;    // 1 = 故障
+stInfo.eStsAxisState    := VirtualAxis.nAxisState;        // SMC_AXIS_STATE 枚举
+stInfo.pStsAxis         := ADR(VirtualAxis);              // 轴指针（POINTER TO AXIS_REF_SM3）
+```
+
+`nAxisState` 取值：`1`=故障、`2`=待机/静止、`3`=停止、`>3`=运行中。
+
+### 轴控 FB 在 LD 里的调用写法（act0_Ptp 实测）
+
+```
+BoxType      = HC_MovePtpV
+CallType     = FunctionBlock
+Instance.Operand = fbPtpV[0]              ← FB 实例（数组元素）
+Instance.Type    = HC_MovePtpV
+
+InputParam.Names = ['EN', 'xCondition', 'stInfo', 'VirtualAxis']
+InputParam.Types = ['BOOL', 'BOOL', 'HC_sPtpInfo[REF]', 'AXIS_REF_SM3[REF]']
+                    ↑ REF 形参在 Types 里带 [REF] 后缀
+
+InputItems (4 槽 = 4 个参数)
+  [0] 连接器 {5f9848d3}  Input=Null        ← EN
+  [1] 引脚 {9de7f100}    Operand='IO.xEmergencyStop'   Type=BOOL
+  [2] 引脚               Operand='EM0.astPtpV[0]'      Type=HC_sPtpInfo
+  [3] 引脚               Operand='Master'              Type=AXIS_REF_SM3
+
+OutputParam.Names = ['ENO']   OutputItems = 1 项 <Null/>
+EN = True   ENO = True
+```
+
+**关键**：`AXIS_REF_SM3[REF]` 引脚的操作数直接写**轴名**（`Master`），
+`Type` 写 `AXIS_REF_SM3`（去掉 `[REF]` 后缀）。引脚 `IsContact=False`。
+
+### `CallType = Action`（全新取值，本轮首次发现）
+
+调用 POU 内的 action 时用这个 CallType：
+
+```
+BoxType   = act0_Ptp        ← action 的名字
+CallType  = Action          ← 之前只记录过 And/Function/Program/FunctionBlock/None
+EN/ENO    = True / True
+InputParam.Names  = ['EN']
+InputParam.Types  = ['BOOL']
+InputItems        = 1 槽（连接器）
+OutputParam.Names = ['ENO']
+OutputItems       = 1 项 <Null/>
+Instance.Operand  = ''      ← ⚠ 空字符串，不是 <Null/>！与 FB 调用不同
+Instance.Type     = ''      ← 也是空
+IsBoxType         = True
+```
+
+**⚠ `Action` 调用的 `Instance.Operand` 是空字符串 `""`**（`<Single Name="Operand" Type="string"></Single>`），
+不是 `<Null/>`。FB 调用才是 `Operand="实例名"`。写错时导入能过，但语义不对。
+
+### 轴控数据结构
+
+| 结构 | 作用 | 关键字段 |
+|---|---|---|
+| `HC_sPtpInfo` | **PLC 侧**命令 + 状态（程序用） | `xCmdPwr/xCmdAbs/xCmdRel/xCmdJogFor...` 命令；`fSetPos/fSetVel/fSetAcc/fSetDec/fSetJerk/eSetDir` 参数；`xStsAbsDone/xStsAbsBusy/xStsAbsError` 状态；`eStsFbErrorID : HMC_ERROR`；`pStsAxis : POINTER TO AXIS_REF_SM3` |
+| `HC_sPtpMan` | **HMI 侧**命令 + 参数（触摸屏用） | 含示教数组 `arAbsPos/arAbsVel`、`wCmdAbsSave/wCmdAbsTch` 等 |
+| `HC_sPtpHold` | 保持型数据 | 掉电保持的轴参数 |
+| `HC_sFumInfo` | 功能块状态 | |
+
+**分工**：`stInfo`（`HC_sPtpInfo`）给 PLC 程序用，`stHMI`（`HC_sPtpMan`）给 HMI 用，
+两者在 action 里做转换。这样 HMI 改参数不影响 PLC 逻辑层。
+
+### ⚠ 实轴版的双实例切换（避坑）
+
+`HC_MovePtpR` 的 `actAbs` 用两个实例交替，切换顺序按 Busy 决定：
+
+```pascal
+IF fbAbsolute[1].Busy THEN
+    fbAbsolute[0](Axis:= RealAxis);
+    fbAbsolute[1](Axis:= RealAxis);
+ELSE
+    fbAbsolute[1](Axis:= RealAxis);
+    fbAbsolute[0](Axis:= RealAxis);
+END_IF
+```
+
+**为什么**：汇川的圆弧/定位指令**不支持对同一实例重复触发**——同一实例连着调两次
+Execute，第二次会被忽略或直接 Done。用双实例交替可以让第二次运动在第一次还在
+Busy 时就排队。这正是 AM521 蚊香形螺旋插补里踩到的同一个坑。
+
+### 与本仓库其它章节的关系
+
+- 轴控 FB 是普通 `FUNCTION_BLOCK`，所以「`FUNCTION_BLOCK` 里的 LD 写法」一节全部适用
+- 轴控 FB 内部用 **ST**（不是 LD），所以它的实现部分落在 `Implementation` 的 `TextLines` 里，
+  和「EXECUTE 框内嵌 ST」用的是**同一个 `TextLines` 节点类型**——这也正是
+  「改声明区必须锚定 `Interface`」那条铁律的由来（一份 native 里 `TextLines` 有多处）
+- 轴控 FB 在 LD 里的调用框是常规 `CallType=FunctionBlock`，槽位规则同「功能块（FB）调用标准结构」

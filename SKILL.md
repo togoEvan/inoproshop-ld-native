@@ -28,6 +28,7 @@ description: 汇川 InoProShop（CODESYS V3.5 SP11 系）LD 梯形图 native XML
 13. **验收脚本「读不到消息」必须抛错，绝不能返回空列表当 0 错误**。按 GUID 匹配分类写成 `except Exception: continue` + `return []`，匹配失败就静默输出 `total=0 / 通过` —— **假通过**。实测预编译真实 48 条 Error，旧脚本报 `total=0 errors=0` 并判「通过」。必须 `raise`，并先打印全部分类便于核对
 14. **往返 diff PASS 不等于内容正确**。`rt_diff` 一致只能证明「IDE 没改写我的结构」；源文件本身错时 IDE 原样保留，往返照样 PASS（2026-11-25 实测：两个 POU 都 diffs=0，但源文件声明区是错的）。必须配合双分类 0 错误 + **语义抽查**（打印声明区首行确认是 `PROGRAM xxx` / `FUNCTION_BLOCK xxx`）
 15. **`OutputItems` 项数 == `OutputParam` 个数；`OutputParam` 含不含 `ENO` 由 `EN`/`ENO` 字段决定**。`EN/ENO=True` 的框（Function/Program/常规 FB/EXECUTE）第一项是 `ENO`；**`TON` 是 `EN/ENO=False`，`OutputParam=['Q','ET']` 不含 ENO**，两个输出不接线就写两个 `<Null/>`。19/19 样本 0 例外。⚠ 这条**预编译/编译/往返 diff 全都查不出来**（IDE 静默接受），只能靠 `scripts/check_slots.py` 或「项数 vs 参数数」比对发现——`fb_box()` 已加 `raise` 断言
+16. **往 XML 文本节点塞自由文本必须转义 `<` `>` `&`**。网络注释/声明区/ST 代码都是直接拼进 `<Single Name="Comment" Type="string">…</Single>` 的，注释里写 `<Null/>` 会被解析成**真实子节点**，导致该 Network 的 `Comment` 下凭空多一个 `Null`，节点数不等、`rt_diff` 从某处起整段错位报几十处 diff（2026-11-25 实测 55 处）。统一走 `make_ld_learn.xml_text()`，且它必须定义在 `textlines_block()` **之前**。**排查提示**：diff 报「节点数不同 + 整段错位」时先看错位处父节点是不是 `Comment`/`Text`/`Title`/`Label`，是就 100% 是转义问题，别去改结构
 
 ## 结构速查（详见 references/）
 
@@ -55,6 +56,11 @@ description: 汇川 InoProShop（CODESYS V3.5 SP11 系）LD 梯形图 native XML
 - **线圈 / 功能框输出引脚接线的 Operand 不带 `Name` 属性**（`<Single Type="{c9b2f165}">`）；触点/值引脚带 `Name="Operand"`、Instance 带 `Name="Instance"`。写错时预编译/编译/图形都正常，**只有往返 diff 会现形**（IDE 静默抹掉该属性）
 - **`AND` 框与功能框的 `EN`/`ENO` 是两种形态**：`AND` 是 `<Null Name="EN" />` / `<Null Name="ENO" />`（无值）；功能框是 `<Single Name="EN" Type="bool">True|False</Single>`。`AND` 的 `InputParam`/`OutputParam` 是**空 List2**（无参数名），所以「槽位数 == 参数数」对 `AND` 不适用（它按条件个数自由伸缩，但**至少 2 槽**）
 - **多输出 FB 实际接线**：`OutputItems` 每项的 `Operand.Type` 必须与 `OutputParam.Types` **逐字一致**，包括复合类型（`ARRAY [0..(c_uiEventNumber - 1)] OF BOOL`、`WSTRING(32)`、`sPmlCtrlCmd`）；`LValue=True`、`Boolean=False`、`IsCoil=False`、`IsSeriesCoil=False`、`SeriesIndex=-1`
+- **轴控 FB 在 LD 里的调用**：`CallType=FunctionBlock`，`BoxType` 写 FB 名（如 `HC_MovePtpV`），`Instance.Operand` 写实例（可带数组下标 `fbPtpV[0]`）。**`[REF]` 形参在 `InputParam.Types` 里带 `[REF]` 后缀**（`HC_sPtpInfo[REF]`、`AXIS_REF_SM3[REF]`），但引脚 `Operand.Type` 写**去掉后缀**的实际类型；`AXIS_REF_SM3` 引脚的操作数直接写**轴名**（`Master`）。实测 `prg_AxisCallTest` 导入 + 双分类 0 + 往返一致
+- **`CallType=Action`（调 POU 内 action）**：`BoxType` 写 action 名；只有 `EN` 一个参数、`InputItems` 1 个连接器槽；`OutputParam=['ENO']`、1 项 `<Null/>`。**`Instance.Operand` 和 `Instance.Type` 都是空字符串 `""`，不是 `<Null/>`**（这是第三种形态：`<Null/>`=Function/Program 无实例、实例名=FB、空串=Action）。实测 `prg_AxisCallTest` 网络2 通过
+- **网络注释里的自由文本必须转义**（铁律 16）：`network()` 的 `comment` 和 `textlines_block()` 的每一行都过 `xml_text()`；`xml_text` 必须定义在 `textlines_block` **之前**
+- **轴控指令不在 LD 里画**：`MC_Power`/`MC_MoveAbsolute`/`HMC_MoveJog` 等全部写在轴控 FB 内部的 **ST** 里（`Implementation` 的 `TextLines`），LD 层只出现「调用封装 FB」一个框。想在 LD 里直接画 `MC_xxx` 框走不通
+- **轴引用必须放 `VAR_IN_OUT`**：`AXIS_REF_SM3` / `AXIS_REF_ETC_DS402_CS` 是结构体，放 `VAR_INPUT` 会复制一份，运动指令作用不到真实轴
 - **输入引脚（值引脚 `{9de7f100}`）**：`IsContact=False`，内部 `Operand` 带 `Name="Operand"`；REF 形参在 `InputParam.Types` 里带 `[REF]` 后缀，引脚 `Operand.Type` 写去掉后缀的实际类型
 
 ## 弃用路径（勿重试）
@@ -152,7 +158,7 @@ description: 汇川 InoProShop（CODESYS V3.5 SP11 系）LD 梯形图 native XML
 | ide/task_silent_import.py | 静默导入核心（由 do_replace.py 调用） |
 | ide/task_readnow.py | 不清空直接读全部消息（排查异步） |
 | ide/task_export_fixed.py | 导出指定 POU（学结构用） |
-| examples/make_*.py | 生成脚本范例。`make_full8.py` / `make_fix45.py` 读 `PLC_SRC_NATIVE` / `PLC_DST_NATIVE` 环境变量；`make_packml_cmd_test.py` / `make_fb_call_test.py` 用相对路径（前者含 `contact/coil/and_box/branch/netitem/network` 全套节点构造函数；后者含 `fb_box/pin/connector_input/output_target` FB 调用构造函数） |
+| examples/make_*.py | 生成脚本范例。`make_full8.py` / `make_fix45.py` 读 `PLC_SRC_NATIVE` / `PLC_DST_NATIVE` 环境变量；`make_packml_cmd_test.py` / `make_fb_call_test.py` 用相对路径（前者含 `contact/coil/and_box/branch/netitem/network` 全套节点构造函数；后者含 `fb_box/pin/connector_input/output_target` FB 调用构造函数）；`make_ld_learn.py` 是**当前最完整的可复用基座**（`contact/value_pin/connector_slot/coil/fb_box/ton_box/execute_box/network/textlines_block/xml_text/build_pou` 全套，带 `__main__` 守卫可被 import）；`make_axis_call.py` 演示轴控 FB 调用 + `CallType=Action`；`extract_action_entry.py` 从模板 native 里切出 action Entry 原始 XML 作模板 |
 
 `ide/*.py` 是 IronPython 2 语法，`except Exception, e:` 合法，**勿用 Python 3 的 ast 校验**。
 

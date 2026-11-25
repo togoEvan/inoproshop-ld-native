@@ -285,6 +285,19 @@ def fb_box(box_type, instance, in_items, in_names, in_types,
                             box_type, nid()))
 
 
+def xml_text(s):
+    """把文本转义成可安全放进 XML 文本节点的形式。
+
+    ⚠ 血泪教训（2026-11-25）：网络注释里写 `<Null/>` 这种字面量，
+    如果直接拼进 XML，会被解析成**真实的子节点**，导致
+    「网络 Comment 下多一个 Null 节点」，往返 diff 节点数不等（363 vs 362）。
+    凡是往 XML 文本节点里塞的自由文本（注释/声明/ST 代码）都必须过这里。
+    """
+    return (s.replace(u"&", u"&")
+             .replace(u"<", u"<")
+             .replace(u">", u">"))
+
+
 def textlines_block(lines, start_id):
     """TextLines 数组（声明区 / 内嵌 ST 共用）。"""
     out = [u'<Array Name="TextLines" Type="%s">' % G_TEXTLINE]
@@ -295,7 +308,7 @@ def textlines_block(lines, start_id):
             u'    <Single Name="Id" Type="long">%d</Single>\n'
             u'    <Null Name="Tag" />\n'
             u'    <Single Name="Text" Type="string">%s</Single>\n'
-            u'  </Single>' % (G_TEXTLINE, tid, d))
+            u'  </Single>' % (G_TEXTLINE, tid, xml_text(d)))
         tid += 1
     out.append(u'</Array>')
     return u"\n".join(out), tid
@@ -417,7 +430,7 @@ def network(items, comment):
             u'  <Single Name="Title" Type="string"></Single>\n'
             u'  <Single Name="Collapsed" Type="bool">False</Single>\n'
             u'  <Single Name="Id" Type="long">%d</Single>\n'
-            u'</Single>' % (G_NETWORK, body, comment, nid()))
+            u'</Single>' % (G_NETWORK, body, xml_text(comment), nid()))
 
 
 # ===================== 网络构建 =====================
@@ -573,4 +586,7 @@ def main():
               os.path.join(OUT_DIR, "fb_LdLearnTest.native"))
 
 
-main()
+# 加 __main__ 守卫：其它生成器（如 make_axis_call.py）要 import 本模块的
+# fb_box / contact / value_pin 等辅助函数，import 时不能顺带执行生成。
+if __name__ == u"__main__":
+    main()
