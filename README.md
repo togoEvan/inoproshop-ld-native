@@ -184,6 +184,7 @@ inoproshop-ld-native/
 ├── scripts/
 │   ├── check_slots.py            # 结构自检：槽位数 vs 参数数 + Operand 三态断言
 │   ├── check_symbols.py          # 符号自检：网络引用 vs 声明区
+│   ├── ld_logic.py               # 逻辑层验收：图形拓扑 → 布尔表达式，DNF 规范化比对
 │   ├── bridge.py                 # IPC 客户端（本地 Python 3）
 │   ├── do_replace.py             # 静默导入入口（本地 Python 3）
 │   ├── launch_ide_daemon.py      # 启动 IDE + 注入 daemon

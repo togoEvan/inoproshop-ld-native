@@ -89,21 +89,34 @@ try:
     # 只处理一次待办消息，绝不循环、绝不 sleep
     system.process_messageloop()
 
-    # ═══ 动态枚举全部消息分类（学自 inoproshop-mcp 的 compile_project.py）═══
+    # ═══ 动态枚举全部消息分类（学自 inoproshop-mcp / multi-plc-agent）═══
     # 硬编码 GUID 只覆盖常见分类；大工程里编译错误会落到其它分类
     # （Library Manager、POU 专属、工程树等）。这里枚举运行时暴露的
-    # 每一个分类，全部扫描，防止漏读。已知分类单独标注，未知分类也计入合计。
+    # 每一个分类，全部扫描，防止漏读。
+    # 分类名称用 system.get_message_category_description() 动态取（实测可用），
+    # 不再硬编码中文标签——GUID 集合因版本/配置而异，名称才是稳定语义。
     cats = {}
     for c in list(system.get_message_categories()):
         cats[unicode(c)] = c
     if not cats:
         raise RuntimeError(u"get_message_categories() 返回空，不得当作 0 错误")
+
+    def cat_name(c):
+        """取分类可读名（实测本机 SP11 返回中文：编译/预编译/格式检查/导出导入/脚本消息）。"""
+        try:
+            d = unicode(system.get_message_category_description(c))
+            if d:
+                return d
+        except Exception:
+            pass
+        return u"?"
+
     L(u"=== 消息分类清单（共 %d 个）===" % len(cats))
-    KNOWN = {CAT_PRE: u"预编译", CAT_BUILD: u"编译", CAT_FMT: u"格式检查",
-             CAT_CHECKS: u"附加代码检查"}
+    cat_desc = {}
     for guid in sorted(cats.keys()):
-        mark = KNOWN.get(guid, u"")
-        L(u"  %s %s" % (guid, u"← %s" % mark if mark else u""))
+        nm = cat_name(cats[guid])
+        cat_desc[guid] = nm
+        L(u"  %s  %s" % (guid, nm))
 
     def read_cat(guid, label):
         """读一个分类；分类不存在直接抛错（不得当作 0 错误）。"""
@@ -148,14 +161,14 @@ try:
         return ne, nw
 
     # ① 三个基础分类：缺一个就抛错（本机 SP11 实测必存在）
-    # ② 已知的第 4 个分类 220493a1（附加代码检查）与未知分类：存在才读。
+    # ② 其余分类（含已知的 220493a1 附加代码检查）存在才读。
     #    实测（2026-11-25 本机 SP11）：运行时只暴露 5 个分类，没有 220493a1——
-    #    外部项目 inoproshop-mcp 记录的分类集合与本机不同，GUID 因版本/配置而异，
+    #    外部项目记录的分类集合与本机不同，GUID 因版本/配置而异，
     #    所以非基础分类不能设为「缺了就 raise」，否则验收永远过不去。
     total_err = 0
     total_warn = 0
-    for label, guid in ((u"预编译", CAT_PRE), (u"编译", CAT_BUILD),
-                        (u"格式检查", CAT_FMT)):
+    for guid in (CAT_PRE, CAT_BUILD, CAT_FMT):
+        label = cat_desc.get(guid) or u"?"
         objs = read_cat(guid, label)
         L(u"=== %s : total=%d ===" % (label, len(objs)))
         ne, nw = dump_cat(label, objs)
@@ -163,12 +176,11 @@ try:
         total_warn += nw
         L(u"  -> %s errors=%d warnings=%d" % (label, ne, nw))
 
-    # 可选分类：已知 220493a1 + 其余全部未知分类，存在就读、计入合计
-    optional = [u"附加代码检查"]
+    # 可选分类：其余全部分类，存在就读、计入合计
     for guid in sorted(cats.keys()):
         if guid in (CAT_PRE, CAT_BUILD, CAT_FMT):
             continue
-        label = optional[0] if guid == CAT_CHECKS else u"未知分类"
+        label = cat_desc.get(guid) or u"?"
         try:
             objs = list(system.get_message_objects(cats[guid]))
         except Exception, e:

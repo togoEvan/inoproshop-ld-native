@@ -32,6 +32,26 @@ daemon 轮询发现 `cmd.json` 后，先**原子改名为 `running.json`** 再�
 
 **新增配置项时**：除了在这里加一行，还要在 `scripts/ide/_base.py` 顶部注释写清解析优先级，并在 `docs/iteration.md` §7 补同步步骤。
 
+### 导出 API 签名（本机 SP11 实测，2026-11-25）
+
+学自 `tkucic/codesys_workflow_automation` 的 `codesysBulker.saveAndExport`。用 `fn.__doc__` 反射拿到本机真实重载：
+
+```python
+# PLCopenXML（可带 declarations_as_plaintext）
+proj.export_xml(objects, path=..., recursive=True,
+                export_folder_structure=True,
+                declarations_as_plaintext=True)
+# native XML（CODESYS 自有格式，注意参数名是 destination 不是 path）
+proj.export_native(objects=..., destination=..., recursive=True,
+                   one_file_per_subtree=False,
+                   profile_name=None, reporter=None)
+```
+
+两者在本机都 `hasattr == True`，`import_xml` / `import_native` 同样存在。
+**用途**：`export_native` 可整工程一次性导出（免去逐个 POU 导出），
+`export_xml` 的 PLCopenXML 是跨平台通用格式，可用于与其它工具交换。
+⚠ 反射签名时 `fn.Overloads` 在 IronPython 下 `len()` 会报错，直接读 `fn.__doc__` 更可靠。
+
 ## 静默导入（改名让位法）
 
 ```
@@ -105,6 +125,17 @@ python bridge.py eval_file '{\"path\": \"D:\\\\plc_mcp\\\\ide\\\\task_check.py\"
   本机不存在**——GUID 集合因版本/配置而异，不能照抄外部项目的分类清单。`task_check.py` 已按此实现：
   三个基础分类（预编译/编译/格式检查）缺一即 `raise`；其余分类（含已知的 `220493a1`）
   存在才读、计入合计。
+- **分类名称用 `system.get_message_category_description(cat)` 动态取**（实测可用，
+  学自 `Wayan123/multi-plc-agent`）。本机 SP11 实测返回中文，直接解决了「5 个分类里
+  2 个 GUID 不明身份」的问题：
+  | GUID | 名称 |
+  |---|---|
+  | `97f48d64-a2a3-4856-b640-75c046e37ea9` | 编译 |
+  | `217bc73e-759b-4a3c-bfa1-991c938a6541` | 预编译 |
+  | `0986c5dd-ca06-40a7-94e5-bf42de3dfd91` | 格式检查 |
+  | `2af7707f-6167-4a76-a40e-430967be0f18` | 导出/导入 |
+  | `194b48a9-ab51-43ae-b9a9-51d3edaaddf3` | 脚本消息 |
+  **不要硬编码中文标签**——GUID 集合因版本/配置而异，名称才是稳定语义。
 - ⚠ `Guid` 是 `script_engine.Guid`（.NET 类型），不是 Python 内建——裸写 `Guid("{...}")` 会静默 `NameError`
 
 ## system.commands
