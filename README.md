@@ -190,7 +190,7 @@ inoproshop-ld-native/
 │   ├── precompile-errors.md      # 错误 → 根因 → 修复（8 类，含 2b 单条件 AND）
 │   └── mcp-bridge.md             # 桥的协议、命令、消息分类
 ├── scripts/
-│   ├── check_slots.py            # 结构自检：槽位数 vs 参数数 + Operand 三态断言
+│   ├── check_slots.py            # 结构自检：槽位数 vs 参数数 + Operand 三态断言（含 MOVE 原生形态豁免）
 │   ├── check_symbols.py          # 符号自检：网络引用 vs 声明区
 │   ├── ld_logic.py               # 逻辑层验收：图形拓扑 → 布尔表达式，DNF 规范化比对
 │   ├── bridge.py                 # IPC 客户端（本地 Python 3）

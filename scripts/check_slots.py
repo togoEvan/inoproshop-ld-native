@@ -69,21 +69,42 @@ def names_of(el, pname):
 def slots_of(el, items_name):
     """数 InputItems/OutputItems 的槽数。
 
-    ⚠ 这两者都是 Single 包一层 List2，必须数 List2 的子节点。
-       直接数外层恒得 1，会把「TON 少写一项」误判成一致。
+    ⚠ 2026-11-25 全工程 126 POU 实测容器不对称（557 框无一例外）：
+       InputItems  = <List2 Name="InputItems"> 直接挂在框下
+       OutputItems = <Single Name="OutputItems"> 内包一层 <List2 Name="OutputItems">
+       用同一段代码取两者会把 MOVE 的输入槽数成 0（踩过）。
     """
     holder = child(el, items_name)
     if holder is None:
         return 0
-    if holder.tag == "List2":          # AND 框是直接挂 List2
+    if holder.tag == "List2":          # InputItems：直接挂 List2
         return len(list(holder))
-    # 注意：不能用 `a or b`，ElementTree 元素在 Python 3.12 起真值判断会告警
+    # OutputItems：Single 包一层 List2（内层与外层同名）
     lst = child(holder, "OutputItems")
     if lst is None:
         lst = child(holder, "InputItems")
     if lst is None:
         lst = holder
     return len(list(lst))
+
+
+G_NESTED_BOX = "acfc6f68-8e3a-4af5-bf81-3dd512095a46"   # 功能框（含嵌套框）
+G_CONTACT = "9de7f100-1b87-424c-a62e-45b0cfc85ed2"        # 触点/值引脚
+
+
+def _input_exempt(el):
+    """MOVE 的 IDE 原生形态豁免（2026-11-25 全工程实测，详见 native-structure.md）。
+
+    ① 嵌套框接 EN：槽0 是功能框，前框 ENO 链式供 EN，InputParam 可只有 [EN]
+    ② 多槽触点链：槽0 是触点且槽 > 2（末槽为 IN 常量），EN 直接串联
+    这两种形态「输入槽 != InputParam 数」是正常的，不豁免会把模板原生 POU 全部误报。
+    """
+    lst = child(el, "InputItems")
+    if lst is None or lst.tag != "List2" or len(lst) == 0:
+        return False
+    kind = (lst[0].get("Type") or "").strip("{}")
+    n = len(lst)
+    return kind == G_NESTED_BOX or (kind == G_CONTACT and n > 2)
 
 
 def check(path):
@@ -113,7 +134,8 @@ def check(path):
         if msg:
             rows.append((bt, ct, msg))
 
-        if n_in != len(in_names):
+        # MOVE 的 IDE 原生形态豁免（嵌套框接 EN / 多槽触点链）
+        if n_in != len(in_names) and not (bt == "MOVE" and _input_exempt(el)):
             rows.append((bt, ct, "输入槽 %d != InputParam %d %s"
                          % (n_in, len(in_names), in_names)))
         if n_out != len(out_names):

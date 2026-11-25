@@ -85,6 +85,53 @@ Operand="TRUE"  内部 Flags=0  IsContact=True
 </Single>
 ```
 
+## 功能框容器不对称规律 + MOVE 三形态（2026-11-25 全工程 126 个 POU 实测）
+
+用 `scripts/ide/scan_all_native.py` 一键导出全工程所有对象后全量统计，得到两条**容器形态铁律**：
+
+| 容器 | 形态 | 证据量 |
+|---|---|---|
+| `InputItems` | **`<List2 Name="InputItems">` 直接挂在框下**（框的直接子节点） | 全部 CallType × 557 个框 |
+| `OutputItems` | **`<Single Name="OutputItems"><List2 Name="OutputItems">…</List2></Single>`**（Single 包一层 List2） | 全部 CallType × 557 个框 |
+
+**两者不对称是常态，不是笔误**——解析时若用同一段代码取两者，会把 MOVE 的 InputItems 数成 0（实测踩坑：先按 `Single>List2` 解析，MOVE 的 EN+IN 两槽被数成 0 槽，还误判文档写错了）。
+
+### MOVE 框的三种合法形态
+
+| 形态 | InputParam.Names | InputItems 内容 | 出处 |
+|---|---|---|---|
+| **标准**（自己生成用这种） | `[EN, IN]` | 2 槽：槽0=AND 框（或触点），槽1=IN 值引脚 | 用户手改验证、模板导出 133 处 |
+| **多槽触点链** | `[EN, IN]` | 6~8 槽：槽0=TRUE 触点，槽1..N-2=条件触点（EN 直接串联，无显式 AND 框），槽末=IN 常量（如 `7`） | `dump_155228.native` 段2 状态机（Id=60263） |
+| **嵌套框接 EN** | `[EN]`（**只有 1 个参数，无 IN！**） | 2 槽：槽0=**另一个功能框**（如 `PackMLUnitManager`，13 槽 FB），槽1=IN 值引脚（如 `PML0.stCmd.stSc`） | `scan_063_Main.native`（Id=591，7 处） |
+
+**⚠ 豁免规则（check_slots 必须放行）**：`InputParam=['EN']` 但 `InputItems` 有 2 槽——槽 0 是嵌套框 `{acfc6f68}` 时，前一个框的 ENO 输出直接作为本框的 EN 输入（EN/ENO 链式调用）。同理**多槽触点链形态**（槽 0 是触点、槽 > 2、末槽是 IN 常量）也合法。这两种 IDE 原生形态下「输入槽 == InputParam 数」断言**不成立是正常的**，否则 IDE 模板原生 POU 全部误报。
+
+### 批量导出全工程（scan_all_native.py，2026-11-25 新增）
+
+`scripts/ide/scan_all_native.py`（IDE 内 eval_file 执行）：递归遍历
+`proj.active_application` 全部后代对象，凡能 `export_native` 的都导出为
+`<IPC>/scan_<序号>_<名字>.native`，空壳（<200 字节，folder 等）自动删除。
+本次实测导出 **126 个对象**（含 Library Manager / Symbols / Trace 等工程级对象）。
+
+用途：①学习时**批量扫描未知 BoxType**（`glob('scan_*.native')` 一把梭）；
+②回归对比（新生成结构与模板原生 POU 同场跑 check_slots）。
+
+## FUNCTION 调用框（CallType=Function，2026-11-25 全工程实测）
+
+**函数（有返回值）在 LD 里的调用框**，全工程 35 处（EtcStatusV2 / EventRecordV2 /
+PackMLSCCmdSum / PackMLConfiguer / PackMLScCmdInit）。与 FB 框的关键差异：
+
+- **核心规律：`OutputItems[i]` 与 `OutputParam.Names[i]` 严格按索引一一对应**（35/35 实测）
+- `[0]` ↔ `ENO`：未接 ENO 线时为 `<Null/>`
+- `[1]` ↔ **`OutputParam.Names` 索引 1 恒为空字符串**（35/35）＝**函数返回值槽**，
+  `Types[1]` 是返回类型（如 BOOL）。接住返回值＝在 `[1]` 放操作数
+  （`Operand=xScInitOk`、`LValue=True`）——已在 `prg_FbCallTest`（自建 POU）实测验证
+- `[2..]` ↔ 其余 `VAR_OUTPUT` 参数
+- **Instance.Operand 必须是 `<Null/>`**（三态规律，同 Action/Program）
+- **`InputItems` 实测全为空**（35/35）——函数实参不在 InputItems 里，
+  生成 Function 调用框时**不要照 FB 框写 InputItems 槽位**
+- 未接线的输出槽写 `<Null/>`，接线的写 `Operand` 操作数（`LValue=True`）
+
 ## 功能块（FB）调用标准结构（act04 / act90 实测，2026-11-25）
 
 **FB 调用与 MOVE 框同属 `{acfc6f68}` 功能框，但关键字段全不一样。**

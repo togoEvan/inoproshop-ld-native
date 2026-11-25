@@ -155,7 +155,7 @@ description: 汇川 InoProShop（CODESYS V3.5 SP11 系）LD 梯形图 native XML
 |------|------|
 | bridge.py | IPC 客户端（本地 Python 3 运行） |
 | do_replace.py | 静默导入入口（本地 Python 3 运行） |
-| check_slots.py | **结构自检**（本地 Python 3 运行）：校验所有功能框「`OutputItems` 项数 == `OutputParam` 个数」与「`InputItems` 槽数 == `InputParam` 个数」，`AND` 框校验至少 2 槽，并断言 **`Instance.Operand` 三态**（`FunctionBlock`→`<Single>实例名</Single>`；`Action`/`Function`/`Program`→`<Null/>`，写空 `<Single>` 会让 IDE 多画可填参数小方框）。**唯一能发现「编译器查不出来的结构错误」的手段**（预编译/编译/往返 diff 都查不出来）。退出码 0/1，可当 CI 断言 |
+| check_slots.py | **结构自检**（本地 Python 3 运行）：校验所有功能框「`OutputItems` 项数 == `OutputParam` 个数」与「`InputItems` 槽数 == `InputParam` 个数」，`AND` 框校验至少 2 槽，并断言 **`Instance.Operand` 三态**（`FunctionBlock`→`<Single>实例名</Single>`；`Action`/`Function`/`Program`→`<Null/>`，写空 `<Single>` 会让 IDE 多画可填参数小方框）。⚠ 容器不对称：`InputItems` 直接挂 `List2`、`OutputItems` 是 `Single>List2`；⚠ MOVE 豁免：IDE 原生「嵌套框接 EN」与「多槽触点链」形态下输入槽 ≠ InputParam 数是正常的（详见 native-structure.md「MOVE 三形态」）。**唯一能发现「编译器查不出来的结构错误」的手段**（预编译/编译/往返 diff 都查不出来）。退出码 0/1，可当 CI 断言 |
 | check_symbols.py | **符号自检**（本地 Python 3 运行）：校验 POU 网络里引用的符号是否都在声明区定义过。用于「编译器没报错、消息窗口读不到，但 POU 打开就是红的」这类问题——不依赖 IDE 消息，直接比对操作数与声明 |
 | ld_logic.py | **逻辑层验收**（本地 Python 3 运行）：把 native 图形拓扑还原成布尔表达式并 DNF 规范化。单文件打印逻辑签名 / 双文件逻辑等价比对。**第四层验收**，补前三层盲区：双分类 0 错误只证明「编译器不报错」、往返 diff 只证明「IDE 没改写结构」、check_slots 只证明「槽位数对得上」——都不证明「画的是你要的逻辑」。学自 `Wayan123/multi-plc-agent`（`The verification compares logic, not XML`）：Id 重编号、节点顺序变化都不影响比对。已知局限：分支组内 MOVE 框 / EXECUTE 块无法还原成布尔式，显示为 `TRUE` 或 `BLOCK:类型(实例)` |
 | launch_ide_daemon.py | 启动 IDE + 注入 daemon（本地 Python 3 运行） |
@@ -168,6 +168,7 @@ description: 汇川 InoProShop（CODESYS V3.5 SP11 系）LD 梯形图 native XML
 | ide/task_silent_import.py | 静默导入核心（由 do_replace.py 调用） |
 | ide/task_readnow.py | 不清空直接读全部消息（排查异步） |
 | ide/task_export_fixed.py | 导出指定 POU（学结构用） |
+| ide/scan_all_native.py | **批量导出全工程**（IDE 内 eval_file 执行）：递归遍历 `active_application` 全部后代，凡能 `export_native` 的都导出为 `<IPC>/scan_<序号>_<名字>.native`，空壳自动删。用途：①学习时批量扫描未知 BoxType；②回归对比（新生成结构与模板原生 POU 同场跑 check_slots）。实测一次导出 126 个对象 |
 | examples/make_*.py | 生成脚本范例。`make_full8.py` / `make_fix45.py` 读 `PLC_SRC_NATIVE` / `PLC_DST_NATIVE` 环境变量；`make_packml_cmd_test.py` / `make_fb_call_test.py` 用相对路径（前者含 `contact/coil/and_box/branch/netitem/network` 全套节点构造函数；后者含 `fb_box/pin/connector_input/output_target` FB 调用构造函数）；`make_ld_learn.py` 是**当前最完整的可复用基座**（`contact/value_pin/connector_slot/coil/fb_box/ton_box/execute_box/network/textlines_block/xml_text/build_pou` 全套，带 `__main__` 守卫可被 import）；`make_axis_call.py` 演示轴控 FB 调用 + `CallType=Action`；`extract_action_entry.py` 从模板 native 里切出 action Entry 原始 XML 作模板 |
 
 `ide/*.py` 是 IronPython 2 语法，`except Exception, e:` 合法，**勿用 Python 3 的 ast 校验**。
