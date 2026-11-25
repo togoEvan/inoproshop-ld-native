@@ -23,8 +23,11 @@
 # *.ps1 → CRLF。PowerShell 对 LF 支持不完善（尤其 5.1），
 #         必须保留 Windows 原生换行，否则可能出现解析异常
 # *.md  → LF。文档类文件，GitHub 渲染与各种编辑器都正常
+# *.cmd → CRLF。批处理里虽然多数情况 LF 也能跑，但 cmd.exe 对含 label/goto
+#         的脚本只有 CRLF 才稳，统一按 Windows 原生处理，免得以后踩坑
 *.py   text eol=lf
 *.ps1  text eol=crlf
+*.cmd  text eol=crlf
 *.md   text eol=lf
 
 # ---------------------------------------------------------------------------

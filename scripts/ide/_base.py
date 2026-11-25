@@ -110,13 +110,23 @@ def resolve_base():
 
 
 def resolve_ipc(base=None):
-    """IPC 目录：优先环境变量 PLC_MCP_IPC，否则 <BASE>/ipc"""
+    """IPC 目录：优先 <BASE>/ipc；仅当它不存在时才退回环境变量 PLC_MCP_IPC。
+
+    不能反过来：IDE 进程会继承「启动它的那个环境」里的 PLC_MCP_IPC。
+    实测（2026-11-25）：IDE 从旧工作区启动时带着
+    PLC_MCP_IPC=D:\\小艺Work工作空间\\20261123160323\\plc_mcp\\ipc，
+    若环境变量优先，守护会把 ready.flag / 心跳写到旧目录，
+    新版部署永远等不到就绪信号。
+    """
+    if base is None:
+        base = resolve_base()
+    d = os.path.join(base, "ipc")
+    if os.path.isdir(d):
+        return d
     env = _clean(os.environ.get("PLC_MCP_IPC") or u"")
     if env:
         return env
-    if base is None:
-        base = resolve_base()
-    return os.path.join(base, "ipc")
+    return d
 
 
 def ensure_ipc(base=None):

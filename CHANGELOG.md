@@ -8,6 +8,8 @@
 ## [Unreleased]
 
 ### 新增
+- `scripts/start_daemon.cmd`：给**已经开着的** IDE 注入守护的一键入口。用 UIA `InvokePattern` 点「工具 → 脚本 → 执行脚本文件」，不移动鼠标、不抢键盘焦点、不激活窗口；注入完自检 `ipc/ready.flag` 并打印 `[OK]`/`[FAIL]`
+- `scripts/bridge.cmd`：命令行调用入口，按 `PLC_PYTHON` → `py -3` → `python` 顺序挑一个真能跑的 Python 3，避开 Windows 应用商店那个 0 字节的 `python.exe` 存根
 - `scripts/pack_skill.py`：打包 `.skill` 分发件。文件清单严格取自 `git ls-files`，只打 `SKILL.md` + `references/` + `scripts/` + `assets/`，保证包里永远是已提交版本，不会混入本地改动或已删除的旧文件
 - `references/precompile-errors.md` 第 6、7 类问题：C0046 批量未定义标识符、两个 TRUE 串联
 - `references/native-structure.md`「声明区（TextLines）结构」与「公共前缀与支路条件去重」两节
@@ -22,6 +24,7 @@
 - `SKILL.md`：`assets/natives/` 与 `scripts/` 表格按实际用途重排；铁律新增第 9 条；合法模式补两条
 - `docs/usage.md`：目录约定补全实际文件；快速排错索引补 §6 与 §7
 - `docs/iteration.md`：新增 §5.4「为什么不弹凭据窗口了」，记录 `helper-selector` 弹窗根因与 `wincred` 方案
+- `README.md`：快速开始补「IDE 已开着」的一键注入（`start_daemon.cmd`）与 `bridge.cmd`；路径解析表补 IPC 目录优先级**与它和 BASE 解析顺序不同的原因**（IDE 继承旧环境变量导致 ready.flag 写错目录）；目录结构补两个新脚本
 - `references/mcp-bridge.md`：修正 `bridge.py` 的 PowerShell 示例（原引号不匹配、路径末尾多一个 `/`），改为推荐 Python 调用 + 正确的 CLI 转义写法
 - `references/native-structure.md`：重写「挂载位置规则」，补完整支路结构图与补齐前后对照表
 - `.gitignore` / `.gitattributes`：注释从「一句话标签」改写为「为什么 + 挡什么 + 自检命令」。`.gitignore` 补充 gitignore 只对未跟踪文件生效、`git check-ignore -v` 自检、凭据已提交需吊销并清历史的说明；`.gitattributes` 补充跨平台换行根因、`git check-attr` 自检、`*.native` 为何按二进制处理。规则内容本身未变
@@ -38,6 +41,7 @@
 - **`plc_daemon.py` 加载即崩（NameError: a_import_native）**：`ACTIONS` 字典引用了在它之后才定义的 `a_import_native` 函数，前向引用导致模块级加载失败、daemon 永远起不来。已把 `a_import_native` 移到 `ACTIONS` 之前
 - **daemon 日志文件被锁导致整个守护崩死**：`daemon.log` 被上一个实例的句柄锁住时，`io.open` 抛异常直接中断 daemon 启动。已改为 `_open_log()`：打不开 `daemon.log` 就用带时间戳的日志名降级，绝不让日志问题拖垮守护
 - **`task_check.py` 读预编译报 category null**：`get_message_objects` 不能传字符串/GUID 分类，需先枚举 `get_message_categories()` 按 GUID 匹配到分类对象再取消息。已改 `_objs_by_guid`
+- **守护 `ready.flag` 写到旧目录、新版永远等不到就绪**（2026-11-25 部署实测）：IDE 进程会继承「启动它的环境」里的 `PLC_MCP_IPC`（实测指向旧工作区 `D:\小艺Work工作空间\20261123160323\plc_mcp\ipc`），而 `_base.resolve_ipc()` 原来环境变量优先，导致 `plc_daemon.py` 把 `ready.flag` / 心跳 / 日志全写进旧目录，`bridge.start_daemon()` 傻等 30 秒后报「守护进程未就绪」。已改为 `<BASE>/ipc` 优先、环境变量仅在该目录不存在时兜底
 
 ### 删除
 - `docs/github-新手操作手册.md` —— 一次性的对话式操作记录，不属于工具文档

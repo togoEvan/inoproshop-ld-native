@@ -68,13 +68,29 @@ Copy-Item -Recurse .\scripts\* $BASE\
 
 ### 2. 启动 IDE 并注入 daemon（每次开机/重开 IDE 做一次）
 
+IDE 还没开，用这个（顺手把工程一起打开）：
+
 ```powershell
 python "$BASE\launch_ide_daemon.py" --project="E:\你的工程\xxx.project"
 ```
 
 工程路径也可以不写（只开 IDE 空窗口，自己手动打开工程）。IDE 路径会自动搜索常见安装位置，找不到时用 `--ide=<完整路径>` 指定。
 
+**IDE 已经开着（你自己打开的工作工程）** —— 直接双击或用命令行跑：
+
+```
+scripts\start_daemon.cmd
+```
+
+它只用 UIA 的 `InvokePattern` 去点「工具 → 脚本 → 执行脚本文件」，**不移动鼠标、不抢键盘焦点、不激活窗口**，注入完打印 `[OK] 守护已就绪`。这也是「不打扰用户」的关键：日常写入全程走 IPC 文件，IDE 界面不会跳到前台。
+
 首次会出现「执行脚本文件」确认框。**后续调用 `bridge.py` 时会自动用 UIA 点掉它**（`ide_trigger.ps1`），不需要人工介入；只有 IDE 完全没启动时才需要你手动点。
+
+命令行调用也可以走 `scripts\bridge.cmd`（自动挑一个能跑的 Python 3，避开 Windows 应用商店的 0 字节 python.exe 存根）：
+
+```
+scripts\bridge.cmd ping
+```
 
 ### 3. 生成 native → 导入 → 验收
 
@@ -105,6 +121,8 @@ python -c "import sys; sys.path.insert(0, r'<BASE>'); import bridge; bridge.call
 | 2 | `<BASE>/base_path.txt` 第一行 | 手工兜底，适合 IDE 手动开、脚本放在奇怪位置的情况 |
 | 3 | 从脚本自身路径反推 `scripts/ide/xxx.py → scripts/` | **默认路径，铺好文件就能用** |
 | 4 | `D:\plc_mcp` | 最后兜底 |
+
+IPC 目录另有自己的顺序，**和上面不同**：`<BASE>/ipc` 存在就用它，然后才看 `PLC_MCP_IPC`。原因是 IDE 进程会继承「启动它的那个 shell」里的环境变量——实测 IDE 被旧脚本启动时带着 `PLC_MCP_IPC` 指向旧目录，若环境变量优先，守护会把 `ready.flag` 写进旧目录，新版永远等不到就绪。
 
 `bridge.py` 用同一套规则。日志里会打印实际解析结果和来源：
 
@@ -150,7 +168,9 @@ inoproshop-ld-native/
 │   ├── do_replace.py             # 静默导入入口（本地 Python 3）
 │   ├── launch_ide_daemon.py      # 启动 IDE + 注入 daemon
 │   ├── pack_skill.py             # 打包 .skill 分发件（清单取自 git ls-files）
-│   ├── ide_trigger.ps1           # UIA 触发注入
+│   ├── ide_trigger.ps1           # UIA 触发注入（不动鼠标）
+│   ├── start_daemon.cmd          # 一键给「已运行的 IDE」注入守护
+│   ├── bridge.cmd                # 命令行入口（自动挑可用的 Python 3）
 │   ├── ide/                      # IDE 内 IronPython 2.7 脚本
 │   │   ├── _base.py              # 路径自解析（IDE 内环境变量无效，靠它定位）
 │   │   ├── plc_daemon.py         # 守护进程（命令分发）
