@@ -189,6 +189,34 @@ printf "protocol=https`nhost=github.com`n`n" | git credential fill
 
 凭据失效时 `sync.ps1` 会直接报错提示重新登录，**不会弹窗等待**。
 
+### 5.5 DNS 污染（2026-11-25 实测）
+
+**症状**：
+
+```
+fatal: unable to access 'https://github.com/...': Failed to connect to github.com:443 after 21072 ms
+```
+
+**关键**：这不一定是网络断了，也不是凭据失效。本机 DNS 曾把 `github.com` 解析到
+`20.6.7.17`（不可达），而真实 IP `20.205.243.166:443` 是通的。
+
+判别（三步全过说明只是 DNS 问题）：
+
+```powershell
+printf "protocol=https`nhost=github.com`n`n" | git credential fill   # 有 username/password = 凭据 OK
+nslookup github.com                                                    # 污染时给不可达 IP
+```
+
+修复：把域名钉到可用 IP。
+
+```powershell
+git -c http.curloptResolve=github.com:443:20.205.243.166 push origin main
+```
+
+`sync.ps1` 已内置兜底：推送前依次探测候选 IP（`20.205.243.166` / `20.27.177.113` /
+`140.82.113.4`）的 443 端口，钉住第一个可达的；全不可达才回退系统 DNS。
+IP 会变，所以是**候选列表 + TCP 探测**，不是硬编码单个 IP。全部失败时用
+`nslookup github.com 8.8.8.8` 拿新 IP 补进 `sync.ps1` 的 `$GithubIpCandidates`。
 
 ---
 

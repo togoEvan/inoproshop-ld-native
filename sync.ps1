@@ -145,14 +145,41 @@ if (-not $hasRemote) {
     exit 0
 }
 
-Info "git push origin $Branch（最多重试 5 次，应对网络抖动）"
+Info "git push origin $Branch（最多重试 5 次，应对网络抖动 / DNS 污染）"
+
+# --- DNS 污染兜底 -------------------------------------------------------------
+# 实测（2026-11-25）：本机 DNS 把 github.com 解析到 20.6.7.17（不可达），
+# 表现为 `Failed to connect to github.com:443 after 21000 ms`，
+# 但直连真实 IP 20.205.243.166:443 是通的。
+# 对策：用 http.curloptResolve 把域名钉到可用 IP（git ≥ 2.36 / curl ≥ 7.75）。
+# 注意：IP 可能失效，脚本会依次尝试候选列表；全部失败才回退到系统 DNS。
+$GithubIpCandidates = @("20.205.243.166", "20.27.177.113", "140.82.113.4")
+$GithubResolveArgs = @()
+foreach ($ip in $GithubIpCandidates) {
+    $ok = $false
+    try {
+        $c = New-Object System.Net.Sockets.TcpClient
+        $ar = $c.BeginConnect($ip, 443, $null, $null)
+        $ok = $ar.AsyncWaitHandle.WaitOne(3000) -and $c.Connected
+        $c.Close()
+    } catch { $ok = $false }
+    if ($ok) {
+        $GithubResolveArgs = @("-c", "http.curloptResolve=github.com:443:$ip")
+        Info "DNS 兜底：github.com:443 -> $ip（TCP 可达）"
+        break
+    }
+}
+if ($GithubResolveArgs.Count -eq 0) {
+    Warn "候选 GitHub IP 均不可达，回退系统 DNS（可能因污染失败）"
+}
+
 $pushed = $false
 for ($i = 1; $i -le 5; $i++) {
     Write-Host "  尝试 $i / 5 ..." -NoNewline
     # git 把进度信息写到 stderr，PowerShell 会当成 ErrorRecord；先压成字符串再判断
     $prevEAP = $ErrorActionPreference
     $ErrorActionPreference = "Continue"
-    $out = (& git push origin $Branch 2>&1 | ForEach-Object { "$_" }) -join "`n"
+    $out = (& git @GithubResolveArgs push origin $Branch 2>&1 | ForEach-Object { "$_" }) -join "`n"
     $rc = $LASTEXITCODE
     $ErrorActionPreference = $prevEAP
 

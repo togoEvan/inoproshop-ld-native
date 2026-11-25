@@ -14,7 +14,7 @@ bridge.py（本地客户端，文件队列 IPC）
 - 全局对象：`projects` / `online` / `system`
 - 脚本内用 IronPython 2 语法（`print` 无括号、`except Exception, e`、`unicode()`）
 
-### 换环境时必查的 6 项（新配置触发点）
+### 换环境时必查的 7 项（新配置触发点）
 
 换机器 / 换 IDE 版本 / 换工程路径 / 换凭据方式后，逐项跑下面的自检命令，**不要凭"我这边能用"下结论**。
 
@@ -26,8 +26,44 @@ bridge.py（本地客户端，文件队列 IPC）
 | 4 | **IDE 进程与工程** | `Get-Process InoProShop` + 日志里的 `project = ...` | 无进程 / 工程路径对不上 |
 | 5 | **IronPython 语法** | 新增 `ide/*.py` 后先 `eval_file` 试跑一次 | `except Exception, e` 被 Python 3 化会直接 SyntaxError |
 | 6 | **Git 凭据** | `printf "protocol=https\nhost=github.com\n\n" \| git credential fill` | 弹「选择凭据助手」窗口 = 被 `helper-selector` 接管 |
+| 7 | **GitHub DNS 是否被污染** | `git ls-remote origin main`（不通再试 `git -c http.curloptResolve=github.com:443:20.205.243.166 ls-remote origin main`） | 报 `Failed to connect to github.com:443 after 21000 ms` 但固定 IP 能通 = **DNS 污染**，不是网络断 |
 
 **新增配置项时**：除了在这里加一行，还要在 `scripts/ide/_base.py` 顶部注释写清解析优先级，并在 `docs/iteration.md` §7 补同步步骤。
+
+### DNS 污染（2026-11-25 实测）
+
+**症状**：`git push` 报
+
+```
+fatal: unable to access 'https://github.com/...': Failed to connect to github.com:443 after 21072 ms: Could not connect to server
+```
+
+**误判风险**：很容易当成"网络断了"或"凭据失效"去反复重试，其实两者都正常。
+
+**判别三步**（全部实测过）：
+
+```bash
+# 1) 凭据是否正常（正常会打印 username=... password=...）
+printf "protocol=https\nhost=github.com\n\n" | git credential fill
+
+# 2) 系统 DNS 解析到什么
+nslookup github.com          # 污染时返回 20.6.7.17 这类不可达地址
+
+# 3) 真实 IP 是否可达（OPEN = 网络没问题，问题在 DNS）
+timeout 8 bash -c "echo > /dev/tcp/20.205.243.166/443" && echo OPEN
+```
+
+**修复**：把域名钉到可用 IP，绕过系统 DNS。
+
+```bash
+git -c http.curloptResolve=github.com:443:20.205.243.166 push origin main
+```
+
+`sync.ps1` 已内置这个兜底：推送前依次探测候选 IP（`20.205.243.166` / `20.27.177.113` / `140.82.113.4`）的 443 端口，
+选第一个可达的钉住；全部不可达才回退系统 DNS。
+
+**注意**：IP 会变，所以脚本用**候选列表 + TCP 探测**而不是硬编码单个 IP。若哪天全部失败，用
+`nslookup github.com 8.8.8.8` 或在线 DNS 查询拿新 IP 补进候选表。
 
 ## 静默导入（改名让位法）
 
