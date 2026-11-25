@@ -169,7 +169,7 @@ description: 汇川 InoProShop（CODESYS V3.5 SP11 系）LD 梯形图 native XML
 | ide/task_readnow.py | 不清空直接读全部消息（排查异步） |
 | ide/task_export_fixed.py | 导出指定 POU（学结构用） |
 | ide/scan_all_native.py | **批量导出全工程**（IDE 内 eval_file 执行）：递归遍历 `active_application` 全部后代，凡能 `export_native` 的都导出为 `<IPC>/scan_<序号>_<名字>.native`，空壳自动删。用途：①学习时批量扫描未知 BoxType；②回归对比（新生成结构与模板原生 POU 同场跑 check_slots）。实测一次导出 126 个对象 |
-| examples/make_*.py | 生成脚本范例。`make_full8.py` / `make_fix45.py` 读 `PLC_SRC_NATIVE` / `PLC_DST_NATIVE` 环境变量；`make_packml_cmd_test.py` / `make_fb_call_test.py` 用相对路径（前者含 `contact/coil/and_box/branch/netitem/network` 全套节点构造函数；后者含 `fb_box/pin/connector_input/output_target` FB 调用构造函数）；`make_ld_learn.py` 是**当前最完整的可复用基座**（`contact/value_pin/connector_slot/coil/fb_box/ton_box/execute_box/network/textlines_block/xml_text/build_pou` 全套，带 `__main__` 守卫可被 import）；`make_axis_call.py` 演示轴控 FB 调用 + `CallType=Action`；`extract_action_entry.py` 从模板 native 里切出 action Entry 原始 XML 作模板 |
+| examples/make_*.py | 生成脚本范例。`make_full8.py` / `make_fix45.py` 读 `PLC_SRC_NATIVE` / `PLC_DST_NATIVE` 环境变量；`make_packml_cmd_test.py` / `make_fb_call_test.py` 用相对路径（前者含 `contact/coil/and_box/branch/netitem/network` 全套节点构造函数；后者含 `fb_box/pin/connector_input/output_target` FB 调用构造函数）；`make_ld_learn.py` 是**当前最完整的可复用基座**（`contact/value_pin/connector_slot/coil/fb_box/ton_box/execute_box/network/textlines_block/xml_text/build_pou` 全套，带 `__main__` 守卫可被 import）；`make_axis_call.py` 演示轴控 FB 调用 + `CallType=Action`；`make_func_return_test.py` 演示 **Function 调用框接返回值**（OutputItems 按索引对应 OutputParam.Names，[1]=返回值；含「REF 形参接全局实例成员」避坑）；`extract_action_entry.py` 从模板 native 里切出 action Entry 原始 XML 作模板 |
 
 `ide/*.py` 是 IronPython 2 语法，`except Exception, e:` 合法，**勿用 Python 3 的 ast 校验**。
 

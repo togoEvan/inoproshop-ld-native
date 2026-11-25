@@ -128,9 +128,20 @@ PackMLSCCmdSum / PackMLConfiguer / PackMLScCmdInit）。与 FB 框的关键差�
   （`Operand=xScInitOk`、`LValue=True`）——已在 `prg_FbCallTest`（自建 POU）实测验证
 - `[2..]` ↔ 其余 `VAR_OUTPUT` 参数
 - **Instance.Operand 必须是 `<Null/>`**（三态规律，同 Action/Program）
-- **`InputItems` 实测全为空**（35/35）——函数实参不在 InputItems 里，
-  生成 Function 调用框时**不要照 FB 框写 InputItems 槽位**
+- **`InputItems` 槽位数 == `InputParam` 参数个数**（35/35 等长，含 EN 槽——与 FB 框一致，
+  槽0=连接器、槽1..n=参数引脚）。⚠ 教训：统计时若用 `find("Single[@Name='InputItems']")`
+  解析会**踩容器不对称坑**——InputItems 是 `List2` 直接挂、不在 `Single` 里，
+  find 不到返回 0，会得出「恒为空」的**错误结论**（实测翻过车，复核后已修正）
 - 未接线的输出槽写 `<Null/>`，接线的写 `Operand` 操作数（`LValue=True`）
+- **端到端验证（prg_FuncRetTest，2026-11-25）**：生成器 `examples/make_func_return_test.py`
+  生成两个 Function 框（PackMLScCmdInit 最简形态 + PackMLSCCmdSum 带 VAR_OUTPUT 尾参），
+  导入后**双分类 0 错误**，往返导出结构保持：`[0]=Null(ENO)`、`[1]=返回值变量`、`[2]=VAR_OUTPUT`，
+  索引严格一一对应
+- ⚠ **REF 形参类型不可当本地声明用**：`PackMLSCCmdSum` 的 `stSum` 形参类型是
+  `sUnitScCmd[REF]`，但本 POU 声明 `stSumTest : sUnitScCmd` 会预编译报
+  「没有定义标识符」——`sUnitScCmd` 不是简单可见名。照模板 `act90_ScCmd` 的接法
+  **直接接工程全局实例成员**（`PML0.stCmd.stSc`），不要自己声明局部变量
+  （`PML0` 是全局实例，check_symbols 需加 `PLC_GLOBAL_SYMBOLS=Master,PML0` 白名单）
 
 ## 功能块（FB）调用标准结构（act04 / act90 实测，2026-11-25）
 
