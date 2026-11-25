@@ -14,6 +14,7 @@
 - `docs/usage.md`：操作规范（环境、命名、验收、禁止事项）
 - `docs/iteration.md`：迭代流程（改动分类、CHANGELOG、提交信息、发版）
 - `sync.ps1`：一键校验 CHANGELOG → commit → push
+- `docs/github-新手操作手册.md`：面向非技术用户的 GitHub 建仓与登录推送步骤
 
 ### 修改
 - `README.md`：改为面向其他 AI 的上手文档，含铁律表、快速开始、已验证模式、弃用路径
