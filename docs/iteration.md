@@ -117,12 +117,14 @@ fix: IN 槽位 IsContact 必须为 False
 .\sync.ps1 -Message "fix: 修正 IN 引脚 Type 说明"
 ```
 
-脚本做四件事：
+脚本做五件事：
 
-1. 检查 `CHANGELOG.md` 是否有未提交变动（没有就拒绝提交，防止漏登记）
-2. `git add -A`
-3. `git commit -m "<message>"`
-4. `git push origin HEAD`
+1. **禁止交互**：设 `GIT_TERMINAL_PROMPT=0` + `GCM_INTERACTIVE=never`，
+   并把仓库级 `credential.helper` 设为 `wincred`（见 §5.4）
+2. 检查 `CHANGELOG.md` 是否有未提交变动（没有就拒绝提交，防止漏登记）
+3. `git add -A`
+4. `git commit -m "<message>"`
+5. `git push origin HEAD`
 
 ### 5.2 自动生成提交信息
 
@@ -135,6 +137,36 @@ fix: IN 槽位 IsContact 必须为 False
 - [ ] 涉及结构的已预编译 0 错误
 - [ ] 没有把临时调试脚本提交上去（`work/`、`ipc/` 应被 gitignore）
 - [ ] 没有提交 PAT、密码、内网地址
+
+### 5.4 为什么不弹凭据窗口了
+
+Git for Windows 的系统级配置是：
+
+```
+credential.helper=helper-selector
+```
+
+这是**凭据助手选择器**，每次需要认证都会弹一个窗口让你选助手，无人值守场景直接卡住。
+
+`sync.ps1` 的处理方式（只改本仓库，不动你的全局配置）：
+
+```powershell
+git config --local --add credential.helper ""        # 清掉继承的 helper-selector
+git config --local --add credential.helper wincred   # 只留 wincred
+```
+
+`wincred` 是纯命令行助手，直接读写 Windows 凭据管理器，**零弹窗**。
+前提是凭据已存在于 Windows 凭据管理器（target 形如 `git:https://<用户名>@github.com`）。
+
+验证方式（不联网、不弹窗）：
+
+```powershell
+printf "protocol=https`nhost=github.com`n`n" | git credential fill
+# 能直接输出 username/password 就说明凭据可用
+```
+
+凭据失效时 `sync.ps1` 会直接报错提示重新登录，**不会弹窗等待**。
+
 
 ---
 

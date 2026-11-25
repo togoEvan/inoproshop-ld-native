@@ -20,6 +20,7 @@
 - `README.md`：目录结构补全到实际文件（含 `scripts/examples/`、`sync.cmd`、各 `task_*.py` 用途）；铁律表新增第 9 条；「已验证的合法模式」补公共前缀去重与声明区
 - `SKILL.md`：`assets/natives/` 与 `scripts/` 表格按实际用途重排；铁律新增第 9 条；合法模式补两条
 - `docs/usage.md`：目录约定补全实际文件；快速排错索引补 §6 与 §7
+- `docs/iteration.md`：新增 §5.4「为什么不弹凭据窗口了」，记录 `helper-selector` 弹窗根因与 `wincred` 方案
 - `references/mcp-bridge.md`：修正 `bridge.py` 的 PowerShell 示例（原引号不匹配、路径末尾多一个 `/`），改为推荐 Python 调用 + 正确的 CLI 转义写法
 - `references/native-structure.md`：重写「挂载位置规则」，补完整支路结构图与补齐前后对照表
 
