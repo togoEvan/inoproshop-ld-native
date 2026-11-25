@@ -14,6 +14,7 @@ InoProShop 的梯形图存在一个 native XML 结构里。这个仓库提供：
 1. **已验证的结构知识**（`references/`）：节点 GUID、槽位规则、预编译错误对照表。所有结论都经过实测，不是猜的。
 2. **可运行的桥接脚本**（`scripts/`）：通过文件 IPC 向**已经打开的** InoProShop 进程注入 IronPython 脚本，实现导入 / 导出 / 预编译检查。
 3. **克隆模板**（`assets/natives/`）：4 份已验证的 native 样本，生成新结构时从这里克隆，不要凭空构造。
+   写**树形/分支组**结构时，必须从 `assets/natives/user_fixed.native` 克隆（见下方「已验证的合法模式」）。
 
 **能做什么**
 
@@ -125,10 +126,14 @@ inoproshop-ld-native/
 
 ## 已验证的合法模式
 
-- **MOVE 框**可直接挂 `Network/NetworkItems`，**也可挂分支组 `{827b9ec2}` 的 `Trees`**（每条支路一个 MOVE 框）。不能挂 `NETITEM.OutputItems` 或 `NETITEM.RValue`。
-- **EN 槽**放 AND 框（内含条件触点）；**IN 槽**放常量引脚。
+- **MOVE 框**可直接挂 `Network/NetworkItems`。不能挂 `NETITEM.OutputItems` 或 `NETITEM.RValue`。
+- **分支组里的「完整支路」= AND 框包住 `[MOVE 框, 连接器]`**，不是裸 MOVE 框。这是 2026-11-25 用户手改验证的关键修正：
+  - 外层 AND 框 `InputItems` 两槽：`[0]` MOVE 框、`[1]` 连接器 `{505bff94}`
+  - 裸 MOVE 框挂 Trees 虽能过预编译，但功能链断头，图形与后续串接都不完整
+  - 内层嵌套分支组的支路才是裸 MOVE 框（见 `references/native-structure.md` 的三层实例）
+- **EN 槽**放 AND 框（内含条件触点，至少 2 个）；**IN 槽**放常量引脚。
 - **触点并联**：分支组 `{827b9ec2}` 的 `Trees` 放多个支路节点。
-- **树形状态机**：公共前缀只画一次 + 竖线分叉，靠分支组嵌套表达，不要每条梯级重复画完整条件。
+- **树形状态机**：公共前缀只画一次（放分支组 `Input` 槽）+ 竖线分叉，靠分支组嵌套表达。
 - **取反/置位/复位**：Operand 内部 `Flags` 位掩码，`1=NOT`、`2=S`、`3=R`。
 - **功能链末端不需要 ENO**：分支内最后一个功能框的 `ENO` 引脚可以删掉（不往后连接），已实测预编译 0 错误。
 

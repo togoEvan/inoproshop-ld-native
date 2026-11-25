@@ -27,8 +27,8 @@ NetworkList
 | `{acfc6f68-8e3a-4af5-bf81-3dd512095a46}` | 功能框（AND/MOVE 等） | InputItems 槽位数必须 == InputParam 参数数 |
 | `{9de7f100-1b87-424c-a62e-45b0cfc85ed2}` | 触点/引脚节点 | 外层 `IsContact` 决定身份：True=触点，False=值引脚 |
 | `{c9b2f165-48a2-4a45-8326-3952d8a3d708}` | Operand 操作数 | 内含 Boolean/Flags/Operand/Type/IsCoil/SeriesIndex/Id |
-| `{827b9ec2-2032-40da-9f4e-7670ca2d55a8}` | 并联分支组 | 内部 Trees 放多个触点，Mode=Sequential |
-| `{505bff94-4c90-4e17-ac28-b8ac69d1b9e2}` | 连接器节点 | 只有 Id |
+| `{827b9ec2-2032-40da-9f4e-7670ca2d55a8}` | 并联分支组 | 内部 Trees 放多个支路节点，Mode=Sequential |
+| `{505bff94-4c90-4e17-ac28-b8ac69d1b9e2}` | 连接器节点（支路输出接点） | 只有 Id 一个子节点；**完整支路必须有它** |
 | `{5f9848d3-568d-4cc5-9e31-8e28e9607ff1}` | 连接器（带 Flags/Input） | |
 | `{d9a99d73-b633-47db-b876-a752acb25871}` | Network 单网络容器 | |
 
@@ -60,10 +60,67 @@ NetworkList
 MOVE 框（功能框）有两个合法位置：
 
 1. **直接挂 `Network/NetworkItems`** —— 一个网络里多条独立梯级，每梯级一个 MOVE 框
-2. **挂分支组 `{827b9ec2}` 的 `Trees`** —— 树形/并联结构，每条支路 = 一个 MOVE 框
-   （已验证：8 支路，每条支路 = MOVE 框内含 EN 槽 AND + IN 槽常量，预编译 0 错误）
+2. **挂分支组 `{827b9ec2}` 的 `Trees`** —— 树形/并联结构
 
-不能挂的位置：
+### ⚠️ 分支组里「完整支路」的标准结构（用户手改已验证，2026-11-25）
+
+**分支组 Trees 里的支路不是裸 MOVE 框，而是「AND 框包住 [MOVE 框, 连接器]」。**
+
+这是最关键的修正。裸 MOVE 框挂 Trees 虽然预编译能过，但 IDE 里的功能链不完整——
+末端缺少连接器，后续无法继续串接，图形上也不完整。用户手工补全后的正确结构：
+
+```
+分支组 {827b9ec2}  Mode=Sequential
+├─ Input: 公共前缀触点（如 TRUE，IsContact=True）
+└─ Trees:
+   ├─ tree 0 ─ 外层 AND 框 {acfc6f68}  BoxType=AND  CallType=And  IsBoxType=False
+   │            └─ InputItems (2 槽):
+   │               ├─ [0] MOVE 框 {acfc6f68}  BoxType=MOVE  CallType=Move  IsBoxType=True
+   │               │      ├─ EN  = True
+   │               │      ├─ ENO = True
+   │               │      ├─ InputParam  Names=[EN, IN]  Types=[BOOL, INT]
+   │               │      ├─ OutputParam Names=[ENO, OUT]
+   │               │      ├─ InputItems (2 槽):
+   │               │      │    ├─ [0] EN 槽 = AND 框（内含条件触点，至少 2 个）
+   │               │      │    └─ [1] IN 槽 = 常量引脚（IsContact=False, Flags=0, Type=INT）
+   │               │      └─ OutputItems: OUT 操作数（iState）
+   │               └─ [1] 连接器 {505bff94-4c90-4e17-ac28-b8ac69d1b9e2}  ← 只有 Id 一个子节点
+   │
+   ├─ tree 1 ─ 外层 AND 框 ... (同上)
+   └─ tree 2 ─ 外层 AND 框
+                └─ InputItems (2 槽):
+                   ├─ [0] 嵌套分支组 {827b9ec2}（继续分层，内部再放多个 MOVE 框）
+                   └─ [1] 连接器 {505bff94}
+```
+
+### 三层嵌套的完整实例（实测预编译 0 错误）
+
+用户工程 `assets/natives/user_fixed.native` 网络 2 的真实结构：
+
+```
+分支组 (3 支路, Input=TRUE 触点)
+├─ tree0: AND[ MOVE(7) , CONN ]
+├─ tree1: AND[ MOVE(2) , CONN ]
+└─ tree2: AND[ 分支组(6 支路) , CONN ]
+              ├─ tree0: MOVE(6)
+              ├─ tree1: MOVE(8)
+              ├─ tree2: MOVE(9)
+              ├─ tree3: MOVE(4)
+              ├─ tree4: MOVE(3)
+              └─ tree5: MOVE(5)
+```
+
+**注意内层嵌套分支组的支路是裸 MOVE 框**（不带外层 AND + 连接器），
+只有最外层（直接挂 NetworkItems 的分支组）的支路才需要 AND+连接器包装。
+这是 IDE 手工绘制自然形成的层次，照搬即可。
+
+### 为什么需要外层 AND + 连接器
+
+- 外层 AND 框的 `InputItems` 两个槽 = 「功能框输入」+「功能框输出接线位」
+- 连接器 `{505bff94}` 代表这条支路的输出接点，使支路可以继续向右串接
+- 缺少它 = 功能链断头，虽然预编译不报错，但结构不完整
+
+### 不能挂的位置
 
 - NETITEM.OutputItems（线圈位）→ `已标识项中有一项的格式无效`
 - NETITEM.RValue → 同上

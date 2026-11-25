@@ -8,29 +8,16 @@
 ## [Unreleased]
 
 ### 新增
-- 树形状态机：MOVE 框可直接挂分支组 `{827b9ec2}` 的 `Trees`（8 支路实测预编译 0 错误）
-- 分支内最后一个功能框可省略 `ENO` 引脚（不往后连接），实测预编译 0 错误
-- `AGENTS.md`：AI 协作契约（上手顺序、验收标准、改动必须同步）
-- `docs/usage.md`：操作规范（环境、命名、验收、禁止事项）
-- `docs/iteration.md`：迭代流程（改动分类、CHANGELOG、提交信息、发版）
-- `sync.ps1`：一键校验 CHANGELOG → commit → push
-- `docs/github-新手操作手册.md`：面向非技术用户的 GitHub 建仓与登录推送步骤
+- **分支组「完整支路」标准结构**（用户手改已验证）：外层 AND 框包住 `[MOVE 框, 连接器 {505bff94}]`；内层嵌套分支组的支路才是裸 MOVE 框
+- `assets/natives/user_fixed.native` 更新为用户手改完整版：三层嵌套树形状态机（3 支路 + 内层 6 支路），预编译 0 错误
+- 分支组 `Input` 槽可放公共前缀触点（如 TRUE），实现「公共条件只画一次」
 
 ### 修改
-- `sync.ps1`：推送阶段增加最多 5 次重试与退避，仅对网络类错误重试（应对 github.com 连接抖动）
-- `sync.cmd`：Windows 包装器，绕过 PowerShell 执行策略限制（`-ExecutionPolicy Bypass`）
+- `references/native-structure.md`：重写「挂载位置规则」，补三层嵌套完整实例图
+- `SKILL.md` / `README.md`：修正「MOVE 框可直接挂 Trees」的表述（裸挂能过预编译但结构不完整）
 
 ### 修复
-- `sync.ps1`：git 把进度写入 stderr，PowerShell 会误判为异常；改为先压成字符串再判断退出码
-- `README.md`：改为面向其他 AI 的上手文档，含铁律表、快速开始、已验证模式、弃用路径
-- `SKILL.md`：正文增加「已验证的合法模式」与「功能链末端可省略 ENO」说明
-
-### 修复
-- 修正 IN 引脚类型说明：应为 `Type=INT` 而非 `BOOL`（`BOOL` 会红框）
-
-### 文档
-- 补充英文摘要
-- 补充「已验证的合法模式」小节
+- **修正认知**：裸 MOVE 框挂分支组 Trees 虽预编译 0 错误，但功能链断头、图形不完整；完整结构必须由外层 AND + 连接器包装
 
 ## [1.0.0] - 2026-11-24
 
