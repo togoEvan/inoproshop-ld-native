@@ -8,9 +8,14 @@
 ## [Unreleased]
 
 ### 文档
-- **铁律扩到 24 条**：新增第 21（FB 类框 `Instance.Type` 必填，否则模态弹窗冻死 IDE）、第 22（`check_slots.py` 不能按槽数==参数数校验比较框/MOVE/算术框）、第 23（未构建过的工程编译分类不存在，须先 `build()`）三条，README + SKILL.md 双写。`check_slots.py` 已加 `_input_exempt(el, bt)` 并对 154 个历史样本做全量回归（无新增 FAIL）。
+- **铁律扩到 30 条**：新增第 24（没挂任务调用列表的 POU 根本不参与编译）、25（`ScriptPouObjectList.remove` 留空槽项）、26（`Task Configuration` 不允许改名）、27（`AT %MBxxxx` 副本必冲突）、28（RETAIN 段被 IDE 自动改写，无法字节级往返）、29/30（GVL 对象层级 + Folder 四条 GUID 关系）七条，README + SKILL.md 双写；`references/native-structure.md` 新增「GVL（全局变量列表）与 Folder 的 native 结构」整章（约 110 行）。
 
 ### 新增
+- **【GVL 全流程验证：F01_Variable_GVLVerify】**（2026-11-25）在真实工程 `study.project` 里新建 `F01_Variable_GVLVerify` 文件夹，先放 2 个手写 GVL 做 A/B 对照，再把 `F01_Variable` 的 8 个 GVL 复制进来、737 个变量全部加 `_GVLVerify` 后缀。三个阶段：
+  - **阶段 1（手写 GVL）**：正样本 0 错误 / 负样本 2 条错误 ⇒ GVL 变量确实全局可见。
+  - **阶段 2（副本剥 AT）**：50 个 `AT` 地址全部剥掉交给 IDE 分配，A/B 对照通过。踩到 `AT%MW1000` 无空格写法正则漏匹配（`\s+` → `\s*`，`PLC_Common` 漏 6 行）。
+  - **阶段 3（副本带 AT）**：原样保留 AT → **编译 13 条「地址重复」**；改为按区平移 `MB +311228 / MW +2000` → 50 个地址与原件重叠 **0**，正样本 0 错误 / 负样本 2 条，最终工程预编译 0 错误、编译仅剩模板原有 1 条 `E3_SystemTime` 多任务。
+  - **新增脚本**：`scripts/examples/make_gvl.py`（GVL/Folder 生成器，花括号铁律 + GUID 关系铁律）、`make_f01_copy.py`（复制 + 加后缀 + `keep`/`drop` AT 策略 + `MB=…,MW=…` 按区偏移）、`rebuild_f01.py`（原样重建 + 自比对）、`make_gvl_verify.py` / `make_gvl_bad.py`（正/负样本）；`scripts/ide/task_at_check.py`（AT 重叠比对）、`task_at_scan.py`（全工程地址区间扫描）、`task_at_ab_test.py`（带 AT 变量 A/B）、`task_at_cleanup.py`（删 POU + 清任务槽）、`task_gvl_task_test.py`（**挂任务再编译**的核心验证）、`task_final_verify.py`（任务列表 + 全分类错误统计）、`task_export_gvl.py` / `task_export_named.py`（按路径/名字导出）、`task_import_overwrite.py` + `run_overwrite_import.py`（系统对象覆盖导入 + 自动点「全部」）。
 - **【真实产线工程全量结构普查 + 端到端复现】**（2026-11-25）对「除油倒盘-擦拭机-PLCV20261124」真实工程做全量导出（400 entries / 403 对象 / 5804 个功能框 / 940 个分支组）逐字段统计，校正了一批「小样本推出来的一般规律」，并新增 `scripts/examples/make_repro_study.py` 生成 `prg_ReproStudy`（9 个网络，覆盖该工程全部主流写法）做端到端验证：**预编译 0 错误；编译仅剩模板自带的 1 条 `E3_SystemTime` 多任务错误（日志里 `prg_ReproStudy` 出现 0 次）；往返导出 9 个网络结构签名逐行一致**。核心修正与新发现：
   - **`NetworkItems` 的直接子节点里分支组才是主流**：分支组 `{827b9ec2}` 679 个网络、空网络 540、AND 55、FB 调用 20+、**NETITEM 仅 18**、MOVE 11、EXECUTE 4。真实程序的主结构是 `NetworkItems → 分支组 → Trees`，`NETITEM` 直挂只是少数写法。生成复杂逻辑应优先用分支组。
   - **分支组 `{827b9ec2}` 完整字段**：`Input`（可为 Null/触点/比较框/AND/TON/嵌套分支组；实测 EQ 614、PIN 191、AND 49、Null 45、BRANCH 37、GT 16、TON 13、GE 13、LT 11、FIND 1）、`Trees` 2~17 条、**`Mode` 恒为 `Sequential`（990/990，无第二种取值）**、`Id`。**⚠ `Input` 节点带 `Name="Input"` 属性，漏写会报「格式无效」。**

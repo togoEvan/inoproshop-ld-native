@@ -41,6 +41,12 @@ description: 汇川 InoProShop（CODESYS V3.5 SP11 系）LD 梯形图 native XML
 23. **`check_slots.py` 不能按「输入槽数 == InputParam 名数」校验比较框 / MOVE / 算术框**。真实产线工程实测（911 处比较框）：`InputParam` 只有 `['EN']` 一个名字，但 `InputItems` **恒 3 槽**（槽0=EN 触点、槽1/2=左右操作数）；MOVE 恒 2 槽；ADD 恒 3 槽。旧版会把**模板原生 POU 全部误报**。已加 `_input_exempt(el, bt)`。**元教训**：校验脚本的「规则」本身也要拿真实工程回归
 
 24. **从未构建过的工程，编译分类 `97f48d64` 根本不存在**。`get_message_categories()` 只返回 2 个（预编译 + 导出/导入）；必须先跑一次 `app.build()`（**不 clear_messages**）才出现第 3 个。`scripts/ide/task_build_check.py` 专做此事。**不要**因分类不存在就当 0 错误通过。真实工程构建后剩下的错误不一定是你的——先 `grep 你的 POU 名`，为 0 即无关，结论须如实区分「模板原有」与「本次新增」
+25. **没挂进任务调用列表的 POU 根本不参与编译**。`app.build()` 对游离在 Application 下、没被任何 Task 引用的 POU **恒报 0 错误**——包括故意写错标识符的负样本。必须 `main_task.pous.add("POU名")`（`ScriptPouObjectList.add(str)`）之后才真的被编译。**推论**：任何「新建 POU 验证」的 A/B 对照，没挂任务时「正样本 0 错误」就是假通过
+26. **`ScriptPouObjectList.remove("名字")` 不报错，但留下 `Name=""` 空槽项**，之后编译报 `MainTask: 期望标识符，而不是''`。`remove(idx)`/`remove(item)`/`replace(idx,'')`/`Item[i]` 全都摘不掉（`replace` 只是置空）。**唯一可靠修法**：导出 Task Configuration native → 删掉空 `<Single Type="{f194d1ef-…}">` 块 → 覆盖导入
+27. **`Task Configuration` 不允许改名**。`task_silent_import.py` 的「改名让位」对它报 `名称 'Task Configuration_old_tmp' 对于本工程无效。` 必须走「直接 `import_native` 同名覆盖 + 主机侧自动点『全部(&A)』」（`run_overwrite_import.py`）
+28. **`AT %MBxxxx` 是绝对物理地址，副本沿用原件地址必然冲突**。实测把 8 个 GVL 复制、变量加后缀、`AT` 原样保留 → 编译 **13 条「地址重复」**（`"Hr_xBuzzerShield_GVLVerify"地址重复(重复地址范围为：%MB131076~%MB131076)`）。两条合法路线：① 剥掉 `AT` 交给 IDE 分配；② 保留但整体平移到空闲区间（实测 `MB +311228 / MW +2000` 后 50 个地址与原件重叠 0，A/B 对照正样本 0 错误、负样本 2 条）。⚠ 正则要吃 `AT%MW1000` 这种**无空格**写法，用 `\s*` 不是 `\s+`
+29. **含 `PERSISTENT RETAIN` / `RETAIN PERSISTENT` 段的 GVL 无法「往返逐字节一致」**。IDE 导入时自动给这些变量补绝对地址并规范化字面量：`Gv_xSaved :BOOL :=TRUE;` → `Gv_xSaved AT %MB131099 : BOOL := TRUE;`、`Gv_diTotal :DINT :=0;` → `Gv_diTotal AT %MB149512 : DINT := DINT#0;`。普通 `VAR_GLOBAL` 段与 `VAR_GLOBAL CONSTANT` 段**不被改写**。这类 GVL 只能逐字段比对类型/名字
+30. **GVL = `Object > Interface > TextDocument > TextLines`**（没有 `NetworkList`、没有 `Implementation`）。一个 GVL 内可有多段 `VAR_GLOBAL`；`PERSISTENT RETAIN` 与 `RETAIN PERSISTENT` 两种顺序都存在。`MetaObject.EmbeddedTypeGuids` 是 `Array[a9ed5b7e]` 单元素（Folder 的是 `<Null/>`）。Folder 的四条 GUID 关系（`ParentObjects` Key/Value、`ParentSVNodeGuid`、`MetaObject.ParentGuid` 指向祖父、被导出 Folder 自身 `IsRoot=True`）见 `references/native-structure.md`
 
 ## 结构速查（详见 references/）
 

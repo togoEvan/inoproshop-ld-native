@@ -1359,3 +1359,98 @@ Busy 时就排队。这正是 AM521 蚊香形螺旋插补里踩到的同一个�
   和「EXECUTE 框内嵌 ST」用的是**同一个 `TextLines` 节点类型**——这也正是
   「改声明区必须锚定 `Interface`」那条铁律的由来（一份 native 里 `TextLines` 有多处）
 - 轴控 FB 在 LD 里的调用框是常规 `CallType=FunctionBlock`，槽位规则同「功能块（FB）调用标准结构」
+
+## GVL（全局变量列表）与 Folder 的 native 结构（2026-11-25 实测，1319 行 / 8 个 GVL）
+
+### 对象层级
+
+```
+ExportFile
+└─ StructuredView  (Guid = 导出根 SV Guid)
+   └─ Single
+      └─ List2                      (EntryList)
+         └─ Single (entry)          (一个 entry = 一个对象)
+            ├─ Single Name="IsRoot"
+            ├─ Single Name="MetaObject"   → Guid / ParentGuid / Name / Properties / TypeGuid / EmbeddedTypeGuids / Timestamp
+            ├─ Single Name="Object"       → 对象本体（GVL 的声明在这里）
+            ├─ Single Name="ParentSVNodeGuid"
+            ├─ Array  Name="Path"
+            └─ Single Name="Index"
+```
+
+⚠ `root.iter("Object")` **找不到对象**——`Object` 是 `Single` 的 `Name` **属性值**，
+不是标签名。必须遍历 entry 再按 `Name` 属性取子节点。
+
+### GVL 本体
+
+```
+Object (Type = {ffbfa93a-…})
+└─ Single Name="Interface"
+   └─ Single Name="TextDocument"
+      └─ Array Name="TextLines"
+         └─ Single   (每行)
+            ├─ Single Name="Text" Type="string"    ← 声明原文，保留 tab/空格
+            └─ Single Name="Id"   Type="int"       ← GVL 内独立递增序列
+```
+
+- **没有 `NetworkList`，没有 `Implementation`**（那是 POU 才有的）
+- 一个 GVL 内可以有**多段** `VAR_GLOBAL … END_VAR`
+- `PERSISTENT RETAIN` 和 `RETAIN PERSISTENT` **两种顺序都真实存在**，不要当成笔误
+- `Object.NetVarProperties` = `<Null/>`；`AddAttributeSubsequent` / `ParameterList` = `<Single Type="bool">False</Single>`
+- `MetaObject.EmbeddedTypeGuids` = `Array[a9ed5b7e]` 单元素；**Folder 的是 `<Null/>`**
+
+### Folder 的四条 GUID 关系铁律
+
+| # | 字段 | 取值 |
+|---|---|---|
+| ① | `MetaObject.Properties` 字典 | **Key = 导出根 SV Guid**，**Value = 父容器 guid**（内层 `ParentObjects` 的 Key 又是导出根 SV Guid，Value 是父容器 guid） |
+| ② | `ParentSVNodeGuid` | = `ParentObjects` 的 Value |
+| ③ | `MetaObject.ParentGuid` | **祖父** guid：直属 Application 的 Folder → 全零；Folder 的子对象 → Application 的 SV 节点 `2fb5ae21-…` |
+| ④ | `Object.StructuredViewGuid`（Folder） | = **导出根 SV Guid**（不是自身 guid） |
+| ⑤ | `IsRoot` | **被导出的 Folder 自身 `IsRoot=True`**，其余 entry 一律 `False` |
+
+### 花括号铁律（写错就报「格式无效」）
+
+- 节点 **`Type="…"` 属性**带 `{…}`
+- **`Type="System.Guid"` 的文本值不带 `{}`**
+- `Properties` 字典的 `<Value><Single Type="{829a18f2-…}">` **属性带** `{}`
+
+### AT 绝对地址（`AT %MBxxxx`）三条硬规矩
+
+1. **`AT %MBxxxx` 是绝对物理地址**。把 GVL 复制一份、变量名加后缀、地址原样保留 →
+   编译报 **13 条「地址重复」**：`"Hr_xBuzzerShield_GVLVerify"地址重复(重复地址范围为：%MB131076~%MB131076)`。
+2. 副本要带地址，必须**整体平移到空闲区间**。实测 `MB +311228 / MW +2000` 后
+   50 个地址与原件重叠 **0**，A/B 对照正样本 0 错误、负样本 2 条。
+   已用区间与空闲起点可用 `scripts/ide/task_at_scan.py` 扫出来。
+3. 正则要吃 **`AT%MW1000` 这种无空格写法**：`(\s+AT\s*%\S+)?`，`\s*` 不是 `\s+`。
+   第一版写 `\s+` 导致 `PLC_Common` 有 6 行没被识别。
+
+### IDE 会自动改写 RETAIN 段（不是 bug）
+
+导入回导后，`PERSISTENT RETAIN` / `RETAIN PERSISTENT` 段的变量被 IDE 补上绝对地址
+并规范化字面量：
+
+```
+Gv_xSaved    :BOOL :=TRUE;   →  Gv_xSaved AT %MB131099 : BOOL := TRUE;
+Gv_diTotal   :DINT :=0;      →  Gv_diTotal AT %MB149512 : DINT := DINT#0;
+Gv_xRetain2  :BOOL;          →  Gv_xRetain2 AT %MB146918 : BOOL;
+```
+
+普通 `VAR_GLOBAL` 段和 `VAR_GLOBAL CONSTANT` 段**不被改写**。
+⇒ **含 RETAIN 段的 GVL 无法「往返逐字节一致」**，只能逐字段比对类型/名字。
+（上一轮 `F01_Variable` 8 个 GVL 重建时能字节级一致，是因为那次保留了原地址、
+且原文件本来就是 IDE 已改写过的形态。）
+
+### POU 参与编译的前提
+
+`app.build()` 只编译**挂进任务调用列表**的 POU。游离在 Application 下的 POU
+（哪怕代码里写的是不存在的标识符）**恒 0 错误**。必须：
+
+```python
+main_task = <Application / "Task Configuration" / "MainTask">
+main_task.pous.add("POU名")      # ScriptPouObjectList.add(str)
+```
+
+`app.create_pou` 的第 2 个参数必须是 CLR 枚举
+`_3S.CoDeSys.ScriptEngine.BasicFunctionality.PouType`（反射取后 `System.Enum.Parse`），
+传字符串报 `expected PouType, got str`，传数字报 `Cannot convert numeric value`。
