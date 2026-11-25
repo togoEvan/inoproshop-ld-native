@@ -19,6 +19,9 @@
 ### 修改
 - `sync.ps1`：推送阶段增加最多 5 次重试与退避，仅对网络类错误重试（应对 github.com 连接抖动）
 - `sync.cmd`：Windows 包装器，绕过 PowerShell 执行策略限制（`-ExecutionPolicy Bypass`）
+
+### 修复
+- `sync.ps1`：git 把进度写入 stderr，PowerShell 会误判为异常；改为先压成字符串再判断退出码
 - `README.md`：改为面向其他 AI 的上手文档，含铁律表、快速开始、已验证模式、弃用路径
 - `SKILL.md`：正文增加「已验证的合法模式」与「功能链末端可省略 ENO」说明
 

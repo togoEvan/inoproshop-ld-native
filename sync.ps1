@@ -131,18 +131,24 @@ Info "git push origin $Branch（最多重试 5 次，应对网络抖动）"
 $pushed = $false
 for ($i = 1; $i -le 5; $i++) {
     Write-Host "  尝试 $i / 5 ..." -NoNewline
-    $out = & git push origin $Branch 2>&1
-    if ($LASTEXITCODE -eq 0) {
+    # git 把进度信息写到 stderr，PowerShell 会当成 ErrorRecord；先压成字符串再判断
+    $prevEAP = $ErrorActionPreference
+    $ErrorActionPreference = "Continue"
+    $out = (& git push origin $Branch 2>&1 | ForEach-Object { "$_" }) -join "`n"
+    $rc = $LASTEXITCODE
+    $ErrorActionPreference = $prevEAP
+
+    if ($rc -eq 0) {
         Write-Host " 成功" -ForegroundColor Green
         $pushed = $true
         break
     }
     Write-Host " 失败" -ForegroundColor Yellow
-    $out | Select-Object -Last 3 | ForEach-Object { Write-Host "    $_" -ForegroundColor DarkGray }
+    ($out -split "`n" | Select-Object -Last 3) | ForEach-Object { Write-Host "    $_" -ForegroundColor DarkGray }
 
     if ($i -lt 5) {
         # 网络类错误：退避后重试；其他错误（如被拒绝）不重试
-        if ($out -match "Could not connect|Failed to connect|Connection reset|timed out|unable to access") {
+        if ($out -match "Could not connect|Failed to connect|Connection reset|timed out|unable to access|Could not resolve") {
             Start-Sleep -Seconds (3 * $i)
         } else {
             Write-Host ""
