@@ -24,6 +24,7 @@
 - `docs/iteration.md`：新增 §5.4「为什么不弹凭据窗口了」，记录 `helper-selector` 弹窗根因与 `wincred` 方案
 - `references/mcp-bridge.md`：修正 `bridge.py` 的 PowerShell 示例（原引号不匹配、路径末尾多一个 `/`），改为推荐 Python 调用 + 正确的 CLI 转义写法
 - `references/native-structure.md`：重写「挂载位置规则」，补完整支路结构图与补齐前后对照表
+- `.gitignore` / `.gitattributes`：注释从「一句话标签」改写为「为什么 + 挡什么 + 自检命令」。`.gitignore` 补充 gitignore 只对未跟踪文件生效、`git check-ignore -v` 自检、凭据已提交需吊销并清历史的说明；`.gitattributes` 补充跨平台换行根因、`git check-attr` 自检、`*.native` 为何按二进制处理。规则内容本身未变
 
 ### 修复
 - **同步时弹「选择凭据助手」窗口**：Git for Windows 的系统级配置是 `credential.helper=helper-selector`，
