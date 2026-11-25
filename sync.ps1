@@ -127,11 +127,31 @@ if (-not $hasRemote) {
     exit 0
 }
 
-Info "git push origin $Branch"
-& git push origin $Branch
-if ($LASTEXITCODE -ne 0) {
-    Write-Host ""
-    Fail "推送失败。常见原因：凭据过期、无网络、远程有新提交（先 git pull --rebase）。"
+Info "git push origin $Branch（最多重试 5 次，应对网络抖动）"
+$pushed = $false
+for ($i = 1; $i -le 5; $i++) {
+    Write-Host "  尝试 $i / 5 ..." -NoNewline
+    $out = & git push origin $Branch 2>&1
+    if ($LASTEXITCODE -eq 0) {
+        Write-Host " 成功" -ForegroundColor Green
+        $pushed = $true
+        break
+    }
+    Write-Host " 失败" -ForegroundColor Yellow
+    $out | Select-Object -Last 3 | ForEach-Object { Write-Host "    $_" -ForegroundColor DarkGray }
+
+    if ($i -lt 5) {
+        # 网络类错误：退避后重试；其他错误（如被拒绝）不重试
+        if ($out -match "Could not connect|Failed to connect|Connection reset|timed out|unable to access") {
+            Start-Sleep -Seconds (3 * $i)
+        } else {
+            Write-Host ""
+            Fail "推送失败（非网络原因，不重试）。请检查凭据或先 git pull --rebase。"
+        }
+    }
+}
+if (-not $pushed) {
+    Fail "推送失败：已重试 5 次仍连不上 github.com。检查网络后重新运行本脚本（本地提交已完成，不会丢）。"
 }
 
 Ok "pushed to origin/$Branch"
