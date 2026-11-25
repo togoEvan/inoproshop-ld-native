@@ -224,9 +224,18 @@ inoproshop-ld-native/
 任何改动都遵循 [`docs/iteration.md`](docs/iteration.md)：
 
 1. 改之前先读 `references/`，确认结论是否已被验证过
-2. 改动必须实测（预编译 0 错误 / 或明确说明是文档改动）
+2. 改动必须实测（**预编译 + 编译双分类 0 错误** / 或明确说明是文档改动）
 3. 更新 `CHANGELOG.md`
 4. `.\sync.ps1 -Message "..."` 一键提交推送
+
+**回写四类触发**（详见 [`AGENTS.md`](AGENTS.md) §6 与 [`docs/iteration.md`](docs/iteration.md) §2.1）：
+
+| # | 类别 | 落到哪 |
+|---|------|--------|
+| ① | **没见过的格式**（新 GUID / 层级 / 属性组合 / 槽位排布） | `native-structure.md` + `assets/natives/` + `scripts/examples/` |
+| ② | **Bug**（脚本报错 / IDE 崩 / 导入失败 / 验收漏报） | `precompile-errors.md` 或直接修 `scripts/` |
+| ③ | **吃过的亏**（理解错、结论被证伪） | 提炼成铁律（README + SKILL 双写）+ `⚠` 块 |
+| ④ | **新配置**（换机器 / IDE 版本 / 路径 / 凭据） | `mcp-bridge.md` 环境要点 + 一条自检命令 |
 
 详见 [`AGENTS.md`](AGENTS.md) 的「改动必须同步」一节。
 

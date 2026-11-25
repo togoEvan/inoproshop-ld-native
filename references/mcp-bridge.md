@@ -14,6 +14,21 @@ bridge.py（本地客户端，文件队列 IPC）
 - 全局对象：`projects` / `online` / `system`
 - 脚本内用 IronPython 2 语法（`print` 无括号、`except Exception, e`、`unicode()`）
 
+### 换环境时必查的 6 项（新配置触发点）
+
+换机器 / 换 IDE 版本 / 换工程路径 / 换凭据方式后，逐项跑下面的自检命令，**不要凭"我这边能用"下结论**。
+
+| # | 项 | 自检命令 | 失效表现 |
+|---|---|---------|---------|
+| 1 | **BASE 路径解析** | 跑 `task_check.py`，看 `ipc/check.log` 第一行 `BASE = ... (source: ...)` | source 是 `fallback` 说明推导失败，会用 `D:\plc_mcp` |
+| 2 | **IPC 目录**（与 BASE 可能不同） | `ls ipc/ready.flag ipc/heartbeat` | ready.flag 写在旧目录 → bridge 傻等 30s 报"守护未就绪" |
+| 3 | **daemon 存活** | `python bridge.py ping` | 无 `{"ok":true,"pong":true}` |
+| 4 | **IDE 进程与工程** | `Get-Process InoProShop` + 日志里的 `project = ...` | 无进程 / 工程路径对不上 |
+| 5 | **IronPython 语法** | 新增 `ide/*.py` 后先 `eval_file` 试跑一次 | `except Exception, e` 被 Python 3 化会直接 SyntaxError |
+| 6 | **Git 凭据** | `printf "protocol=https\nhost=github.com\n\n" \| git credential fill` | 弹「选择凭据助手」窗口 = 被 `helper-selector` 接管 |
+
+**新增配置项时**：除了在这里加一行，还要在 `scripts/ide/_base.py` 顶部注释写清解析优先级，并在 `docs/iteration.md` §7 补同步步骤。
+
 ## 静默导入（改名让位法）
 
 ```
