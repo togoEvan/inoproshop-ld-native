@@ -173,3 +173,38 @@ for e in root.iter():
 ## 编译分类的可忽略警告
 
 - `[Warning] 未加载库(CmpLog)...` —— 库未加载警告，与逻辑无关，可忽略
+
+---
+
+## ⚠ 编译器查不出来的结构错误（不报错，但结构是错的）
+
+下面这些**不会**产生任何 Error 或 Warning，双分类 0 错误、往返 diff 也 PASS，
+只能靠「与真实样本逐字段比对」发现。列在这里是因为它们的危害和报错一样大——
+错误结构会被 IDE 静默接受并原样导出，下次谁照抄谁错。
+
+### A. `TON` 的 `OutputItems` 少写一项
+
+- **错在哪**：把「`OutputItems` 第 0 项恒为 `<Null/>`（对应 ENO）」当死规矩，
+  给 TON 写 `OutputParam=['Q','ET']` 却只输出 1 个 `<Null/>`
+- **对的是什么**：`TON` 的 `EN`/`ENO` 都是 `False`，`OutputParam` **不含 ENO**，
+  是 `['Q','ET']` 两项；两个输出都不接线就写 **两个** `<Null/>`
+  （InoPack `HC_ValveCtrl` 7 处 TON 全是 `[Null, Null]`）
+- **规律**（19/19 样本 0 例外）：
+  | `EN`/`ENO` | `OutputParam.Names` |
+  |---|---|
+  | `True`/`True` | 第一项 `ENO`，之后才是真输出 |
+  | `False`/`False` | **不含 `ENO`**，直接是真输出（只有 TON） |
+- **怎么自检**：数 `OutputItems/List2` 的子节点数，必须 == `OutputParam/Names` 项数。
+  注意 `OutputItems` 是 `Single` 包 `List2`，别数错层（数外层恒得 1，会误判成一致）
+- **已修**：`scripts/examples/make_ld_learn.py` 的 `fb_box()` 加了
+  `len(out_vars) != len(out_names)` 就 `raise ValueError` 的断言，写错立刻崩
+
+### B. `AND` 框被误套功能框规则
+
+- **错在哪**：以为所有 `{acfc6f68}` 都有 `EN`/`ENO` bool 值和 `InputParam` 参数名
+- **对的是什么**：
+  - `AND` 的 `EN`/`ENO` 是 **`<Null Name="EN" />`**（不是 `<Single Type="bool">`）
+  - `AND` 的 `InputParam`/`OutputParam` 是**空 `List2`**（`Names`/`Types` 都空）
+  - 所以「槽位数 == 参数数」对 `AND` **不适用**——它按条件个数自由伸缩，但**至少 2 槽**
+  - `AND` 的 `IsBoxType=False`；功能框是 `True`
+- **怎么自检**：按 `BoxType` 分支处理，别用一套模板套所有 `{acfc6f68}`

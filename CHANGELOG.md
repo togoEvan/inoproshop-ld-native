@@ -8,6 +8,12 @@
 ## [Unreleased]
 
 ### 新增
+- **`scripts/check_slots.py`：结构自检脚本**。检查 native 里所有功能框的「`OutputItems` 项数 == `OutputParam` 个数」与「`InputItems` 槽数 == `InputParam` 个数」，`AND` 框豁免参数比对但校验「至少 2 槽」。退出码 0/1，可直接当 CI 断言。**这是唯一能发现「编译器查不出来的结构错误」的手段**——预编译、编译、往返 diff 都查不出来。实测：对 10 个 InoPack 真实样本全部 PASS；对修 bug 前的旧文件准确报出 `TON 输出槽 1 != OutputParam 2 ['Q','ET']` 两处
+- **`references/precompile-errors.md` 新增「编译器查不出来的结构错误」一节**：列出两类**不产生任何 Error/Warning、双分类 0、往返 diff 也 PASS** 的错误结构——A. `TON` 的 `OutputItems` 少写一项；B. `AND` 框被误套功能框规则。每类给出「错在哪 / 对的是什么 / 规律表 / 怎么自检」。这类错误只能靠与真实样本逐字段比对发现
+- **`references/native-structure.md` 新增「`OutputParam` 里有没有 `ENO`，由 `EN`/`ENO` 字段决定（19/19 实测）」**：`EN/ENO=True` 的框第一项是 `ENO`；`TON` 是 `EN/ENO=False`、`OutputParam=['Q','ET']` 不含 `ENO`。附 8 个框的实测证据表，并更正了原文「第 0 项恒为 `<Null/>` 对应 ENO」的过窄表述（TON 一节同步更正）
+- **`references/native-structure.md` / `SKILL.md` 补 `AND` 框与功能框的 `EN`/`ENO` 形态差异**：`AND` 是 `<Null Name="EN"/>`，功能框是 `<Single Type="bool">`；`AND` 的 `InputParam`/`OutputParam` 是空 `List2`，所以「槽位数 == 参数数」对 `AND` 不适用
+- **多输出 FB 实际接线的字段规律**：`OutputItems` 每项 `Operand.Type` 必须与 `OutputParam.Types` 逐字一致（含 `ARRAY [0..(c_uiEventNumber - 1)] OF BOOL`、`WSTRING(32)` 等复合类型），`LValue=True`、`Boolean=False`、`IsCoil=False`、`SeriesIndex=-1`
+- **`README.md` 铁律新增第 14 条、`SKILL.md` 新增第 15 条**：`OutputItems` 项数 == `OutputParam` 个数，且含不含 `ENO` 由 `EN`/`ENO` 决定；并注明这条**预编译/编译/往返 diff 全都查不出来**
 - **`references/precompile-errors.md` 第 8 类问题**：一次性 40+ 条 `符号 'PROGRAM'/'FUNCTION_BLOCK'/'BOOL' 不能识别` + `应该用';' 替换'...'`。给出报错原文、根因（裸 `find` 命中 ST 代码块）、修复代码、**以及往返 diff 查不出来时必须用的语义自检片段**
 - **`references/precompile-errors.md` 第 9 类问题**：验收脚本报 `total=0 / 通过` 但 IDE 里真有 48 条 Error。给出假通过的根因代码、修复代码，并立规矩「验收脚本宁可崩，也不能把『读不到』当成『没错误』」
 - **`references/native-structure.md`「新建 POU 的完整流程」补两道卡**：第 3 步加「必须锚定 `Interface` 再找 `TextLines`」的警告；第 8 步加「先确认 `check.log` 列出全部 5 个分类，看不到清单 = `total=0` 无效」；新增第 9 步「语义抽查声明区首行（`PROGRAM xxx` / `FUNCTION_BLOCK xxx`）」
@@ -24,6 +30,7 @@
 - `docs/iteration.md` §2 标准流程补第 ⑨ 步（重新打包 `.skill` 并同步本机技能目录），并新增 §2.1「回写四类触发」对表
 
 ### 修复
+- **`TON` 的 `OutputItems` 少写一项（编译器查不出来）**。原 `fb_box()` 把「`OutputItems` 第 0 项恒为 `<Null/>`（对应 ENO）」当死规矩写死，给 TON 写 `OutputParam=['Q','ET']` 却只输出 1 个 `<Null/>`。实际 TON 的 `EN`/`ENO` 都是 `False`，`OutputParam` **不含 ENO**，是 `['Q','ET']` 两项，两个输出不接线要写**两个** `<Null/>`（InoPack `HC_ValveCtrl` 7 处 TON 实测全是 `[Null, Null]`）。**这条预编译 0 错误、编译 0 错误、往返 diff 也 PASS，IDE 静默接受**，只有拿真实样本比对「项数 vs 参数数」才发现。已修，并在 `fb_box()` 加 `len(out_vars) != len(out_names)` 即 `raise ValueError` 的断言。修正后重新导入，双分类 0 错误、往返 `diffs=0`（节点数 489→491 / 495→497，正好各多 2 个 `<Null/>`），导出后 IDE 保留两个 `<Null/>`
 - **生成器把 POU 声明写进 EXECUTE 框的 ST 代码块，导致预编译 48 条错误**。`make_ld_learn.py` 改声明区时用裸 `raw.find('<Array Name="TextLines"')`，而一份 native 里 `TextLines` 至少两处（`Interface` 下的 POU 声明区 + EXECUTE 框 `STSnippet` 里的 ST 代码），且 `List2[NetworkList]` 在文档中排在 `Interface` **之前**——只要网络里有 EXECUTE 框，`find()` 就命中 ST 代码块。结果声明被塞进 ST、ST 代码被覆盖成 `PROGRAM xxx / VAR ...`，真正的声明区留着骨架 `prg_StartStop` 的旧变量，预编译逐行炸出 `符号 'FUNCTION_BLOCK'/'PROGRAM'/'BOOL' 不能识别`（number=9）、`应该用';' 替换'...'`（number=189）、`POU应以';'结尾`（number=190）、`没有定义标识符'...'`（number=46），共 48 条 Error + 23 条 Warning。修法：`p = raw.find('<Array Name="TextLines"', raw.find('<Single Name="Interface"'))`。修正后重新导入，**预编译 0 错误 + 编译 0 错误**，往返 diff 两个 POU 均 `diffs=0`
 - **验收脚本 `task_check.py` 会「假通过」：读不到消息时静默输出 `total=0` 并判验收通过**。`_objs_by_guid` 按 GUID 匹配消息分类时写成 `except Exception: continue` + `return []`，把「读失败」和「没匹配上」全吞掉，`return []` 再把它伪装成干净。实测预编译真实有 48 条 Error，脚本却报 `预编译 : total=0 errors=0` + `验收结论 : 通过`。修法：匹配不到分类即 `raise RuntimeError`，`get_message_objects` 失败也抛错，并先打印全部 5 个分类便于核对（正常 `check.log` 必须能看到 5 个分类清单）。同步更新 `scripts/ide/task_check.py`
 - **分支组 `Trees` 只有 1 条支路会让 IDE 绘制网络时崩溃**（用户截图报「在绘制该网络的时候遇到错误 / 不能显示内容 / 索引超出了数组界限」，堆栈在 `IBoxTreeParallel`）。`make_fb_call_test.py` 首版给只有一条 FB 调用的网络套了「单支路分支组 + NETITEM.RValue」，**预编译 0 错误、编译 0 错误，但梯形图编辑器打不开这一级网络**。脚本枚举全部样本后确认：act03_PackMLCmd 的 10 个网络、prg_PackMLCmdTest 的 7 个网络，所有分支组 `Trees` 都是 2，工程里从未出现过 `Trees=1`。修法：单支路时**不用 `branch()`、不套 `NETITEM`**，直接把 AND 框挂 `NetworkItems`（照 act90_PackMLManager 网络3）。改后重新导入，导出结构与实测样本一致，预编译 0 + 编译 0，程序段 2 正常显示

@@ -27,6 +27,7 @@ description: 汇川 InoProShop（CODESYS V3.5 SP11 系）LD 梯形图 native XML
 12. **改声明区必须锚定 `Interface` 再找 `TextLines`，禁止裸 `find('<Array Name="TextLines"')`**。一份 native 里 `TextLines` 至少 2 处：`Interface` 下的 POU 声明区 + EXECUTE 框 `STSnippet` 里的 ST 代码；`find()` 取文档中**靠前**的那个，而网络列表排在 `Interface` 之前，所以只要网络里有 EXECUTE 框，裸 `find` 就会把声明写进 ST 代码块、真正声明区留着骨架旧变量 → 预编译 40+ 条 `符号 'PROGRAM'/'FUNCTION_BLOCK'/'BOOL' 不能识别`（2026-11-25 实测 48 条）。正确：`raw.find('<Array Name="TextLines"', raw.find('<Single Name="Interface"'))`
 13. **验收脚本「读不到消息」必须抛错，绝不能返回空列表当 0 错误**。按 GUID 匹配分类写成 `except Exception: continue` + `return []`，匹配失败就静默输出 `total=0 / 通过` —— **假通过**。实测预编译真实 48 条 Error，旧脚本报 `total=0 errors=0` 并判「通过」。必须 `raise`，并先打印全部分类便于核对
 14. **往返 diff PASS 不等于内容正确**。`rt_diff` 一致只能证明「IDE 没改写我的结构」；源文件本身错时 IDE 原样保留，往返照样 PASS（2026-11-25 实测：两个 POU 都 diffs=0，但源文件声明区是错的）。必须配合双分类 0 错误 + **语义抽查**（打印声明区首行确认是 `PROGRAM xxx` / `FUNCTION_BLOCK xxx`）
+15. **`OutputItems` 项数 == `OutputParam` 个数；`OutputParam` 含不含 `ENO` 由 `EN`/`ENO` 字段决定**。`EN/ENO=True` 的框（Function/Program/常规 FB/EXECUTE）第一项是 `ENO`；**`TON` 是 `EN/ENO=False`，`OutputParam=['Q','ET']` 不含 ENO**，两个输出不接线就写两个 `<Null/>`。19/19 样本 0 例外。⚠ 这条**预编译/编译/往返 diff 全都查不出来**（IDE 静默接受），只能靠 `scripts/check_slots.py` 或「项数 vs 参数数」比对发现——`fb_box()` 已加 `raise` 断言
 
 ## 结构速查（详见 references/）
 
@@ -52,6 +53,9 @@ description: 汇川 InoProShop（CODESYS V3.5 SP11 系）LD 梯形图 native XML
 - **EXECUTE 框（LD 内嵌 ST）**：`BoxType=EXECUTE`、`CallType=None`（不是 And/Move/Function/FunctionBlock）、`ProvidesSTSnippet=True`、`STSnippet` 三层（`{b2131366}`→`{3b83b776}`→`TextDocument`→`TextLines`）；**直接挂 `Network/NetworkItems`，不套 NETITEM**；InputItems 仅 1 个连接器槽、OutputItems 仅 `<Null/>`
 - **FUNCTION_BLOCK 里的 LD**：native 层与 PROGRAM **完全同构**（`TypeGuid=6f9dac99-…`、`EmbeddedTypeGuids=[a9ed5b7e,25e509de]`、`SpecialFunc=None`、`POULevel=Standard`、`DefaultViewMode=Ld` 全一致），**唯一区别是声明区首行**（`FUNCTION_BLOCK xxx` + VAR_INPUT/VAR_OUTPUT/VAR_IN_OUT/VAR 分段）。实测 `fb_LdLearnTest` 导入 + 双分类 0 + 往返一致
 - **线圈 / 功能框输出引脚接线的 Operand 不带 `Name` 属性**（`<Single Type="{c9b2f165}">`）；触点/值引脚带 `Name="Operand"`、Instance 带 `Name="Instance"`。写错时预编译/编译/图形都正常，**只有往返 diff 会现形**（IDE 静默抹掉该属性）
+- **`AND` 框与功能框的 `EN`/`ENO` 是两种形态**：`AND` 是 `<Null Name="EN" />` / `<Null Name="ENO" />`（无值）；功能框是 `<Single Name="EN" Type="bool">True|False</Single>`。`AND` 的 `InputParam`/`OutputParam` 是**空 List2**（无参数名），所以「槽位数 == 参数数」对 `AND` 不适用（它按条件个数自由伸缩，但**至少 2 槽**）
+- **多输出 FB 实际接线**：`OutputItems` 每项的 `Operand.Type` 必须与 `OutputParam.Types` **逐字一致**，包括复合类型（`ARRAY [0..(c_uiEventNumber - 1)] OF BOOL`、`WSTRING(32)`、`sPmlCtrlCmd`）；`LValue=True`、`Boolean=False`、`IsCoil=False`、`IsSeriesCoil=False`、`SeriesIndex=-1`
+- **输入引脚（值引脚 `{9de7f100}`）**：`IsContact=False`，内部 `Operand` 带 `Name="Operand"`；REF 形参在 `InputParam.Types` 里带 `[REF]` 后缀，引脚 `Operand.Type` 写去掉后缀的实际类型
 
 ## 弃用路径（勿重试）
 
@@ -139,6 +143,7 @@ description: 汇川 InoProShop（CODESYS V3.5 SP11 系）LD 梯形图 native XML
 |------|------|
 | bridge.py | IPC 客户端（本地 Python 3 运行） |
 | do_replace.py | 静默导入入口（本地 Python 3 运行） |
+| check_slots.py | **结构自检**（本地 Python 3 运行）：校验所有功能框「`OutputItems` 项数 == `OutputParam` 个数」与「`InputItems` 槽数 == `InputParam` 个数」，`AND` 框校验至少 2 槽。**唯一能发现「编译器查不出来的结构错误」的手段**（预编译/编译/往返 diff 都查不出来）。退出码 0/1，可当 CI 断言 |
 | launch_ide_daemon.py | 启动 IDE + 注入 daemon（本地 Python 3 运行） |
 | ide_trigger.ps1 | UIA 触发 daemon 注入 |
 | ide/_base.py | 路径自解析（IDE 内环境变量无效，靠它从脚本路径反推 BASE） |

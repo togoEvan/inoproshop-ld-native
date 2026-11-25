@@ -117,10 +117,46 @@ InputItems 槽位数 == InputParam 参数个数（EN 也算一个）
   槽1..n   = 参数引脚 {9de7f100}，IsContact=False
              与 InputParam **去掉 EN 之后**严格一一对应，顺序不可乱
 
-OutputItems 长度 == OutputParam 参数个数
-  第 0 项恒为 <Null />                        ← 对应 ENO
-  之后每项 = Operand 节点 {c9b2f165}，LValue=True, IsCoil=False，Operand=目标变量
+OutputItems 长度 == OutputParam 参数个数（逐项一一对应，不是「恒 1 个 Null」）
+  有 ENO 的框（EN/ENO=True）：第 0 项 = <Null />        ← 对应 ENO
+  无 ENO 的框（TON，EN/ENO=False）：没有 ENO 位，Q/ET 各自一项
+  已接线项 = Operand 节点 {c9b2f165}，LValue=True, IsCoil=False，Operand=目标变量
+  未接线项 = <Null />
 ```
+
+### ⚠ `OutputParam` 里有没有 `ENO`，由 `EN`/`ENO` 字段决定（19/19 实测）
+
+这条之前记成「第 0 项恒为 `<Null />`（对应 ENO）」，**只对含 ENO 的框成立**。
+InoPack 全部样本（54 个功能框，其中 19 个非 AND）实测规律完全一致：
+
+| `EN` / `ENO` 字段 | `OutputParam.Names` | 含义 |
+|---|---|---|
+| `True` / `True` | 第一项是 `ENO`，后面才是真正输出 | Function / Program / 常规 FB / EXECUTE |
+| `False` / `False` | **不含 `ENO`**，直接是真正输出 | 只有 `TON`（`['Q','ET']`） |
+
+实测证据（19/19 全部符合，0 例外）：
+
+```
+TON              EN=False ENO=False  OutputParam=['Q','ET']                不含ENO
+EXECUTE          EN=True  ENO=True   OutputParam=['ENO']                   含
+PackMLConfiguer  EN=True  ENO=True   OutputParam=['ENO','']                含
+HC_GetCPUInfo    EN=True  ENO=True   OutputParam=['ENO','xError']          含
+prg_UN00         EN=True  ENO=True   OutputParam=['ENO']                   含
+HC_MovePtpV      EN=True  ENO=True   OutputParam=['ENO']                   含
+EventRecordV2    EN=True  ENO=True   OutputParam=['ENO','','xActive','xError']
+EventManager     EN=True  ENO=True   OutputParam=['ENO', 8 个真输出]        含
+GetOEE           EN=True  ENO=True   OutputParam=['ENO','xError','xBusy','eMessage']
+```
+
+**踩过的坑（2026-11-25）**：生成器把「第 0 项恒为 `<Null/>`」当死规矩写死，
+给 TON 写 `OutputParam=['Q','ET']` 却只输出 1 个 `<Null/>`（应为 2 个）。
+预编译和编译都是 0 错误、往返 diff 也 PASS，**IDE 照样接受**——
+只有拿真实样本比对 `项数 vs 参数数` 才发现不一致。已修，并在 `fb_box()` 里加了
+`len(out_vars) != len(out_names)` 就 `raise` 的断言。
+
+**自检**：`OutputItems/List2` 的项数必须 == `OutputParam/Names` 的项数。
+注意 `OutputItems` 是 `Single` 包 `List2`，数的是 `List2` 的子节点。
+直接跑 `python scripts/check_slots.py <a.native> [b.native ...]` 即可（退出码 0/1）。
 
 **注意 `InputParam.Names` 填的是参数名，不是操作数。**
 `Names=['EN','stScCmd']`，`Types=['BOOL','sPmlSCCmd[REF]']` —— REF 形参在 Types 里
@@ -495,9 +531,13 @@ InputItems  长度 == InputParam 个数（TON 固定 2 个：IN / PT）
             [1] = 值引脚               ← PT（TIME）
 
 OutputItems 长度 == OutputParam 个数（TON 固定 2 个：Q / ET）
-            [0] = <Null />             ← 对应 ENO
-            [1] = Operand              ← ET，**不带 Name 属性**，LValue=True
+            [0] = <Null />             ← 对应 Q（**不是 ENO**！TON 没有 ENO 位）
+            [1] = <Null /> 或 Operand   ← ET，**不带 Name 属性**，LValue=True
 ```
+
+⚠ **TON 的 `OutputParam` 是 `['Q','ET']`，不含 `ENO`**，所以两项都不承担 ENO 语义。
+两个输出都不接线时，两项都写 `<Null/>`（InoPack `HC_ValveCtrl` 实测 7/7 全是 `[Null, Null]`）。
+别照抄「第 0 项恒为 `<Null/>` 对应 ENO」——那句只对 `EN/ENO=True` 的框成立。
 
 `InputParam` / `OutputParam` 照常填 `Names=[IN,PT]` / `Types=[BOOL,TIME]`、
 `Names=[Q,ET]` / `Types=[BOOL,TIME]`。

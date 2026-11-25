@@ -228,11 +228,18 @@ def fb_box(box_type, instance, in_items, in_names, in_types,
     else:
         inst_operand = u'<Single Name="Operand" Type="string">%s</Single>' % instance
         inst_type = box_type
-    # OutputItems：第 0 项恒为 <Null/>（对应 ENO）
-    outs = [u'   <Null/>']
-    for v in (out_vars or []):
-        outs.append(v)
-    out_body = u"\n".join(outs)
+    # OutputItems：必须与 OutputParam 逐项一一对应（项数 == 参数数）。
+    # 未接线的引脚写 <Null/>；已接线的写 out_operand(变量, 类型)。
+    # ⚠ 不要把「第 0 项恒为 <Null/>」当死规矩：
+    #   只有 OutputParam 第一项是 ENO 时才成立（Function/Program/常规 FB）。
+    #   TON 的 OutputParam 是 ['Q','ET']，不含 ENO，所以它两个输出项都不是 <Null/> 语义位。
+    out_vars = out_vars or []
+    if len(out_vars) != len(out_names):
+        raise ValueError(
+            u"%s: OutputItems 项数(%d) 必须等于 OutputParam 个数(%d) [%s]"
+            % (box_type, len(out_vars), len(out_names), u",".join(out_names)))
+    outs = list(out_vars)
+    out_body = u"\n".join(outs) if outs else u""
     en_v = u"True" if en else u"False"
 
     return (u'<Single Type="%s" Method="IArchivable">\n'
@@ -371,6 +378,9 @@ def ton_box(instance, in_slot, pt_var):
         in_items=[in_slot, value_pin(pt_var, u"TIME")],
         in_names=[u"IN", u"PT"], in_types=[u"BOOL", u"TIME"],
         out_names=[u"Q", u"ET"], out_types=[u"BOOL", u"TIME"],
+        # ⚠ TON 的 OutputParam 是 ['Q','ET']，**没有 ENO**，所以不能套「第 0 项恒为 Null」。
+        # 两个输出都未接线 → 两项都是 <Null/>（InoPack HC_ValveCtrl 实测 7/7 如此）。
+        out_vars=[u'   <Null/>', u'   <Null/>'],
         en=False)
 
 

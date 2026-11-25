@@ -46,6 +46,7 @@ InoProShop 的梯形图存在一个 native XML 结构里。这个仓库提供：
 | 11 | **分支组 `{827b9ec2}` 的 `Trees` 必须 ≥ 2 条支路**。只有 1 条时**预编译 0 错误、编译 0 错误，但 IDE 绘制该网络直接崩**（「在绘制该网络的时候遇到错误 / 不能显示内容 / 索引超出了数组界限」，堆栈在 `IBoxTreeParallel`）。单支路**不要用 `branch()`、不要套 `NETITEM`**，直接把 AND 框挂 `NetworkItems`。 |
 | 12 | **改声明区必须锚定 `Interface` 再找 `TextLines`，禁止裸 `find('<Array Name="TextLines"')`**。一份 native 里 `TextLines` 至少有 2 处：`Interface` 下的 POU 声明区，以及 EXECUTE 框 `STSnippet` 里的 ST 代码。`find()` 取到的是**文档中靠前的那个**——只要网络里有 EXECUTE 框（在网络列表里排在 Interface 前面），裸 `find` 就会把 POU 声明写进 ST 代码块、真正的声明区留着骨架旧变量，**预编译报 40+ 条 `符号 'PROGRAM'/'FUNCTION_BLOCK'/'BOOL' 不能识别` + `应该用';' 替换'...'`**（2026-11-25 实测 48 条）。正确写法：`p = raw.find('<Array Name="TextLines"', raw.find('<Single Name="Interface"'))`。 |
 | 13 | **验收脚本「读不到消息」必须抛错，绝不能返回空列表当 0 错误**。`get_message_objects` 需要分类对象；按 GUID 匹配分类时若写成 `except Exception: continue` + `return []`，一旦匹配失败就静默输出 `total=0 / 验收通过`——**这是假通过**。2026-11-25 实测：预编译真实有 48 条 Error，脚本却报 `预编译 : total=0 errors=0` 并判「通过」。`task_check.py` 已改为匹配不到分类即 `raise`，并先打印全部 5 个分类便于核对。 |
+| 14 | **`OutputItems` 项数必须等于 `OutputParam` 个数，且 `OutputParam` 含不含 `ENO` 由 `EN`/`ENO` 字段决定**。`EN/ENO=True` 的框（Function/Program/常规 FB/EXECUTE）第一项是 `ENO`，之后才是真输出；**`TON` 是 `EN/ENO=False`，`OutputParam=['Q','ET']` 不含 ENO**。别把「第 0 项恒为 `<Null/>` 对应 ENO」当死规矩——照抄会给 TON 少写一个输出项。19/19 样本实测 0 例外。⚠ 这条**预编译、编译、往返 diff 全都查不出来**（IDE 静默接受），只能靠「项数 vs 参数数」比对发现。 |
 
 完整对照见 [`references/precompile-errors.md`](references/precompile-errors.md)。
 
