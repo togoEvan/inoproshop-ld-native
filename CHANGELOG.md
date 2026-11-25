@@ -8,6 +8,7 @@
 ## [Unreleased]
 
 ### 新增
+- `scripts/pack_skill.py`：打包 `.skill` 分发件。文件清单严格取自 `git ls-files`，只打 `SKILL.md` + `references/` + `scripts/` + `assets/`，保证包里永远是已提交版本，不会混入本地改动或已删除的旧文件
 - `references/precompile-errors.md` 第 6、7 类问题：C0046 批量未定义标识符、两个 TRUE 串联
 - `references/native-structure.md`「声明区（TextLines）结构」与「公共前缀与支路条件去重」两节
 - `scripts/examples/make_fix45.py`：补声明 + 删多余 TRUE 的修复脚本

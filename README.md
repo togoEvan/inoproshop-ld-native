@@ -116,6 +116,7 @@ inoproshop-ld-native/
 │   ├── bridge.py                 # IPC 客户端（本地 Python 3）
 │   ├── do_replace.py             # 静默导入入口（本地 Python 3）
 │   ├── launch_ide_daemon.py      # 启动 IDE + 注入 daemon
+│   ├── pack_skill.py             # 打包 .skill 分发件（清单取自 git ls-files）
 │   ├── ide_trigger.ps1           # UIA 触发注入
 │   ├── ide/                      # IDE 内 IronPython 2.7 脚本
 │   │   ├── plc_daemon.py         # 守护进程（命令分发）
