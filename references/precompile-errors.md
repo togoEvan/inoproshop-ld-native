@@ -98,6 +98,78 @@ for e in root.iter():
 - **注意**：只删 `BoxType=="MOVE"` 框的 `InputItems[0]` 那个 AND 框里的 TRUE；
   别去动分支组 `Input`，也别动 `NetworkItems` 层的 AND。
 
+### 8. 一次性 40+ 条 `符号 'PROGRAM'/'FUNCTION_BLOCK'/'BOOL' 不能识别` + `应该用';' 替换'...'`
+
+> 2026-11-25 实测：预编译 **48 条 Error**，全部集中在新建的 `prg_LdLearnTest` / `fb_LdLearnTest` 两个 POU。
+
+- **症状**：报错文本长这样（每个声明行炸 2~3 条）：
+  ```
+  [Error] 符号'FUNCTION_BLOCK' 不能识别                    (number=9)
+  [Error] 应该用';' 替换'fb_LdLearnTest'                   (number=189)
+  [Error] 符号'VAR_INPUT' 不能识别                          (number=9)
+  [Error] 符号'BOOL' 不能识别                              (number=9)
+  [Error] POU应以';'结尾                                   (number=190)
+  [Error] 没有定义标识符'fbDelay'                           (number=46)
+  ```
+  伴随一批 `[Warning] 标签 'XTIMERIN' 未被引用`（number=118）。
+- **根因**：**POU 声明被写进了 EXECUTE 框的 ST 代码块，真正的 `Interface` 声明区还留着骨架的旧变量。**
+  生成脚本改声明区时用了裸 `find`：
+  ```python
+  p2 = raw.find('<Array Name="TextLines"')   # ✗ 错
+  ```
+  一份 native 里 `TextLines` 至少两处：`Interface` 下的 POU 声明区，和 EXECUTE 框 `STSnippet` 里的 ST 代码。
+  而 `List2[NetworkList]` 在文档里排在 `Interface` **之前**，所以只要网络里有 EXECUTE 框，
+  第一个 `TextLines` 就是 ST 代码块 → 声明被塞进 ST，ST 代码被覆盖成 `PROGRAM xxx / VAR ...`。
+  编译器于是把 `PROGRAM`/`FUNCTION_BLOCK`/`BOOL` 当普通标识符解析，逐行炸。
+- **修复**：锚定 `Interface` 之后再找：
+  ```python
+  p2 = raw.find('<Array Name="TextLines"', raw.find('<Single Name="Interface"'))
+  ```
+- **自检（必做，往返 diff 查不出来）**：
+  ```python
+  a = s.find('<Single Name="Interface"')
+  p = s.find('<Array Name="TextLines"', a)
+  print(re.findall(r'Name="Text" Type="string">(.*?)</Single>', s[p:s.find('</Array>', p)], re.S)[:3])
+  # 期望第一行是 'PROGRAM prg_Xxx' 或 'FUNCTION_BLOCK fb_Xxx'
+  ```
+  ⚠ **往返 diff PASS 不代表对**：源文件错时 IDE 原样保留，`rt_diff` 照样 `diffs=0`。
+
+### 9. 验收脚本报 `total=0 errors=0` 并判「通过」，但 IDE 里明明有 48 条 Error
+
+> 2026-11-25 实测：这是**验收脚本自己的 bug**，比第 8 条更危险——它会让错误静默通过。
+
+- **症状**：`check.log` 输出
+  ```
+  === 预编译 : total=0 errors=0 ===
+  === 编译 : total=3 errors=0 ===
+  === 验收结论 : 通过 ===
+  ```
+  但用 `task_allmsgs.py` 全分类 dump 出来，预编译分类 `count=69`（含 48 条 Error）。
+- **根因**：`get_message_objects` 要传**分类对象**而不是 GUID 字符串。按 GUID 匹配分类时写成：
+  ```python
+  for c in list(system.get_message_categories()):
+      try:
+          if unicode(c) == guid:
+              return list(system.get_message_objects(c))
+      except Exception:
+          continue
+  return []          # ✗ 匹配不到就返回空 → 被当成「0 错误」
+  ```
+  `except Exception: continue` 把「读失败」和「没匹配上」全吞了，`return []` 再把它伪装成干净。
+- **修复**：**匹配不到必须抛错**，并先打印全部分类便于核对：
+  ```python
+  cats = list(system.get_message_categories())
+  for c in cats:
+      L(u"  cat %s" % unicode(c))
+  def _objs_by_guid(guid):
+      for c in cats:
+          if unicode(c) == guid:
+              return list(system.get_message_objects(c))   # 失败就让它抛
+      raise RuntimeError(u"消息分类 %s 未找到，不得当作 0 错误" % guid)
+  ```
+- **教训**：验收脚本**宁可崩，也不能把「读不到」当成「没错误」**。
+  正常 `check.log` 里应该能看到 5 个分类全部列出；看不到分类清单 = 没真读到，结论无效。
+
 ## 编译分类的可忽略警告
 
 - `[Warning] 未加载库(CmpLog)...` —— 库未加载警告，与逻辑无关，可忽略

@@ -24,6 +24,9 @@ description: 汇川 InoProShop（CODESYS V3.5 SP11 系）LD 梯形图 native XML
 9. **图形里引用的每个符号，声明区必须有一行对应声明**（`Interface/TextDocument/TextLines` 里的 `VAR…END_VAR`）。`import_native` 不会替你补声明；漏一个就报一串 `C0046: 没有定义标识符`，**每个引用点一条**（例：8 个未声明变量共 45 次引用 → 45 个错误）
 10. **AND 框（含 NETWORK 顶层 `RValue` 的 AND）至少 2 个输入槽**。单条件 rung 只给 1 个槽时预编译不报错，但构建报 `'AND'需要至少'2' 个操作数`；补一个 `TRUE` 触点（`Operand=TRUE`、内部 `Flags=0`、`IsContact=True`）即可，语义不变
 11. **分支组 `{827b9ec2}` 的 `Trees` 必须 ≥ 2 条支路**。只有 1 条时**预编译 0 错误、编译 0 错误，但 IDE 绘制该网络直接崩**：「在绘制该网络的时候遇到错误 / 不能显示内容 / 索引超出了数组界限」，堆栈在 `IBoxTreeParallel`。单支路**不要用 `branch()`、不要套 `NETITEM`**，直接把 AND 框挂 `NetworkItems`（act90 网络3 实测形态）
+12. **改声明区必须锚定 `Interface` 再找 `TextLines`，禁止裸 `find('<Array Name="TextLines"')`**。一份 native 里 `TextLines` 至少 2 处：`Interface` 下的 POU 声明区 + EXECUTE 框 `STSnippet` 里的 ST 代码；`find()` 取文档中**靠前**的那个，而网络列表排在 `Interface` 之前，所以只要网络里有 EXECUTE 框，裸 `find` 就会把声明写进 ST 代码块、真正声明区留着骨架旧变量 → 预编译 40+ 条 `符号 'PROGRAM'/'FUNCTION_BLOCK'/'BOOL' 不能识别`（2026-11-25 实测 48 条）。正确：`raw.find('<Array Name="TextLines"', raw.find('<Single Name="Interface"'))`
+13. **验收脚本「读不到消息」必须抛错，绝不能返回空列表当 0 错误**。按 GUID 匹配分类写成 `except Exception: continue` + `return []`，匹配失败就静默输出 `total=0 / 通过` —— **假通过**。实测预编译真实 48 条 Error，旧脚本报 `total=0 errors=0` 并判「通过」。必须 `raise`，并先打印全部分类便于核对
+14. **往返 diff PASS 不等于内容正确**。`rt_diff` 一致只能证明「IDE 没改写我的结构」；源文件本身错时 IDE 原样保留，往返照样 PASS（2026-11-25 实测：两个 POU 都 diffs=0，但源文件声明区是错的）。必须配合双分类 0 错误 + **语义抽查**（打印声明区首行确认是 `PROGRAM xxx` / `FUNCTION_BLOCK xxx`）
 
 ## 结构速查（详见 references/）
 
@@ -44,6 +47,11 @@ description: 汇川 InoProShop（CODESYS V3.5 SP11 系）LD 梯形图 native XML
 - **功能链末端的 `ENO` 引脚可以删掉**（不往后连接），实测预编译 0 错误
 - **公共前缀去重**：公共 TRUE 放分支组 `Input` 后，支路 EN 条件框里不要再放 TRUE（否则图形出现两个 TRUE 串联）
 - **声明区**：`TextLines` 里逐行写声明，`Id` 全表唯一且递增（插完从 900 重排最省事），中文注释可直接写
+  - ⚠ **定位必须锚定 `Interface`**（铁律 12）：`raw.find('<Array Name="TextLines"', raw.find('<Single Name="Interface"'))`
+- **定时器框（TON）**：`CallType=FunctionBlock` 但 `EN/ENO=False`；顶层时 `InputItems[0]` 是连接器 `{5f9848d3}`，嵌在 AND 里时是条件触点 `{9de7f100}`（IsContact=True）；输出 Q/ET 可空接线（`Operand=""`）不报错；ST 里读 `ET` 直接写 `实例名.ET`
+- **EXECUTE 框（LD 内嵌 ST）**：`BoxType=EXECUTE`、`CallType=None`（不是 And/Move/Function/FunctionBlock）、`ProvidesSTSnippet=True`、`STSnippet` 三层（`{b2131366}`→`{3b83b776}`→`TextDocument`→`TextLines`）；**直接挂 `Network/NetworkItems`，不套 NETITEM**；InputItems 仅 1 个连接器槽、OutputItems 仅 `<Null/>`
+- **FUNCTION_BLOCK 里的 LD**：native 层与 PROGRAM **完全同构**（`TypeGuid=6f9dac99-…`、`EmbeddedTypeGuids=[a9ed5b7e,25e509de]`、`SpecialFunc=None`、`POULevel=Standard`、`DefaultViewMode=Ld` 全一致），**唯一区别是声明区首行**（`FUNCTION_BLOCK xxx` + VAR_INPUT/VAR_OUTPUT/VAR_IN_OUT/VAR 分段）。实测 `fb_LdLearnTest` 导入 + 双分类 0 + 往返一致
+- **线圈 / 功能框输出引脚接线的 Operand 不带 `Name` 属性**（`<Single Type="{c9b2f165}">`）；触点/值引脚带 `Name="Operand"`、Instance 带 `Name="Instance"`。写错时预编译/编译/图形都正常，**只有往返 diff 会现形**（IDE 静默抹掉该属性）
 
 ## 弃用路径（勿重试）
 

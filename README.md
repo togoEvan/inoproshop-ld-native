@@ -44,8 +44,12 @@ InoProShop 的梯形图存在一个 native XML 结构里。这个仓库提供：
 | 9 | **图形里引用的每个符号，声明区必须有一行对应声明**。`import_native` 不会替你补声明，漏一个就报一串 `C0046: 没有定义标识符`（每个引用点一条）。 |
 | 10 | **AND 框（含 NETWORK 顶层 RValue 的 AND）至少 2 个输入槽**。单条件 rung 只有 1 个槽时预编译不报错，但构建报 `'AND'需要至少'2' 个操作数`；补一个 `TRUE` 触点即可（语义不变）。 |
 | 11 | **分支组 `{827b9ec2}` 的 `Trees` 必须 ≥ 2 条支路**。只有 1 条时**预编译 0 错误、编译 0 错误，但 IDE 绘制该网络直接崩**（「在绘制该网络的时候遇到错误 / 不能显示内容 / 索引超出了数组界限」，堆栈在 `IBoxTreeParallel`）。单支路**不要用 `branch()`、不要套 `NETITEM`**，直接把 AND 框挂 `NetworkItems`。 |
+| 12 | **改声明区必须锚定 `Interface` 再找 `TextLines`，禁止裸 `find('<Array Name="TextLines"')`**。一份 native 里 `TextLines` 至少有 2 处：`Interface` 下的 POU 声明区，以及 EXECUTE 框 `STSnippet` 里的 ST 代码。`find()` 取到的是**文档中靠前的那个**——只要网络里有 EXECUTE 框（在网络列表里排在 Interface 前面），裸 `find` 就会把 POU 声明写进 ST 代码块、真正的声明区留着骨架旧变量，**预编译报 40+ 条 `符号 'PROGRAM'/'FUNCTION_BLOCK'/'BOOL' 不能识别` + `应该用';' 替换'...'`**（2026-11-25 实测 48 条）。正确写法：`p = raw.find('<Array Name="TextLines"', raw.find('<Single Name="Interface"'))`。 |
+| 13 | **验收脚本「读不到消息」必须抛错，绝不能返回空列表当 0 错误**。`get_message_objects` 需要分类对象；按 GUID 匹配分类时若写成 `except Exception: continue` + `return []`，一旦匹配失败就静默输出 `total=0 / 验收通过`——**这是假通过**。2026-11-25 实测：预编译真实有 48 条 Error，脚本却报 `预编译 : total=0 errors=0` 并判「通过」。`task_check.py` 已改为匹配不到分类即 `raise`，并先打印全部 5 个分类便于核对。 |
 
 完整对照见 [`references/precompile-errors.md`](references/precompile-errors.md)。
+
+> **铁律 12/13 的元教训**：往返 diff PASS **不等于**内容正确。上次 `rt_diff.py` 两个 POU 都是 `total structural diffs: 0`，但源文件本身就是错的——IDE 把错误原样保留，往返当然一致。**往返一致只能证明「IDE 没改写我的结构」，不能证明「我的结构是对的」**，必须配合双分类 0 错误 + 语义抽查（如打印声明区首行确认是 `PROGRAM xxx` / `FUNCTION_BLOCK xxx`）。
 
 ---
 

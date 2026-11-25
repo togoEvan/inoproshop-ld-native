@@ -15,21 +15,28 @@ NetworkList
   Network                    （一个程序段）
     NetworkItems             （段内多个梯级 NETITEM）
       NETITEM {9873c309-1f09-4ebf-9078-42d8057ef11b}
-        RValue {acfc6f68-...}  AND 框（BoxType="AND", CallType="And", IsBoxType="False"）
+        RValue {acfc6f68-...}  AND 框 / TON 框 / 分支组（BoxType 决定）
         OutputItems             可挂多个线圈
 ```
+
+`NetworkItems` 的直接子节点可以不是 NETITEM —— **EXECUTE 框（内嵌 ST）就直挂这一层**，
+见下文「EXECUTE 框」一节。
 
 ## 关键节点类型
 
 | GUID | 含义 | 要点 |
 |------|------|------|
 | `{9873c309-1f09-4ebf-9078-42d8057ef11b}` | NETITEM（梯级） | |
-| `{acfc6f68-8e3a-4af5-bf81-3dd512095a46}` | 功能框（AND/MOVE 等） | InputItems 槽位数必须 == InputParam 参数数 |
+| `{acfc6f68-8e3a-4af5-bf81-3dd512095a46}` | 功能框（AND/MOVE/TON/FB/EXECUTE） | InputItems 槽位数必须 == InputParam 参数数；`BoxType` + `CallType` 决定是哪种 |
 | `{9de7f100-1b87-424c-a62e-45b0cfc85ed2}` | 触点/引脚节点 | 外层 `IsContact` 决定身份：True=触点，False=值引脚 |
-| `{c9b2f165-48a2-4a45-8326-3952d8a3d708}` | Operand 操作数 | 内含 Boolean/Flags/Operand/Type/IsCoil/SeriesIndex/Id |
+| `{c9b2f165-48a2-4a45-8326-3952d8a3d708}` | Operand 操作数 | 内含 Boolean/Flags/Operand/Type/IsCoil/SeriesIndex/Id；**线圈和输出引脚不带 `Name` 属性** |
 | `{827b9ec2-2032-40da-9f4e-7670ca2d55a8}` | 并联分支组 | 内部 Trees 放多个支路节点，Mode=Sequential；**Trees 必须 ≥2 条，否则 IDE 绘制网络崩溃** |
 | `{505bff94-4c90-4e17-ac28-b8ac69d1b9e2}` | 连接器节点（支路输出接点） | 只有 Id 一个子节点；**完整支路必须有它** |
-| `{5f9848d3-568d-4cc5-9e31-8e28e9607ff1}` | 连接器（带 Flags/Input） | |
+| `{5f9848d3-568d-4cc5-9e31-8e28e9607ff1}` | 连接器（带 Flags/Input） | 功能框的 EN 槽 / 电源流入口 |
+| `{b2131366-6917-4304-87a9-64c0585560a8}` | **STSnippet 容器** | EXECUTE 框的代码块；其它框此处为 `<Null/>` |
+| `{3b83b776-fb25-43b8-99f2-3c507c9143fc}` | **STSnippet 内层** | 只包一个 TextDocument |
+| `{f3878285-8e4f-490b-bb1b-9acbb7eb04db}` | TextDocument | 声明区与 STSnippet 共用此类型 |
+| `{a5de0b0b-1cb5-4913-ac21-9d70293ec00d}` | TextLines 行 | 每行含 Id/Tag/Text |
 | `{d9a99d73-b633-47db-b876-a752acb25871}` | Network 单网络容器 | |
 
 ## Operand 内部 Flags 位掩码
@@ -437,10 +444,246 @@ Input 若是 AND 框，必须是**完整** AND 框（含 `CallType`/`Instance`/`
 1. 取一个**已知可导入**的 native 骨架（如 `assets/natives/user_fixed.native`）
 2. 替换 `NetworkList` 内容为生成的网络（按 `<List2>` 配对扫描，**跳过自闭合标签**）
 3. 替换 `TextLines` 为新的声明文本，Id 从 900 起顺序重排
+   - ⚠ **必须锚定 `Interface` 再找**：`raw.find('<Array Name="TextLines"', raw.find('<Single Name="Interface"'))`
+   - 一份 native 里 `TextLines` 至少两处（`Interface` 声明区 + EXECUTE 框 `STSnippet` 的 ST 代码），
+     且 `NetworkList` 在文档中排在 `Interface` 之前。裸 `find` 会命中 ST 代码块，
+     把声明写进 ST、真声明区留着骨架旧变量 → 预编译 40+ 条 `符号 'PROGRAM'/'BOOL' 不能识别`
+     （2026-11-25 实测 48 条，详见 `precompile-errors.md` 第 8 条）
 4. 改 `MetaObject/Name` 与 `MetaObject/Guid`（新 uuid4）
 5. `UniqueIdGenerator` 抬到最大 Id + 200
 6. `ipc/import_args.json` 写 `{"path":..., "parent":"Application", "expect":[...]}`
 7. `task_silent_import.py` 静默导入（父对象 `Application`，无同名 → 不弹框）
 8. `task_check.py` 验证：**预编译 `217bc73e` 和编译 `97f48d64` 两个分类错误数都必须为 0**（只跑预编译会漏掉 AND 元数这类构建期错误）
+   - ⚠ 先确认 `check.log` 里列出了全部 5 个分类。**看不到分类清单 = 没真读到消息，`total=0` 无效**（假通过，见 `precompile-errors.md` 第 9 条）
+9. 语义抽查声明区首行（`PROGRAM xxx` / `FUNCTION_BLOCK xxx`）——**往返 diff PASS 不能替代这一步**
 
-可复用的生成器：`scripts/examples/make_packml_cmd_test.py`
+可复用的生成器：`scripts/examples/make_packml_cmd_test.py`、`scripts/examples/make_ld_learn.py`（TON / EXECUTE / FB 内 LD）
+
+---
+
+## 定时器功能框（TON）标准结构（act05 / HC_ValveCtrl 实测，2026-11-25）
+
+**TON 是 `{acfc6f68}` 功能框的一个特例，与普通 FB 调用有两处硬差异**：
+
+| 字段 | 普通 FB 调用 | **TON 定时器框** |
+|------|-------------|-----------------|
+| `EN` / `ENO` | `<Single ... >True</Single>` | **`False`**（实测 7 处 TON 全为 False） |
+| `InputItems[0]` | 恒为连接器 `{5f9848d3}` | **看挂载位置**（见下） |
+| `CallType` | `FunctionBlock` | `FunctionBlock`（相同） |
+| `Instance.Operand` / `Type` | 实例名 / FB 类型名 | 实例名（如 `fbActLeft`）/ **`TON`** |
+
+### `InputItems[0]` 的两种合法形态
+
+```
+① 顶层：NETITEM.RValue 直接是 TON 框
+   InputItems[0] = 连接器 {5f9848d3}   Input=Null    ← 电源流来自梯级左侧
+   InputItems[1] = 值引脚 {9de7f100}   Operand="T#3S"  Type=TIME  IsContact=False
+
+② 嵌套：TON 框挂在某个 AND 框的 InputItems 里
+   InputItems[0] = 条件触点 {9de7f100}  Operand="xActiveLeft"  IsContact=True
+   InputItems[1] = 值引脚 {9de7f100}   Operand="TO_TIME(rSetActTime*1000)"  Type=TIME
+```
+
+**为什么不一样**：`EN=False` 意味着这个框没有 EN 引脚，`InputItems` 的第 0 槽就退回成
+**普通输入引脚**——顶层时它是「电源流连接器」，嵌套时它是第一个真实参数 `IN`。
+
+### 槽位规则
+
+```
+InputItems  长度 == InputParam 个数（TON 固定 2 个：IN / PT）
+            [0] = 连接器 或 条件触点   ← IN（BOOL）
+            [1] = 值引脚               ← PT（TIME）
+
+OutputItems 长度 == OutputParam 个数（TON 固定 2 个：Q / ET）
+            [0] = <Null />             ← 对应 ENO
+            [1] = Operand              ← ET，**不带 Name 属性**，LValue=True
+```
+
+`InputParam` / `OutputParam` 照常填 `Names=[IN,PT]` / `Types=[BOOL,TIME]`、
+`Names=[Q,ET]` / `Types=[BOOL,TIME]`。
+
+### 完整结构（顶层写法，实测导出）
+
+```xml
+<Single Type="{acfc6f68...}">
+  <Single Name="ContainsExtensibleInputs" Type="bool">False</Single>
+  <Single Name="EN"  Type="bool">False</Single>       <!-- ⚠ False -->
+  <Single Name="ENO" Type="bool">False</Single>       <!-- ⚠ False -->
+  <Single Name="ProvidesSTSnippet" Type="bool">False</Single>
+  <Flags ... Flags=0 />
+  <Null Name="InputFlags" />
+  <List2 Name="InputItems">
+    <Single Type="{5f9848d3}">   <!-- 槽0：连接器 -->
+      <Flags .../> <Null Name="Input"/> <Id/>
+    </Single>
+    <Single Type="{9de7f100}">   <!-- 槽1：PT 值引脚 -->
+      <Operand ... Operand="T#3S" Type="TIME" .../>
+      <IsContact>False</IsContact> <Id/>
+    </Single>
+  </List2>
+  <CallType>FunctionBlock</CallType>
+  <Instance ... Operand="fbDelay" Type="TON" IsInstance=True />
+  <OutputItems><List2>
+    <Null/>                                        <!-- ENO -->
+    <Operand LValue=True IsCoil=False Operand="" /> <!-- ET，无 Name 属性 -->
+  </List2></OutputItems>
+  <InputParam>  Names=[IN,PT]    Types=[BOOL,TIME] </InputParam>
+  <OutputParam> Names=[Q,ET]     Types=[BOOL,TIME] </OutputParam>
+  <BoxType>TON</BoxType>
+  <Null Name="STSnippet" />
+  <IsBoxType>True</IsBoxType>
+</Single>
+```
+
+**输出引脚可以不接线**：实测 `HC_ValveCtrl` 里 6 个 TON 的 `Q`/`ET` 全空
+（`Operand=""`），预编译 0 错误、编译 0 错误。要读 `ET` 就在 EXECUTE 块里写
+`fbAlarmLeft.ET`（模板正是这么做的）。
+
+参考实现：`scripts/examples/make_ld_learn.py` 的 `ton_box()`。
+
+---
+
+## EXECUTE 框：LD 内嵌 ST 代码块（HC_ValveCtrl 网络9 实测，2026-11-25）
+
+**这是 LD 里直接嵌一段 ST 的官方写法**，`references/` 之前完全没有记载。
+
+| 字段 | 值 | 说明 |
+|------|-----|------|
+| `BoxType` | `EXECUTE` | |
+| `CallType` | **`None`** | ⚠ 全新取值，不是 `And`/`Move`/`Function`/`FunctionBlock` |
+| `ProvidesSTSnippet` | **`True`** | 唯一会为 True 的框类型 |
+| `EN` / `ENO` | `True` / `True` | |
+| `STSnippet` | **非 Null** | 代码在这里；其它框都是 `<Null Name="STSnippet" />` |
+| `InputItems` | 1 槽（连接器 `{5f9848d3}`） | |
+| `OutputItems` | 1 项（`<Null/>`） | |
+| `InputParam` / `OutputParam` | `[EN]/[BOOL]` / `[ENO]/[BOOL]` | |
+
+### 挂载位置
+
+**直接挂 `Network/NetworkItems`，不套 NETITEM、不套分支组**（实测网络9 只有一个子节点）：
+
+```
+Network
+  NetworkItems
+    Box {acfc6f68} BoxType=EXECUTE    ← 就这一层
+```
+
+### STSnippet 三层结构
+
+```
+STSnippet {b2131366}
+└─ STSnippet {3b83b776}
+   └─ TextDocument {f3878285}
+      └─ TextLines {a5de0b0b}  ← 每行一个 Single，含 Id/Tag/Text
+├─ STSnippetWidth  (int，如 496)
+├─ STSnippetHeight (int，如 400)
+└─ Id
+```
+
+**代码行写法与声明区完全一样**：每行 `<Single Type="{a5de0b0b}">`，内含
+`Id`（全局唯一）、`<Null Name="Tag"/>`、`Text`。ST 里的换行靠「一行一个 Text」表达，
+`Text` 内部不写 `\n`；制表符可以直接写 `\t`；`&quot;` 等实体由 XML 层负责转义。
+
+### 完整结构（实测导出）
+
+```xml
+<Single Type="{acfc6f68...}">
+  <ContainsExtensibleInputs>False</ContainsExtensibleInputs>
+  <EN  Type="bool">True</EN>
+  <ENO Type="bool">True</ENO>
+  <ProvidesSTSnippet Type="bool">True</ProvidesSTSnippet>   <!-- ⚠ True -->
+  <Flags .../>
+  <Null Name="InputFlags" />
+  <List2 Name="InputItems">
+    <Single Type="{5f9848d3}"><Flags/><Null Name="Input"/><Id/></Single>
+  </List2>
+  <CallType>None</CallType>                                  <!-- ⚠ None -->
+  <Instance ...><Null Name="Operand"/><Type/></Instance>
+  <OutputItems><List2><Null/></List2></OutputItems>
+  <InputParam> [EN]/[BOOL] </InputParam>
+  <OutputParam>[ENO]/[BOOL]</OutputParam>
+  <BoxType>EXECUTE</BoxType>
+  <Single Name="STSnippet" Type="{b2131366}">                <!-- ⚠ 非 Null -->
+    <Single Name="STSnippet" Type="{3b83b776}">
+      <Single Name="TextDocument" Type="{f3878285}">
+        <Array Name="TextLines" Type="{a5de0b0b}">
+          <Single Type="{a5de0b0b}"><Id/><Null Name="Tag"/><Text>//注释</Text></Single>
+          <Single Type="{a5de0b0b}"><Id/><Null Name="Tag"/><Text>IF x THEN</Text></Single>
+          ...
+        </Array>
+      </Single>
+    </Single>
+    <STSnippetWidth>496</STSnippetWidth>
+    <STSnippetHeight>400</STSnippetHeight>
+    <Id/>
+  </Single>
+  <IsBoxType>True</IsBoxType>
+</Single>
+```
+
+**EXECUTE 里能引用的东西**：本 POU 的局部变量、输入/输出形参、**同一网络里其它功能框的实例**
+（模板用 `fbAlarmLeft.ET` 读 TON 的已过时间）。因此「TON 算时间 + EXECUTE 里做判断/赋值」
+是很自然的搭配，可以避开 LD 里画复杂比较的麻烦。
+
+参考实现：`scripts/examples/make_ld_learn.py` 的 `execute_box()`。
+
+---
+
+## FUNCTION_BLOCK 里的 LD 写法（HC_ValveCtrl 实测，2026-11-25）
+
+**结论：FB 内部的 LD 与 PROGRAM 内部的 LD 在 native 层完全同构，没有任何额外字段。**
+
+`HC_ValveCtrl` 是 `FUNCTION_BLOCK`，它的 native 与 PROGRAM 骨架逐节点对照：
+
+| 项 | PROGRAM | FUNCTION_BLOCK |
+|----|---------|----------------|
+| `MetaObject/TypeGuid` | `6f9dac99-8de1-4efc-8465-68ac443b7d08` | **完全相同** |
+| `EmbeddedTypeGuids` | `[a9ed5b7e, 25e509de]` | **完全相同** |
+| `Object/SpecialFunc` | `None` | `None` |
+| `Object/POULevel` | `Standard` | `Standard` |
+| `Implementation/DefaultViewMode` | `Ld` | `Ld` |
+| 网络 / 分支组 / 功能框结构 | — | **完全相同** |
+
+**唯一区别在声明区文本**：首行写 `FUNCTION_BLOCK <名字>` 而不是 `PROGRAM <名字>`，
+并按需用 `VAR_INPUT` / `VAR_OUTPUT` / `VAR_IN_OUT` / `VAR` 分段。
+
+```iecst
+FUNCTION_BLOCK HC_ValveCtrl
+VAR_INPUT
+    xCmdLeft  : BOOL;
+    rSetActTime : REAL;
+END_VAR
+VAR_OUTPUT
+    xActiveLeft : BOOL;
+    rActTimeLeft : REAL;
+END_VAR
+VAR
+    fbActLeft : TON;      // FB 内部也能有实例
+END_VAR
+```
+
+**实践含义**：想写 FB 里的 LD，**直接把 PROGRAM 的生成流程照搬**，只改声明区首行即可。
+不需要改 TypeGuid、不需要额外字段。实测 `fb_LdLearnTest`（FUNCTION_BLOCK + TON + EXECUTE）
+导入成功、双分类 0 错误、往返结构一致。
+
+参考实现：`scripts/examples/make_ld_learn.py` 的 `build_pou()`（`DECL_FB` 与 `DECL_PRG` 只差声明文本）。
+
+---
+
+## ⚠ 线圈 / 输出引脚的 Operand 不带 `Name` 属性（实测证伪）
+
+生成器里最容易写错的一处。`{c9b2f165}` Operand 节点的 `Name` 属性**分两种**：
+
+| 位置 | 是否带 `Name` | 实测 |
+|------|--------------|------|
+| 触点 / 值引脚内部的 Operand | **带** `Name="Operand"` | `user_fixed.native` |
+| 功能框 `Instance` | **带** `Name="Instance"` | `user_fixed.native` |
+| **线圈**（`NETITEM.OutputItems`） | **不带**（`<Single Type="{c9b2f165}">`） | `user_fixed.native`、`fb_call_test.native` |
+| **功能框输出引脚接线目标** | **不带** | `fb_call_test.native`（`xScInitOk`） |
+
+**症状**：多写了 `Name="Operand"` 时，预编译 0 错误、编译 0 错误、图形显示正常——
+**但导出往返会不一致**：IDE 导入时静默抹掉这个属性。只有逐节点 diff 才能发现。
+
+**自检**：导入后再导出，与源文件做结构 diff，`Operand` 节点的 `Name` 属性对不上就是这个问题。
+
+**对的是什么**：`coil()` / `out_operand()` 生成的 Operand 一律 `name=None`。

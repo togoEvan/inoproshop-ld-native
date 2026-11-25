@@ -60,14 +60,23 @@ try:
 
     # get_message_objects 需要「分类对象」而不能传字符串/GUID。
     # 枚举所有分类，按 GUID 匹配到目标分类后再取消息对象。
+    # ⚠ 铁律：匹配不到 / 取不到消息必须抛错，绝不能静默返回空列表。
+    #   教训（2026-11-25）：旧版这里是 `except Exception: continue` + `return []`，
+    #   预编译实际有 48 条 Error，脚本却输出 total=0 并判「验收通过」——假通过。
+    #   验收脚本宁可崩，也不能把「读不到」当成「没错误」。
+    cats = list(system.get_message_categories())
+    L(u"categories: %d" % len(cats))
+    for c in cats:
+        L(u"  cat %s" % unicode(c))
+
     def _objs_by_guid(guid):
-        for ci, c in enumerate(list(system.get_message_categories())):
-            try:
-                if unicode(c) == guid:
+        for c in cats:
+            if unicode(c) == guid:
+                try:
                     return list(system.get_message_objects(c))
-            except Exception:
-                continue
-        return []
+                except Exception, e:
+                    raise RuntimeError(u"get_message_objects(%s) 失败: %s" % (guid, e))
+        raise RuntimeError(u"消息分类 %s 未找到，不得当作 0 错误" % guid)
 
     total_err = 0
     for label, cat in ((u"预编译", CAT_PRE), (u"编译", CAT_BUILD)):

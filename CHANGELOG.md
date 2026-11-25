@@ -8,6 +8,12 @@
 ## [Unreleased]
 
 ### 新增
+- **`references/precompile-errors.md` 第 8 类问题**：一次性 40+ 条 `符号 'PROGRAM'/'FUNCTION_BLOCK'/'BOOL' 不能识别` + `应该用';' 替换'...'`。给出报错原文、根因（裸 `find` 命中 ST 代码块）、修复代码、**以及往返 diff 查不出来时必须用的语义自检片段**
+- **`references/precompile-errors.md` 第 9 类问题**：验收脚本报 `total=0 / 通过` 但 IDE 里真有 48 条 Error。给出假通过的根因代码、修复代码，并立规矩「验收脚本宁可崩，也不能把『读不到』当成『没错误』」
+- **`references/native-structure.md`「新建 POU 的完整流程」补两道卡**：第 3 步加「必须锚定 `Interface` 再找 `TextLines`」的警告；第 8 步加「先确认 `check.log` 列出全部 5 个分类，看不到清单 = `total=0` 无效」；新增第 9 步「语义抽查声明区首行（`PROGRAM xxx` / `FUNCTION_BLOCK xxx`）」
+- **`README.md` 铁律表新增第 12、13 条**（`TextLines` 定位必须锚定 `Interface`；验收脚本读不到消息必须抛错），并加一段元教训：**往返 diff PASS 不等于内容正确**——源文件本身错时 IDE 原样保留，`rt_diff` 照样 `diffs=0`
+- **`SKILL.md` 铁律新增第 12、13、14 条**，并在「已验证的合法模式」补 4 条本轮实测结论：**TON 定时器框**（`CallType=FunctionBlock` 但 `EN/ENO=False`；顶层 `InputItems[0]` 是连接器 `{5f9848d3}`、嵌在 AND 里时是条件触点 `{9de7f100}`；Q/ET 可空接线）、**EXECUTE 框**（`CallType=None`、`ProvidesSTSnippet=True`、`STSnippet` 三层、直挂 `NetworkItems` 不套 NETITEM）、**FUNCTION_BLOCK 里的 LD**（native 层与 PROGRAM 完全同构，唯一区别是声明区首行）、**线圈/输出引脚的 Operand 不带 `Name` 属性**（写错只有往返 diff 会现形）
+- **`scripts/examples/make_ld_learn.py`**：学习型生成器，复现 InoPack 模板里 `references` 尚未记载的三种 LD 写法——TON 定时器框（顶层 + 嵌 AND 两种挂载）、EXECUTE 内嵌 ST 代码块、FUNCTION_BLOCK 内的 LD。同时生成 `prg_LdLearnTest`（PROGRAM）与 `fb_LdLearnTest`（FUNCTION_BLOCK），各 3 网络。实测静默导入成功、**双分类 0 错误**、往返 diff `diffs=0`
 - **「可回写数据清单」+「四问自查法」**（`AGENTS.md` §6.1 / §6.2，`SKILL.md` 精简版，`docs/iteration.md` §2.1.1 / §2.1.2）。原四类触发只说了「什么类别落到哪个文件」，没说**编程过程中到底要留下哪些原始数据**、也没说**怎么跟另一个 AI 讲清判定口径**，导致换人接手时取证口径不一致。现在补两块：①**现场采集清单 9 项**（新结构完整 `.native`、报错原文整行、定位信息、最小实验记录、双分类错误数、导出往返 diff、IDE 弹窗原文、用户手改前后两份 native、环境快照），明确「报错当次就采，收尾只做归类不重新取证」，并规定①类条目缺「native 文件 / 双分类数字 / 往返 diff」任一项**不许**写进 `references/`；②**四问自查法**（Q1 新格式 / Q2 Bug / Q3 吃过的亏 / Q4 环境），每问只答「有 / 无」，答「有」必须附证据、答「无」要写清查过哪个文件，另附**可直接原文粘贴给其他 AI 的说明块**（含 6 条硬规则）与**常见误判表**（重试即好的抖动不写 / 双分类 0 但图形打不开要写 / 用户手改最高优先 / git 推送问题不写）
 
 ### 修改
@@ -18,6 +24,8 @@
 - `docs/iteration.md` §2 标准流程补第 ⑨ 步（重新打包 `.skill` 并同步本机技能目录），并新增 §2.1「回写四类触发」对表
 
 ### 修复
+- **生成器把 POU 声明写进 EXECUTE 框的 ST 代码块，导致预编译 48 条错误**。`make_ld_learn.py` 改声明区时用裸 `raw.find('<Array Name="TextLines"')`，而一份 native 里 `TextLines` 至少两处（`Interface` 下的 POU 声明区 + EXECUTE 框 `STSnippet` 里的 ST 代码），且 `List2[NetworkList]` 在文档中排在 `Interface` **之前**——只要网络里有 EXECUTE 框，`find()` 就命中 ST 代码块。结果声明被塞进 ST、ST 代码被覆盖成 `PROGRAM xxx / VAR ...`，真正的声明区留着骨架 `prg_StartStop` 的旧变量，预编译逐行炸出 `符号 'FUNCTION_BLOCK'/'PROGRAM'/'BOOL' 不能识别`（number=9）、`应该用';' 替换'...'`（number=189）、`POU应以';'结尾`（number=190）、`没有定义标识符'...'`（number=46），共 48 条 Error + 23 条 Warning。修法：`p = raw.find('<Array Name="TextLines"', raw.find('<Single Name="Interface"'))`。修正后重新导入，**预编译 0 错误 + 编译 0 错误**，往返 diff 两个 POU 均 `diffs=0`
+- **验收脚本 `task_check.py` 会「假通过」：读不到消息时静默输出 `total=0` 并判验收通过**。`_objs_by_guid` 按 GUID 匹配消息分类时写成 `except Exception: continue` + `return []`，把「读失败」和「没匹配上」全吞掉，`return []` 再把它伪装成干净。实测预编译真实有 48 条 Error，脚本却报 `预编译 : total=0 errors=0` + `验收结论 : 通过`。修法：匹配不到分类即 `raise RuntimeError`，`get_message_objects` 失败也抛错，并先打印全部 5 个分类便于核对（正常 `check.log` 必须能看到 5 个分类清单）。同步更新 `scripts/ide/task_check.py`
 - **分支组 `Trees` 只有 1 条支路会让 IDE 绘制网络时崩溃**（用户截图报「在绘制该网络的时候遇到错误 / 不能显示内容 / 索引超出了数组界限」，堆栈在 `IBoxTreeParallel`）。`make_fb_call_test.py` 首版给只有一条 FB 调用的网络套了「单支路分支组 + NETITEM.RValue」，**预编译 0 错误、编译 0 错误，但梯形图编辑器打不开这一级网络**。脚本枚举全部样本后确认：act03_PackMLCmd 的 10 个网络、prg_PackMLCmdTest 的 7 个网络，所有分支组 `Trees` 都是 2，工程里从未出现过 `Trees=1`。修法：单支路时**不用 `branch()`、不套 `NETITEM`**，直接把 AND 框挂 `NetworkItems`（照 act90_PackMLManager 网络3）。改后重新导入，导出结构与实测样本一致，预编译 0 + 编译 0，程序段 2 正常显示
 - `scripts/examples/make_fb_call_test.py`：`build_networks()` 改为「多支路 → 分支组直挂；单支路 → AND 框直挂」；`netitem_rvalue()` 标记为**已弃用**并在 docstring 写明踩坑原因，防止后来者照抄
 
