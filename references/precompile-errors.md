@@ -57,8 +57,28 @@
 
 ### 4. `已标识项中有一项的格式无效`
 
-- **根因**：MOVE 框挂错位置（NETITEM.OutputItems 或 NETITEM.RValue）
-- **修复**：MOVE 框直接挂 `Network/NetworkItems`
+**这是本轮（2026-11-25）最需要记住的一条：它是模态弹窗，会把 IDE 冻死。**
+
+- **根因（实测两种）**：
+  1. MOVE 框挂错位置（NETITEM.OutputItems 或 NETITEM.RValue）
+     → 修复：MOVE 框直接挂 `Network/NetworkItems`
+  2. **FB 类框（TON / FB_xxx）的 `Instance.Type` 为空**
+     → 修复：`Instance.Type` 必须填 BoxType 名（如 `TON`），
+       `Instance.Operand` 填实例名。见 `native-structure.md` ⑥。
+- **为什么这条特别危险**：`import_native` 抛出该异常时 IDE 会弹**模态对话框**
+  「已标识项中有一项的格式无效。」，主线程被阻塞：
+  - 守护进程心跳停止（`ipc/heartbeat` 不再更新）
+  - `bridge.py` 所有命令 180s 超时，看起来像「API 挂了」
+  - `task_silent_import.py` 的日志停在 `children before:`，没有 FATAL 行
+    （因为主线程卡在弹窗，Python 侧写不进去）
+- **判断方法**（不用看屏幕）：枚举该 PID 的可见窗口，若主窗口
+  `IsWindowEnabled=False`，且另有一个窗口挂着 `确定` 按钮 + Static 文本
+  「已标识项中有一项的格式无效。」，就是被模态框卡住了。
+- **解除方法**：`SendMessage(hButton, BM_CLICK=0x00F5, 0, 0)` 点掉「确定」，
+  主线程立刻恢复，心跳重启。
+- **预防**：`ET.parse()` 只能验 XML 合法性，**验不出这种语义错误**。真正的预防是
+  「FunctionBlock 类必须有实例名 + `Instance.Type` 填 BoxType 名」，见生成器
+  `make_repro_study.py::generic_box(instance=...)`。
 
 ### 4b. `在绘制该网络的时候遇到错误 / 不能显示内容 / 索引超出了数组界限`
 
@@ -390,3 +410,32 @@ grep -c 'Name="Name" Type="string">actAbs<'  → 1（Entry 名没动）
 
 **元教训**：反向验证是唯一能证明验收链路有效的手段，但**负样本本身必须造对**。
 负样本报错 ≠ 链路正常；负样本报 0 错误时，先怀疑样本，再怀疑链路。
+
+## 类型 F：编译分类根本不存在（2026-11-25 新踩）
+
+### F-1 打开一个**从未构建过**的工程，`97f48d64` 分类不存在
+
+- **症状**：`task_check.py` 抛
+  `RuntimeError: 消息分类 ?(97f48d64-a2a3-4856-b640-75c046e37ea9) 不存在，不得当作 0 错误`
+- **根因**：消息分类是**惰性创建**的。新打开的工程、或从未执行过构建的工程，
+  运行时只暴露 2 个分类（预编译 `217bc73e` + 导出/导入 `2af7707f`）。
+  编译分类要等第一次 `app.build()` 之后才出现。
+- **正确做法**：先用 `scripts/ide/task_build_check.py` 跑一次 `build()`（**不 clear_messages**），
+  再读双分类。实测构建后分类数从 2 变 3，编译分类出现。
+- **⚠ 不要**因为分类不存在就 `return 0` 当通过——那正是本仓库反复强调的「假通过」。
+
+### F-2 真实工程构建后剩下的错误不一定是你的错
+
+实测「除油倒盘-擦拭机-PLCV20261124」构建后编译分类剩 1 条：
+
+```
+[Error] M000_MAIN | 程序 E3_SystemTime 在多任务下存在多处调用，可能会产生不符合预期的结果
+```
+
+这是**模板工程自带的**（`E3_SystemTime` 被 MainTask 与 ETHERCAT 同时调用），
+与新建 POU 无关。**判断方法**：在日志里 `grep 你新建的 POU 名`，为 0 即与本次改动无关。
+预编译分类同期是 `errors=0 warnings=101`，101 条全是模板自带的
+`ENUM1_CYLINDERNAME → UINT 隐含转换` 警告。
+
+**结论表述要诚实**：应写「预编译 0 错误；编译仅剩模板原有的 1 条 E3_SystemTime 多任务错误，
+新增 POU 无任何错误」，而不是笼统说「双分类 0 错误」。

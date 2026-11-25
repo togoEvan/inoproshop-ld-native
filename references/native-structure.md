@@ -478,6 +478,201 @@ NETITEM 的 `RValue` 字段首节点形态统计（143 处，全工程实测）�
 **要点**：功能框是最常见的 RValue 形态（52 处）——NETITEM 条件直接放 AND/比较框，
 不一定先包 `{5f9848d3}` 容器。生成时保持现有「AND 框当 RValue」写法即可。
 
+## 真实业务工程的全量结构普查（2026-11-25「除油倒盘-擦拭机-PLCV20261124」实测）
+
+前面各节来自小样本 + 手写骨架。本节是对一个**真实产线工程**（403 对象 / 400 个
+export entry / 5804 个功能框 / 940 个分支组）逐字段统计的结果，用来校正「小样本
+推出来的一般规律」。**遇到与本节冲突的旧结论，以本节为准。**
+
+复现脚本：`scripts/examples/make_repro_study.py`（生成 `prg_ReproStudy`，9 个网络，
+实测预编译 0 错误、编译无新增错误、往返导出结构签名逐行一致）。
+
+### ① NetworkItems 的直接子节点：分支组是主流，不是 NETITEM
+
+| NetworkItems 直接子节点 | 网络数 |
+|---|---|
+| **分支组 `{827b9ec2}`** | **679** |
+| 空（无内容） | 540 |
+| AND 框 | 55 |
+| FB 调用框（FB_StepLogger 等） | 20+ |
+| **NETITEM** | **仅 18** |
+| MOVE 框 | 11 |
+| EXECUTE 框 | 4 |
+
+**结论：真实程序里 `NetworkItems → 分支组 → Trees` 才是主结构**，`NETITEM` 直挂只是
+少数写法（18/1330）。生成复杂逻辑时优先用「分支组 + Trees」，不要把一切都塞进 NETITEM。
+
+### ② 分支组 `{827b9ec2}` 的完整字段
+
+```
+Single {827b9ec2}            ← 注意：Input 有 Name 属性，不能漏写
+  ├─ Input     : 可为 <Null/> 或任意图形节点（触点/比较框/AND/TON/嵌套分支组）
+  ├─ List2 Trees : 2~17 条（实测分布：2 条 462、3 条 341、4 条 99、5 条 24、
+  │                6 条 21、9 条 21、7/8 条各 6、10 条 7、17 条 3）
+  ├─ Mode      : 恒为 "Sequential"（990/990，无第二种取值）
+  └─ Id
+```
+
+- **`Mode` 只有 `Sequential`**：不要发明 `Parallel` 等值。
+- **`Trees` 长度 ≥ 2**（与「分支组必须 ≥2 支路」铁律一致）。
+- **`Input` 实测取值分布**：`EQ` 614、`PIN` 191、`AND` 49、`Null` 45、`BRANCH` 37、
+  `GT` 16、`TON` 13、`GE` 13、`LT` 11、`FIND` 1 —— 比较框当公共前缀最常见。
+- **`Trees` 元素类型**：可以是 `NETITEM`、`AND` 框、`PIN`（裸触点）、嵌套 `BRANCH`。
+  最常见组合是 `[AND, AND]`（222）、`[AND, AND, AND]`（218）、`[AND, NETITEM]`（55）。
+
+### ③ `InputFlags`：只有部分框是 `List2`，其余是 `Null`
+
+这是旧文档完全没记的字段。统计（按 BoxType）：
+
+| BoxType | InputFlags 形态 | 处数 |
+|---|---|---|
+| FC_AxisAbsGo | `List2`（长度 = 槽数） | 500 |
+| FC_CylinderExe | `List2` | 236 |
+| **ADD** | **`List2`** | 24（另有 6 处 `Null`） |
+| **LE** | **`List2`** | 13（另有 4 处 `Null`） |
+| AND / MOVE / EQ / GT / LT / GE / TON / EXECUTE / 全部 FB_xxx | `Null` | — |
+
+`List2` 每项是一个 Flags 块（`Extensible/Fixed/Flags`）。**ADD 实测值**：
+
+```
+InputFlags = [ (Flags=16, Fixed=True), (Flags=0, Fixed=False), (Flags=0, Fixed=False) ]
+```
+
+**⚠ 修正旧结论**：`Flags=16` 曾被误判为「S/R 线圈专用标记」。实测推翻——
+NETITEM 级 `Flags=0` 的 S/R 线圈有 306 处（置位 179 + 复位 127），
+`Flags=16` 只有 7 处。`16` 在这里的真实含义是**「该引脚是电源流引脚」的位标志**，
+`Fixed=True` 也是随之而来的。**与 S/R 线圈无关，不要关联。**
+
+### ④ 比较框（EQ/NE/GT/LT/GE/LE）：3 槽，但 InputParam 只有 1 个名字
+
+```
+InputParam  = Names=['EN']  Types=['BOOL']
+OutputParam = Names=['']    Types=['BOOL']
+InputItems  = 3 槽  ← 槽0=EN 触点，槽1=左操作数，槽2=右操作数
+OutputItems = 1 项（<Null/>）
+EN=True  ENO=False  IsBoxType=True  CallType=Eq/Ne/Gt/Lt/Ge/Le
+Instance.Operand = <Null/>
+```
+
+**⚠ 不要按 `len(InputItems) == len(InputParam)` 校验比较框**——模板里 `InputParam`
+只有 1 个名字却有 3 个槽。`check_slots.py` 对比较框要放行。
+
+**比较框可以嵌套比较框**：`LT` 的槽0 可以是 `GE` 框（实测 32 处 `['BOX:GE','PIN','PIN']`）。
+此时槽0 不是触点而是框。
+
+### ⑤ `{505bff94}` 空占位的真实位置
+
+```
+<Single Type="{505bff94-4c90-4e17-ac28-b8ac69d1b9e2}" Method="IArchivable">
+  <Single Name="Id" Type="long">###</Single>
+</Single>
+```
+
+- **只出现在 `List2/InputItems` 的槽位 1（共 2 槽）**，紧跟一个功能框
+  （MOVE / FC_AxisAbsGo / FC_CylinderExe / EXECUTE / ADD / TON / DELETE / FB_xxx）。
+- 2205 处，形态恒定（只有 `Id` 一个子节点，**没有 Flags、没有 Name 属性**）。
+- **⚠ 旧结论「分支组 Trees 内 1908 处」未经核实**：本轮只确认了 AND 框 InputItems 槽1
+  这一种位置。分支组内的出现需另行验证，不要照抄。
+
+### ⑥ `Instance.Operand` 与 `Instance.Type` 必须成对正确
+
+| 框类 | Instance.Operand | Instance.Type |
+|---|---|---|
+| FunctionBlock（TON / FB_xxx） | `<Single Type="string">实例名</Single>` | `<Single Type="string">TON</Single>`（= BoxType） |
+| 其余全部（AND/MOVE/EQ/GT/LT/GE/ADD/EXECUTE/FC_xxx/FIND/DELETE） | `<Null/>` | `<Single Type="string"></Single>`（空） |
+
+**⚠ 血泪教训（本轮实测）**：给 TON 写 `Instance.Type` 为空时，`import_native` 抛
+**「已标识项中有一项的格式无效。」**，并且该错误是**模态弹窗**——它会阻塞 IDE 主线程，
+守护进程心跳停止、`bridge.py` 全部超时。必须人工点掉「确定」才能恢复。
+**造 FB 类框时 `Instance.Type` 必须填 BoxType 名。**
+
+### ⑦ 框级 `Flags.Fixed` 的真实分布
+
+| 框 | Fixed |
+|---|---|
+| AND | False（恒定） |
+| TON | **两种都有**（True 27 / False 20，均合法） |
+| MOVE / 比较框 / ADD | True |
+| Action / Function / FB / Program | True |
+
+**⚠ 修正旧结论**：旧文档写「TON 是仅有的两个 Fixed=False 的框之一」。实测 TON
+True/False 各占一半，**不存在「必须 False」**。取 True 不会多画空引脚，更安全。
+
+### ⑧ TON 框实测（47 处）
+
+```
+CallType=FunctionBlock  EN=False  ENO=False
+Instance.Operand = 实例名（TON_0 / TON_1 / ... 全部有值）
+Instance.Type    = "TON"
+InputParam  = ['IN','PT']   Types=['BOOL','TIME']
+OutputParam = ['Q','ET']    Types=['BOOL','TIME']   ← 没有 ENO
+InputItems  = 2 槽（IN 的电源流 + PT 时间值）
+OutputItems = 2 项，未接线时两项都是 <Null/>
+```
+
+**⚠ TON 的 OutputItems 不能套「第 0 项恒为 ENO 空位」**——它压根没有 ENO 参数。
+
+### ⑨ ADD / MOVE 实测字段
+
+```
+ADD : CallType=Add  EN=True ENO=True IsBoxType=True Fixed=True
+      InputParam=['EN']  OutputParam=['ENO','']
+      InputItems=[CONN, PIN, PIN]  OutputItems=[Null, OPERAND]
+      InputFlags=List2[(16,True),(0,False),(0,False)]
+
+MOVE: CallType=Move EN=True ENO=True IsBoxType=True Fixed=True
+      InputParam=['EN']  OutputParam=['ENO','']
+      InputItems=[CONN, PIN]  OutputItems=[Null, OPERAND]
+      InputFlags=Null
+```
+
+### ⑩ `Implementation` 的 TypeGuid
+
+`Implementation` 节点的 `Type` **属性**（不是子元素文本）区分实现语言：
+
+| TypeGuid | 语言 | 处数 |
+|---|---|---|
+| `{3b83b776-fb25-43b8-99f2-3c507c9143fc}` | ST 文本实现 | 88 |
+| `{25e509de-...}` | LD 网络列表实现 | 52 |
+
+### ⑪ POU 对象的 TypeGuid 语义表（`MetaObject` 的 `TypeGuid` 字段）
+
+| TypeGuid 前 8 位 | 含义 | 数量 |
+|---|---|---|
+| `b53c14ea` | Network 占位 | 159 |
+| `6f9dac99` | FUNCTION_BLOCK | 85 |
+| `2db5746d` | Struct / Enum | 54 |
+| `8ac092e5` | PROGRAM / ACTION | 46 |
+| `738bea1e` | Folder | 24 |
+| `c3fc9989` | Check 函数 | 9 |
+| `ffbfa93a` | GVL | 8 |
+| `98a2708a` | Task（MainTask/ETHERCAT） | 2 |
+| `ad3ae438` | AxesGroup | 2 |
+| `f7aa3620` | Trace | 2 |
+
+### ⑫ 导出 XML 的真实层级（解析别人工程时必读）
+
+```
+ExportFile
+ └ StructuredView
+    └ Single
+       └ List2 (EntryList)
+          └ Single (一个 entry)
+             ├ Single Name="Name"      ← 对象名
+             ├ Single Name="Object"    ← ★对象本体在这里（不是标签名 "Object"！）
+             └ Single Name="MetaObject"
+                └ Single Name="TypeGuid"  ← ★对象类型 GUID 在这里
+```
+
+**⚠ 两个极易踩的读取 bug**（本轮修正了 4 个旧扫描脚本）：
+1. **`Object` 是 `Name` 属性值，不是标签名**。`root.iter('Object')` 永远取不到东西。
+2. **`InputItems` 本身就是 `<List2>`**（取槽直接 `list(node)`）；
+   **`OutputItems` 是 `<Single>` 里再包一层 `<List2>`**（要先找子 `List2`）。
+   容器不对称，读的时候必须分别处理。
+3. `NETITEM` 节点**没有 `Name` 属性**，只能按 `Type="{9873c309...}"` 识别。
+4. `Flags` 是 `<Single Name="Flags">` 里再嵌 `<Single Name="Flags" Type="int">N`
+   —— **取数值要取两层**。
+
 ## 触点取反位掩码与网络级字段（2026-11-25 全工程实测补充）
 
 - **触点 `Operand.Flags.Flags` 值域仅 0/1**（1295 处 =0 正开、62 处 =1 常闭取反）——

@@ -92,18 +92,40 @@ G_NESTED_BOX = "acfc6f68-8e3a-4af5-bf81-3dd512095a46"   # 功能框（含嵌套�
 G_CONTACT = "9de7f100-1b87-424c-a62e-45b0cfc85ed2"        # 触点/值引脚
 
 
-def _input_exempt(el):
-    """MOVE 的 IDE 原生形态豁免（2026-11-25 全工程实测，详见 native-structure.md）。
+def _input_exempt(el, bt):
+    """IDE 原生形态豁免：这些框「输入槽数 != InputParam 名数」是正常的。
 
-    ① 嵌套框接 EN：槽0 是功能框，前框 ENO 链式供 EN，InputParam 可只有 [EN]
-    ② 多槽触点链：槽0 是触点且槽 > 2（末槽为 IN 常量），EN 直接串联
-    这两种形态「输入槽 != InputParam 数」是正常的，不豁免会把模板原生 POU 全部误报。
+    2026-11-25 真实产线工程全量实测（详见 native-structure.md「全量结构普查」）：
+      ① MOVE 嵌套框接 EN：槽0 是功能框，前框 ENO 链式供 EN，InputParam 只有 [EN]
+      ② MOVE 多槽触点链：槽0 是触点且槽 > 2（末槽为 IN 常量），EN 直接串联
+      ③ 比较框（EQ/NE/GT/LT/GE/LE）：InputParam 只有 ['EN'] 一个名字，
+         但 InputItems 恒为 3 槽（槽0=EN 触点、槽1/2=左右操作数）。
+         实测 EQ 725 / GT 67 / LT 53 / GE 47 / LE 17 / NE 2 处，无一例外。
+         **不能按 len(InputItems)==len(InputParam) 校验比较框**，
+         否则模板原生 POU 会被全部误报（本轮 `prg_ReproStudy` 即被误报 3 处）。
+      ④ ADD / LE 等「EN + 多操作数」框同理：InputParam=['EN'] 但槽数 = 操作数+1。
     """
     lst = child(el, "InputItems")
     if lst is None or lst.tag != "List2" or len(lst) == 0:
         return False
     kind = (lst[0].get("Type") or "").strip("{}")
     n = len(lst)
+
+    # ③ 比较框：InputParam 恒为 ['EN']，槽数恒为 3
+    if bt in ("EQ", "NE", "GT", "LT", "GE", "LE"):
+        return True
+
+    # ④ 算术/选择框：InputParam 只有 EN，槽数 = 操作数 + 1
+    if bt in ("ADD", "SUB", "MUL", "DIV", "MOD", "SEL", "MUX", "LIMIT"):
+        return True
+
+    # ⑤ MOVE：InputParam 只有 ['EN']，InputItems 恒 2 槽（EN 电源流 + IN 源值）。
+    #    模板实测槽0 形态：CONN 806 / PIN 326 / BOX:AND 155 / BRANCH 40 —— 全部 2 槽。
+    #    「槽数 == InputParam 数」对 MOVE 完全不成立，一律豁免。
+    if bt == "MOVE":
+        return True
+
+    # ① 嵌套框接 EN ② 多槽触点链
     return kind == G_NESTED_BOX or (kind == G_CONTACT and n > 2)
 
 
@@ -139,8 +161,8 @@ def check(path):
         if msg:
             rows.append((bt, ct, msg))
 
-        # MOVE 的 IDE 原生形态豁免（嵌套框接 EN / 多槽触点链）
-        if n_in != len(in_names) and not (bt == "MOVE" and _input_exempt(el)):
+        # IDE 原生形态豁免（MOVE 嵌套/多槽触点链、比较框 3 槽、算术框多操作数）
+        if n_in != len(in_names) and not _input_exempt(el, bt):
             rows.append((bt, ct, "输入槽 %d != InputParam %d %s"
                          % (n_in, len(in_names), in_names)))
         if n_out != len(out_names):

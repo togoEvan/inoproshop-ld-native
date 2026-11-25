@@ -7,6 +7,21 @@
 
 ## [Unreleased]
 
+### 新增
+- **【真实产线工程全量结构普查 + 端到端复现】**（2026-11-25）对「除油倒盘-擦拭机-PLCV20261124」真实工程做全量导出（400 entries / 403 对象 / 5804 个功能框 / 940 个分支组）逐字段统计，校正了一批「小样本推出来的一般规律」，并新增 `scripts/examples/make_repro_study.py` 生成 `prg_ReproStudy`（9 个网络，覆盖该工程全部主流写法）做端到端验证：**预编译 0 错误；编译仅剩模板自带的 1 条 `E3_SystemTime` 多任务错误（日志里 `prg_ReproStudy` 出现 0 次）；往返导出 9 个网络结构签名逐行一致**。核心修正与新发现：
+  - **`NetworkItems` 的直接子节点里分支组才是主流**：分支组 `{827b9ec2}` 679 个网络、空网络 540、AND 55、FB 调用 20+、**NETITEM 仅 18**、MOVE 11、EXECUTE 4。真实程序的主结构是 `NetworkItems → 分支组 → Trees`，`NETITEM` 直挂只是少数写法。生成复杂逻辑应优先用分支组。
+  - **分支组 `{827b9ec2}` 完整字段**：`Input`（可为 Null/触点/比较框/AND/TON/嵌套分支组；实测 EQ 614、PIN 191、AND 49、Null 45、BRANCH 37、GT 16、TON 13、GE 13、LT 11、FIND 1）、`Trees` 2~17 条、**`Mode` 恒为 `Sequential`（990/990，无第二种取值）**、`Id`。**⚠ `Input` 节点带 `Name="Input"` 属性，漏写会报「格式无效」。**
+  - **`InputFlags` 字段（旧文档完全没记）**：只有 `FC_AxisAbsGo`(500)/`FC_CylinderExe`(236)/`ADD`(24)/`LE`(13) 是 `List2`（长度=槽数，每项一个 Flags 块），其余（AND/MOVE/EQ/GT/LT/GE/TON/EXECUTE/全部 FB_xxx）都是 `<Null/>`。ADD 实测 `[(16,True),(0,False),(0,False)]`。**⚠ 推翻旧结论「`Flags=16` = S/R 线圈专用」**：NETITEM 级 `Flags=0` 的 S/R 线圈有 306 处，`Flags=16` 仅 7 处；`16` 的真实含义是「该引脚是电源流引脚」的位标志，与 S/R 线圈无关。
+  - **比较框 3 槽但 `InputParam` 只有 1 个名字**：`InputParam=['EN']`、`OutputParam=['']`、`InputItems` **3 槽**（槽0=EN 触点、槽1/2=左右操作数）、`OutputItems` 1 项 `<Null/>`、`EN=True ENO=False`。**`check_slots.py` 对比较框不能按 `len(InputItems)==len(InputParam)` 校验**。比较框可嵌套比较框（`LT` 槽0 是 `GE`，实测 32 处）。
+  - **`{505bff94}` 空占位的真实位置**：只出现在 `InputItems` 槽1（共 2 槽），紧跟一个功能框，2205 处形态恒定（只有 `Id` 一个子节点，无 Flags、无 Name）。**旧结论「分支组 Trees 内 1908 处」本轮未验证，不可照抄。**
+  - **`Instance.Operand` + `Instance.Type` 必须成对正确**：FunctionBlock（TON/FB_xxx）→ Operand=实例名字符串、**Type=BoxType 名（如 `TON`）**；其余全部 → Operand=`<Null/>`、Type=空字符串。**给 TON 写空 Type 会抛「已标识项中有一项的格式无效。」模态弹窗，冻死 IDE 主线程**（详见 `precompile-errors.md §4`）。
+  - **推翻旧结论「TON 是仅有的两个 Fixed=False 的框之一」**：TON 的框级 `Flags.Fixed` 实测 True 27 / False 20，两种都合法，不存在「必须 False」。
+  - **TON 47 处实测**：`Instance.Operand` 全部有实例名、`Instance.Type` 全部 `"TON"`、`EN/ENO` 全 False、`OutputParam=['Q','ET']` 无 ENO、`InputItems` 2 槽、`OutputItems` 未接线时两项都是 `<Null/>`。
+  - **`Implementation` 的 `Type` 属性**区分实现语言：`{3b83b776}`=ST 文本（88 处）、`{25e509de}`=LD 网络列表（52 处）——是**属性值**，不是子元素文本。
+  - **POU 对象 `MetaObject.TypeGuid` 语义表**：`b53c14ea`=Network 占位(159)、`6f9dac99`=FB(85)、`2db5746d`=Struct/Enum(54)、`8ac092e5`=PRG/ACTION(46)、`738bea1e`=Folder(24)、`c3fc9989`=Check 函数(9)、`ffbfa93a`=GVL(8)、`98a2708a`=Task(2)、`ad3ae438`=AxesGroup(2)、`f7aa3620`=Trace(2)。
+  - **导出 XML 真实层级 + 4 个读取 bug**（本轮修正了 4 个旧扫描脚本）：①`Object` 是 `Name` **属性值**不是标签名（`iter('Object')` 永远取不到）；②`InputItems` 本身是 `<List2>` 直挂、`OutputItems` 是 `<Single>` 里包 `<List2>`（容器不对称，取槽必须分别处理）；③`NETITEM` 没有 `Name` 属性，只能按 `Type={9873c309}` 识别；④`Flags` 要取两层（外层 Single Name="Flags" 里的内层 Single Name="Flags" Type="int"）。
+  - 全部回写 `references/native-structure.md`（新增「真实业务工程的全量结构普查」整节）。
+
 ### 修复
 - **【重大纠正】单条件 rung 不该建 AND 框，触点直挂 `NETITEM.RValue`**（2026-11-25，用户质疑触发）：用户在图形界面上看到每个单条件 rung 都有一个 `TRUE` 常开触点，提出「TRUE 一直接通，相当于没加，可以取消掉，多此一举」。**用户完全正确**——旧文档写的「单条件补一个 `TRUE` 触点占位」只是绕过报错的绕行修法，不是正解。三方对照实测（新建 `prg_SlotTest` 三网络 + `prg_BareContactTest` 单独隔离）：
   | 写法 | 预编译 `217bc73e` |
