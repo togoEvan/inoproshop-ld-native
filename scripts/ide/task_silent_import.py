@@ -4,7 +4,7 @@
 import io, os, time, traceback
 
 import os
-BASE = os.environ.get("PLC_MCP_BASE") or 'D:\\小艺Work工作空间\\20261123160323\\plc_mcp'
+BASE = os.environ.get("PLC_MCP_BASE") or r"D:\plc_mcp"
 IPC = os.path.join(BASE, "ipc")
 LOG = os.path.join(IPC, "silent_import.log")
 ARGS = os.path.join(IPC, "import_args.json")

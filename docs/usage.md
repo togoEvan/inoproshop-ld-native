@@ -34,6 +34,7 @@
 ├── bridge.py                 # IPC 客户端（Python 3）
 ├── do_replace.py             # 静默导入入口
 ├── launch_ide_daemon.py      # 启动 IDE + 注入
+├── ide_trigger.ps1           # UIA 触发 daemon 注入
 ├── ipc/                      # daemon 与客户端交换区
 │   ├── cmd.json              # 客户端 → daemon
 │   ├── result.json           # daemon → 客户端
@@ -41,8 +42,11 @@
 │   ├── silent_import.log     # 导入过程日志
 │   └── <唯一名>.native       # 导出快照
 ├── ide/                      # IDE 内 IronPython 脚本
-│   ├── plc_daemon.py
-│   └── task_*.py
+│   ├── plc_daemon.py         # 守护进程
+│   ├── task_check.py         # 预编译检查（验收必用）
+│   ├── task_silent_import.py # 静默导入核心
+│   ├── task_readnow.py       # 读全部消息
+│   └── task_export_fixed.py  # 导出指定 POU
 └── work/                     # 生成的 native（可 gitignore）
 ```
 
@@ -179,4 +183,6 @@ python scripts\do_replace.py <native绝对路径> Application <目标POU名>
 | IDE 红框 | `references/precompile-errors.md` §3 |
 | `已标识项中有一项的格式无效` | `references/precompile-errors.md` §4 |
 | 预编译读出 0 但实际有错 | `references/precompile-errors.md` §5 |
+| `C0046: 没有定义标识符'xxx'`（一次几十个） | `references/precompile-errors.md` §6（声明区漏声明） |
+| 图形上两个 `TRUE` 串联 | `references/precompile-errors.md` §7（公共前缀重复） |
 | 桥连不上 | `references/mcp-bridge.md` |

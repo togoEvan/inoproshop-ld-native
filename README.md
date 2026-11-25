@@ -41,6 +41,7 @@ InoProShop 的梯形图存在一个 native XML 结构里。这个仓库提供：
 | 6 | 绝不 SetCursorPos / mouse_event / SetForegroundWindow。只走文件 IPC + PostMessage。 |
 | 7 | 不关 IDE。静默替换用「改名让位法」：`prg_X → prg_X_old_tmp` → import → 删旧。 |
 | 8 | 导出文件名每次唯一（`silent_after_HHMMSS.native`），否则弹覆盖确认框。 |
+| 9 | **图形里引用的每个符号，声明区必须有一行对应声明**。`import_native` 不会替你补声明，漏一个就报一串 `C0046: 没有定义标识符`（每个引用点一条）。 |
 
 完整对照见 [`references/precompile-errors.md`](references/precompile-errors.md)。
 
@@ -87,7 +88,7 @@ python scripts/do_replace.py work\xxx.native Application prg_StartStop
 
 ```python
 # 触发预编译并读错误（经桥在 IDE 内执行）
-python -c "import bridge; bridge.call('eval_file', path=r'D:/plc_mcp/ide/task_check.py')"
+python -c "import sys; sys.path.insert(0, r'<BASE>'); import bridge; bridge.call('eval_file', path=r'<BASE>\ide\task_check.py')"
 # 然后看 ipc/check.log 的「=== 预编译 : total=0 errors=0 ===」
 ```
 
@@ -103,23 +104,31 @@ inoproshop-ld-native/
 ├── AGENTS.md                     # AI 协作契约：上手顺序、验收标准、改动必须同步
 ├── README.md                     # 本文件
 ├── CHANGELOG.md                  # 每次改动必须登记
+├── LICENSE                       # MIT
 ├── docs/
 │   ├── usage.md                  # 使用规范（环境、命名、验收、禁止事项）
 │   └── iteration.md              # 迭代流程（改什么、怎么验证、怎么发版）
 ├── references/
-│   ├── native-structure.md       # 节点 GUID、层级、槽位、合法挂载位置
-│   ├── precompile-errors.md      # 错误 → 根因 → 修复
+│   ├── native-structure.md       # 节点 GUID、层级、槽位、声明区、合法挂载位置
+│   ├── precompile-errors.md      # 错误 → 根因 → 修复（7 类）
 │   └── mcp-bridge.md             # 桥的协议、命令、消息分类
 ├── scripts/
 │   ├── bridge.py                 # IPC 客户端（本地 Python 3）
 │   ├── do_replace.py             # 静默导入入口（本地 Python 3）
 │   ├── launch_ide_daemon.py      # 启动 IDE + 注入 daemon
 │   ├── ide_trigger.ps1           # UIA 触发注入
-│   └── ide/                      # IDE 内 IronPython 2.7 脚本
-│       ├── plc_daemon.py         # 守护进程（810 行，命令分发）
-│       └── task_*.py             # 导入/导出/预编译检查
+│   ├── ide/                      # IDE 内 IronPython 2.7 脚本
+│   │   ├── plc_daemon.py         # 守护进程（命令分发）
+│   │   ├── task_check.py         # 预编译检查（验收必用）
+│   │   ├── task_silent_import.py # 静默导入核心
+│   │   ├── task_readnow.py       # 读当前全部消息（排查异步）
+│   │   └── task_export_fixed.py  # 导出指定 POU（学结构用）
+│   └── examples/                 # 生成脚本范例（可改环境变量复用）
+│       ├── make_full8.py         # 裸 MOVE 支路批量包装成完整支路
+│       └── make_fix45.py         # 补声明 + 删多余 TRUE
 ├── assets/natives/               # 已验证克隆模板（4 份）
-└── sync.ps1                      # 一键：校验 CHANGELOG → commit → push
+├── sync.ps1                      # 一键：校验 CHANGELOG → commit → push
+└── sync.cmd                      # PowerShell 执行策略绕过包装器
 ```
 
 ---
@@ -134,8 +143,10 @@ inoproshop-ld-native/
 - **EN 槽**放 AND 框（内含条件触点，至少 2 个）；**IN 槽**放常量引脚。
 - **触点并联**：分支组 `{827b9ec2}` 的 `Trees` 放多个支路节点。
 - **树形状态机**：公共前缀只画一次（放分支组 `Input` 槽）+ 竖线分叉，靠分支组嵌套表达。
+  **公共前缀已放在 `Input` 时，支路条件框里不要再放同样的 TRUE**，否则图形上出现两个 TRUE 串联。
 - **取反/置位/复位**：Operand 内部 `Flags` 位掩码，`1=NOT`、`2=S`、`3=R`。
 - **功能链末端不需要 ENO**：分支内最后一个功能框的 `ENO` 引脚可以删掉（不往后连接），已实测预编译 0 错误。
+- **声明区**：`Interface/TextDocument/TextLines` 里逐行写 `VAR … END_VAR`；`Id` 全表唯一且递增。详见 `references/native-structure.md`。
 
 ---
 

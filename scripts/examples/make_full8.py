@@ -13,10 +13,11 @@
 """
 import copy
 import io
+import os
 import xml.etree.ElementTree as ET
 
-SRC = r"D:/小艺Work工作空间/20261123160323/plc_mcp/work/user_manual_full.native"
-DST = r"D:/小艺Work工作空间/20261123160323/plc_mcp/work/startstop_full8.native"
+SRC = os.environ.get("PLC_SRC_NATIVE") or "user_manual_full.native"
+DST = os.environ.get("PLC_DST_NATIVE") or "startstop_full8.native"
 
 BG   = "{827b9ec2-2032-40da-9f4e-7670ca2d55a8}"
 BOX  = "{acfc6f68-8e3a-4af5-bf81-3dd512095a46}"

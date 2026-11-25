@@ -25,21 +25,33 @@ do_replace.py <native文件> <父对象名> "关键字过滤"
 - 导入前校验用导出文件**每轮唯一命名**（`silent_after_HHMMSS.native`），否则弹覆盖确认框
 - 1.8 秒左右完成
 
-## bridge.py 调用（PowerShell 下注意引号）
+## bridge.py 调用
+
+推荐用 Python 直接调用（不用跟 PowerShell 的引号转义搏斗）：
+
+```python
+import bridge
+r = bridge.call("eval_file", timeout=180, path=r"D:\plc_mcp\ide\task_check.py")
+print(r)          # {"ok": true, "done": true}
+```
+
+也可以走 CLI，第二个参数是 JSON：
 
 ```powershell
-# eval_file 需要 JSON 参数（PowerShell 转义写法）：
-& python.exe bridge.py eval_file '{\"path\": \"D://...//task_check.py/"}'
+python bridge.py eval_file '{\"path\": \"D:\\\\plc_mcp\\\\ide\\\\task_check.py\"}'
 ```
+
+> PowerShell 里 JSON 的每个双引号都要反斜杠转义，反斜杠本身还要再转义一层，
+> 所以路径写成 `\\\\`。这就是上面推荐用 Python 调用的原因。
 
 ## 常用诊断脚本（ide/ 目录）
 
 | 脚本 | 用途 |
 |------|------|
-| task_check.py | 执行「检查程序」+ 读预编译/编译分类 → ipc/check.log |
-| task_readnow.py | 不清空直接读当前 5 个分类 → ipc/readnow.log |
-| task_allmsgs.py | 带分类读取全部消息 |
-| task_silent_import.py | 静默导入核心 |
+| task_check.py | 执行「检查程序」+ 读预编译/编译分类 → ipc/check.log（**验收必用**） |
+| task_readnow.py | 不清空直接读当前 5 个分类 → ipc/readnow.log（排查异步消息） |
+| task_export_fixed.py | 导出工程内指定 POU → ipc/user_fixed.native（学结构用） |
+| task_silent_import.py | 静默导入核心（由 do_replace.py 调用，一般不直接跑） |
 
 ## 找对象（勿用全局 find_named）
 

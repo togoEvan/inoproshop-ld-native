@@ -11,7 +11,7 @@ import sys
 import time
 import traceback
 
-CMD_DIR = os.environ.get("PLC_MCP_IPC") or r"D:\小艺Work工作空间\20261123160323\plc_mcp\ipc"
+CMD_DIR = os.environ.get("PLC_MCP_IPC") or r"D:\plc_mcp\ipc"
 CMD_FILE = os.path.join(CMD_DIR, "cmd.json")
 RES_FILE = os.path.join(CMD_DIR, "result.json")
 STOP_FILE = os.path.join(CMD_DIR, "stop.flag")

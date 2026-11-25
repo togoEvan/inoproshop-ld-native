@@ -9,7 +9,7 @@ IDE = os.environ.get("INOPROSHOP_EXE") or r"E:\汇川\中型1.10.0.3\CODESYS\Com
 PROFILE = "InoProShop(V1.10.0.3)"
 PROJ = (r"D:\Users\inopack\inopack\InoPack-包装行业编程模板V1.0.0.4"
         r"（当前仅支持到1.9版本）\InoPack包装PLC模板程序_V1.0.0.4.project")
-BASE = os.environ.get("PLC_MCP_BASE") or r"D:\小艺Work工作空间\20261123160323\plc_mcp"
+BASE = os.environ.get("PLC_MCP_BASE") or r"D:\plc_mcp"
 DAEMON = os.path.join(BASE, "ide", "plc_daemon.py")
 IPC = os.path.join(BASE, "ipc")
 READY = os.path.join(IPC, "ready.flag")

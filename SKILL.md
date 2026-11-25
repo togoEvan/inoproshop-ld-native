@@ -21,6 +21,7 @@ description: 汇川 InoProShop（CODESYS V3.5 SP11 系）LD 梯形图 native XML
 6. **绝不动真实鼠标/不抢焦点**：只用消息式自动化（文件 IPC、PostMessage）；绝不 SetCursorPos/mouse_event/SetForegroundWindow
 7. **不关闭 IDE**：改名让位法静默替换（先 `prg_X → prg_X_old_tmp` → import → 删旧）
 8. **校验导出文件每次唯一命名**（如 `silent_after_HHMMSS.native`），否则弹覆盖确认框
+9. **图形里引用的每个符号，声明区必须有一行对应声明**（`Interface/TextDocument/TextLines` 里的 `VAR…END_VAR`）。`import_native` 不会替你补声明；漏一个就报一串 `C0046: 没有定义标识符`，**每个引用点一条**（例：8 个未声明变量共 45 次引用 → 45 个错误）
 
 ## 结构速查（详见 references/）
 
@@ -39,6 +40,8 @@ description: 汇川 InoProShop（CODESYS V3.5 SP11 系）LD 梯形图 native XML
 - 触点并联：分支组 `{827b9ec2}` 内 Trees 放多个支路
 - 触点/线圈取反、置位、复位都用 Operand 内部 Flags 位掩码：1=NOT、2=S、3=R
 - **功能链末端的 `ENO` 引脚可以删掉**（不往后连接），实测预编译 0 错误
+- **公共前缀去重**：公共 TRUE 放分支组 `Input` 后，支路 EN 条件框里不要再放 TRUE（否则图形出现两个 TRUE 串联）
+- **声明区**：`TextLines` 里逐行写声明，`Id` 全表唯一且递增（插完从 900 重排最省事），中文注释可直接写
 
 ## 弃用路径（勿重试）
 
@@ -64,7 +67,13 @@ description: 汇川 InoProShop（CODESYS V3.5 SP11 系）LD 梯形图 native XML
 | launch_ide_daemon.py | 启动 IDE + 注入 daemon（本地 Python 3 运行） |
 | ide_trigger.ps1 | UIA 触发 daemon 注入 |
 | ide/plc_daemon.py | IDE 内守护（IronPython 2.7） |
-| ide/task_*.py | 诊断脚本（IronPython 2.7；`except Exception, e` 是合法语法，勿用 Python 3 校验） |
+| ide/task_check.py | 预编译检查（**验收必用**，读 `217bc73e` 分类） |
+| ide/task_silent_import.py | 静默导入核心（由 do_replace.py 调用） |
+| ide/task_readnow.py | 不清空直接读全部消息（排查异步） |
+| ide/task_export_fixed.py | 导出指定 POU（学结构用） |
+| examples/make_*.py | 生成脚本范例（读 `PLC_SRC_NATIVE` / `PLC_DST_NATIVE` 环境变量） |
+
+`ide/*.py` 是 IronPython 2 语法，`except Exception, e:` 合法，**勿用 Python 3 的 ast 校验**。
 
 **环境变量**（换机部署时设置）：
 - `PLC_MCP_BASE`：桥接工作目录（含 ipc/、ide/）
@@ -83,9 +92,9 @@ description: 汇川 InoProShop（CODESYS V3.5 SP11 系）LD 梯形图 native XML
 
 | 文件 | 用途 |
 |------|------|
-| ss_manual_142651.native | 用户手画并联起保停基线（触点/分支组标准样本） |
-| prg_EM01_Logic.native | 旧工程完整 LD（功能框/多线圈/连接器样本） |
-| user_fixed.native | 用户修正版（IN 引脚 IsContact=False 已验证） |
-| startstop_state3.native | 最终通过预编译 0 错误版本（MOVE 状态字状态机） |
+| `user_fixed.native` | **首选模板**。8 支路树形状态机，完整支路（AND[MOVE, CONN]）+ 声明区齐全，预编译 0 错误 0 警告 |
+| `ss_manual_142651.native` | 用户手画并联起保停基线（触点/分支组最小样本） |
+| `prg_EM01_Logic.native` | 旧工程完整 LD（功能框/多线圈/连接器样本） |
+| `startstop_state3.native` | 早期 MOVE 状态字版本（历史对照，新写请用 `user_fixed.native`） |
 
 生成新 native 时**必须从这些已验证样本克隆节点**，不要凭空构造。

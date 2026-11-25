@@ -2,7 +2,7 @@
 """不清空，直接读当前 5 个分类的所有消息。"""
 import io, os, traceback
 import os
-BASE = os.environ.get("PLC_MCP_BASE") or 'D:/小艺Work工作空间/20261123160323/plc_mcp'
+BASE = os.environ.get("PLC_MCP_BASE") or "D:/plc_mcp"
 _lf = io.open(os.path.join(BASE,"ipc","readnow.log"), "w", encoding="utf-8")
 def L(m):
     _lf.write(u"%s\n" % unicode(m)); _lf.flush()

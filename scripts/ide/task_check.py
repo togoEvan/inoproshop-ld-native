@@ -2,7 +2,7 @@
 """执行「检查程序」(预编译)，读取预编译分类的真实错误。"""
 import io, os, time, traceback
 import os
-BASE = os.environ.get("PLC_MCP_BASE") or 'D:/小艺Work工作空间/20261123160323/plc_mcp'
+BASE = os.environ.get("PLC_MCP_BASE") or "D:/plc_mcp"
 _lf = io.open(os.path.join(BASE,"ipc","check.log"), "w", encoding="utf-8")
 def L(m):
     _lf.write(u"%s\n" % unicode(m)); _lf.flush()

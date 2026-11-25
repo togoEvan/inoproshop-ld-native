@@ -39,10 +39,6 @@
 - **根因**：`system.clear_messages()` 清空后，预编译由 IDE 后台**异步**填充，立即读会漏
 - **修复**：执行「检查程序」命令（`system.commands` 里 name=="检查程序"，tokens=project/buildactiveapp，索引约 91）后 `process_messageloop()` + 短等待再读；或直接读当前消息（不 clear）
 
-## 编译分类的可忽略警告
-
-- `[Warning] 未加载库(CmpLog)...` —— 库未加载警告，与逻辑无关，可忽略
-
 ### 6. `C0046: 没有定义标识符'xxx'`（批量几十个）
 
 - **根因**：native 里的 `Interface/TextDocument/TextLines` 声明区**只写了起保停 3 个变量**，
@@ -67,3 +63,7 @@
   **保留**分支组 `Input` 的公共 `TRUE`。删除后条件框至少还要剩 2 个操作数（否则补回）。
 - **注意**：只删 `BoxType=="MOVE"` 框的 `InputItems[0]` 那个 AND 框里的 TRUE；
   别去动分支组 `Input`，也别动 `NetworkItems` 层的 AND。
+
+## 编译分类的可忽略警告
+
+- `[Warning] 未加载库(CmpLog)...` —— 库未加载警告，与逻辑无关，可忽略
