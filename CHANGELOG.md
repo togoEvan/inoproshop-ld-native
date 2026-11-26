@@ -7,6 +7,25 @@
 
 ## [Unreleased]
 
+### 新增（2026-11-26，验收第 4.5 层：挂载断言 + 双快照差分 —— lead 交叉验证方案落地）
+
+回应 lead（DSH agent）直连信道的两个方案，均已真实 IDE 验证：
+
+- **`scripts/ide/tasks/task_mount_assert.py`** —— 验收前置断言：给定 POU 名必须已挂进某任务的
+  调用列表。防「任务未挂载」假通过（POU 不挂任务 = 不进编译单元 = build 后双分类 0 错误，
+  代码是坏的）。只读 Task Configuration，秒级，不需要编译。
+  验证：真实 IDE 上 `M000_MAIN -> MainTask`（OK）与 `prg_NoTaskTest`（MISS）正确判出。
+- **`scripts/ide/tasks/task_snap.py` + `scripts/delta_snap.py`** —— 双快照多重集差分
+  （lead 方案，baseline 截断的正解）：before 快照 → 导入 → after 快照 → 主机侧差分，
+  只判**新增**的 error，模板工程 101 条 baseline warning 自动归零，无需白名单。
+  消息归一化（数字与 GUID 替换为 #）防行号/GUID 漂移；before 已截断（total≥100）的
+  分类只比 total 差并记不可信；判定优先级：可靠分类新增 error>0 = FAIL（截断不影响
+  该事实）> 有不可信分类 = UNKNOWN（exit 2，绝不静默当通过）> PASS。
+  坑（实测）：IDE 内写文件必须显式 close，裸 `io.open().write()` 句柄滞留 IDE 进程，
+  主机侧读 PermissionError。
+  验证：真实 IDE 空操作差分 PASS；注入负样本（after 新增 error）FAIL exit=1；
+  截断分类 total 差 +1 时正确 UNKNOWN exit=2。
+
 ### 整理（2026-11-26，scripts/ide 分层：可复用与一次性拆开 + 仓库文件地图）
 
 **动机**：`scripts/ide/` 平铺了 113 个脚本，能复用的（`task_check.py` / `task_silent_import.py`）和一次性考古的
