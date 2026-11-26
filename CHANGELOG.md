@@ -7,6 +7,10 @@
 
 ## [Unreleased]
 
+### 新增（2026-11-26，F10_POU_EthercatTask 复制验证）
+
+- **F10_EtherCAT 任务层 POU 复制验证：`F10_POU_EthercatTask_Verify / E0~E3 四个副本（_F10V）`**。`F10_POU_EthercatTask` 含 4 个**纯 ST 的 PROGRAM**（无 LD、无 DUT、无子文件夹），带调用链 `E0_EtherCAT_MainC → E1_M8000与EtherCAT通讯检测 / E2_轴控调用 / E3_SystemTime`。完整复用 F04 翻译管线（`make_f10_translate.py`：单遍交替正则改写 `MetaObject.Name` + 全部 `Text` 节点，36 个真全局变量改写到 `F01_Variable_GVLVerify` 副本，4 个对象名的相互调用一并改写），共 **909 处改写**（E0=5 / E1=69 / E2=756 / E3=79）。**验收**：预编译 101/0、编译 104/0，合计 **0 错误**（202 条 warning 与 F08 轮数量一致，模板自带非新增）。**判定要点（无新坑，全部沿用既有结论）**：设备对象（`Servo*`/`Axis*`/`EtherCAT_C`/`GL20*`）、共享全局（`Gc_ui4PMEAxisNum`/`Gc_uiPAxisNum`/`Hr_astAxisData`/`g_xVirtual`，F04 轮已确认原件无副本）、A 开头轴枚举值（DUT 属原件、未复制枚举定义，无需加后缀，与 F04 的差别所在）、FB 引脚名、局部变量、注释中文——一律不改写。改写完整性用「裸 `M8000`/`M8002` 计数为 0」核验（子串计数 `M8000_GVLVerify` 会误报残留，必须用词边界正则）。新增脚本：`task_scan_f10.py`、`task_probe_f10.py`、`task_export_f10.py`、`task_topguid_f10.py`、`task_import_f10.py`、`examples/analyze_f10.py`、`examples/make_f10_translate.py`。
+
 ### 修改（2026-11-26，bridge/daemon 可靠性重写：run_id 对账 + 心跳看门狗 + 取消代数 + 并发锁 + selftest）
 
 参考 `dsh-computer-use-win`（v0.6.4，MIT）的工程实践重写 `scripts/bridge.py`、补丁 `scripts/ide/plc_daemon.py`。
