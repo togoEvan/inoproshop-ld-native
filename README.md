@@ -60,7 +60,7 @@ InoProShop 的梯形图存在一个 native XML 结构里。这个仓库提供：
 | # | 铁律 |
 |---|------|
 | 2 | 功能框 `InputItems` 槽位数 **==** `InputParam` 参数数（MOVE = `[EN, IN]` 2 槽）。 |
-| 3 | 值输入引脚（IN 槽）必须 `IsContact=False`。从触点克隆残留 `True` → `不允许对类型 'SINT' 进行 'NOT' 操作`。 |
+| 3 | 值输入引脚（IN 槽）必须 `IsContact=False`。从触点克隆残留 `True` 有两种后果：**SINT 等类型报错**（`不允许对类型 'SINT' 进行 'NOT' 操作`）；**INT 等类型则完全不报错**——预编译 0 / 编译 0 / 往返 diff PASS，`check_symbols` / `check_slots` / `ld_logic` 三层也全 PASS（lead 隐藏实例实证：MOVE.IN 的 INT 引脚改 True，唯一差异是导入分类多一条 Text）。所以这条**必须靠静态断言**，判据看引脚自己的 `Operand.Type`：非 BOOL 却 `IsContact=True` 即违规；**不要**按 `InputParam` 索引对齐判（比较框槽数不齐，见铁律 22），**也不要**反向断言 BOOL 引脚必须 True（FB 的 BOOL 值槽合法为 False，会误报 20 处）。→ `check_valpin.py` |
 | 4 | 操作数内部 `Flags/Flags=1` 是 **NOT 取反**。常量引脚必须清 0；触点取反才用 1。`2`=S、`3`=R。 |
 | 5 | 常量引脚 `Type=INT`、`Boolean=False`（写 `BOOL` 会红框）。 |
 | 9 | **图形里引用的每个符号，声明区必须有一行对应声明**。`import_native` 不补声明，漏一个就每个引用点报一条 `C0046`（8 个未声明变量共 45 次引用 → 45 个错误）。 |
@@ -248,6 +248,7 @@ inoproshop-ld-native/
 │   ├── check_slots.py            # 结构自检：槽位数 vs 参数数 + Operand 三态断言（含 MOVE 原生形态豁免）
 │   ├── check_symbols.py          # 符号自检：网络引用 vs 声明区
 │   ├── ld_logic.py               # 逻辑层验收：图形拓扑 → 布尔表达式，DNF 规范化比对
+│   ├── check_valpin.py           # 值引脚自检：非 BOOL 引脚 IsContact 必须 False（编译链查不出的第五类假通过）
 │   ├── bridge.py                 # IPC 客户端（本地 Python 3）
 │   ├── do_replace.py             # 静默导入入口（本地 Python 3）
 │   ├── launch_ide_daemon.py      # 启动 IDE + 注入 daemon

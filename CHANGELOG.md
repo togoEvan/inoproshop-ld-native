@@ -7,6 +7,29 @@
 
 ## [Unreleased]
 
+### 新增（2026-11-26，第五层验收：值引脚 IsContact —— lead 负样本交叉验证）
+
+lead 在隐藏实例上造出**第五类假通过**：把 MOVE 框 `IN` 引脚（INT）的
+`IsContact` 改成 `True`（值槽画成触点），预编译 0 / 编译 0 / 往返 diff PASS，
+他的 `check_symbols` / `check_slots` / `ld_logic` 三个静态校验器也全 PASS。
+
+我在自己的四层链上复跑 `exchange/lead_valpin_neg_c3d81f47.native`，结果**同样全 PASS**
+（`ld_logic` 输出 2 个网络、`check_symbols` 未定义 0、`check_slots` 0 不一致）——
+证实这个维度我也没有建模。编译器不校验 `IsContact` 语义，只能靠静态断言。
+
+- **`scripts/check_valpin.py`（新）** —— 判据看**引脚自己**的 `Operand.Type`：
+  非 BOOL 却 `IsContact=True` 即违规（触点只能是布尔量）。
+  - 不按 `InputParam` 索引对齐判：比较框 `InputParam` 只有 `['EN']` 而
+    `InputItems` 恒 3 槽（README 铁律 22），对齐会静默跳过 = 漏检。
+  - 不反向断言 BOOL 引脚必须 True：`fb_call_test` / `prg_EM01_Logic` 里
+    FB 的 BOOL 输入合法地存在 `IsContact=False`（值槽形态），反向判会误报 20 处。
+- **负样本入库** `assets/natives/negative/valpin_iscontact_neg_c3d81f47.native`
+  （lead 提供，唯一 GUID `c3d81f47`）。
+
+验证：11 个正样本 + S/R 负样本 **0 误报**；lead 负样本精确命中 1 处
+（`MOVE 类型=INT 操作数=7`）。README 铁律 3 扩写（原来只写了 SINT 会报错，
+现在写明 INT 等类型完全不报错、必须靠 `check_valpin.py`）。
+
 ### 修复（2026-11-26，截断判据改本质信号 —— lead 隐藏实例实测推翻我的条数阈值假设）
 
 lead 起了隐藏桌面实例，用一个**真实损坏工程**（编译分类 all=540）实测，数据直接
@@ -21,8 +44,10 @@ lead 起了隐藏桌面实例，用一个**真实损坏工程**（编译分类 a
 | 截断提示 | 有 | **无** |
 
 **502 + 35 + 3 = 540 完全对得上，且没有任何截断提示。** 结论：100 条上限
-**只作用于警告，不作用于错误**。我上一轮写的 `truncated = len(objs) >= 100`
-会把 502 条的 Error 池误判成截断 → 大错误工程永远 UNKNOWN。这是我自己的 bug。
+**是按 severity 各自计数的，不是按分类总数**——Warning 维度被截到 100（我那 104 条
+= 100 实体 + 1 条「多于100个警告发生」提示 + 1 条收尾汇总），Error 维度 502 条一条不少。
+我上一轮写的 `truncated = len(objs) >= 100` 会把 502 条的 Error 池误判成截断 →
+大错误工程永远 UNKNOWN。这是我自己的 bug。
 
 修法：截断判据改用**本质信号**——IDE 截断时会注入一条实体消息
 「多于N个消息/警告/错误发生：跳过更多的…」，按它判，不看条数。
