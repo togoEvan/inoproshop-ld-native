@@ -1,1 +1,0 @@
-{"meta": {"which": "after", "schema": 2}, "cats": {"97f48d64-0000-0000-0000-000000000000": {"total": 3, "truncated": false, "truncated_all": false, "items": [], "err_total": 3, "err_addrs": [], "err_pool": {"total": 3, "truncated": false, "items": ["没有定义标识符'bNoSuch0000'", "没有定义标识符'bNoSuch0001'", "没有定义标识符'bNoSuch0002'"], "addrs": []}}}}
