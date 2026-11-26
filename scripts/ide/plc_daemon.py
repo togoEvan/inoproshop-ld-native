@@ -24,6 +24,10 @@ RES_FILE = os.path.join(CMD_DIR, "result.json")
 STOP_FILE = os.path.join(CMD_DIR, "stop.flag")
 READY_FILE = os.path.join(CMD_DIR, "ready.flag")
 LOG_FILE = os.path.join(CMD_DIR, "daemon.log")
+# 取消代数（单调递增）。bridge.cancel() 每次 +1；本守护在每条命令执行前后
+# 比对代数，变了就标记 cancelled 并尽快收尾。
+# ⚠ 与 stop.flag 的区别：stop.flag 让守护**退出**，cancel.gen 只取消**当前命令**。
+CANCEL_GEN_FILE = os.path.join(CMD_DIR, "cancel.gen")
 
 if not os.path.isdir(CMD_DIR):
     try:
@@ -767,8 +771,14 @@ def handle_on_main(cmd, timeout=180):
 
 
 # ---------------------------------------------------------------------
-# 后台轮询线程
+# 心跳线程（独立于轮询线程）
 # ---------------------------------------------------------------------
+# ⚠ 为什么必须独立成线程（2026-11-26 新增，配合 bridge 的心跳看门狗）：
+#   旧实现把 _beat() 写在轮询循环里，于是心跳的含义变成「轮询循环没被卡住」。
+#   但 app.build() 在主线程上跑 10~40s 是常态，这段时间轮询线程阻塞在
+#   handle_on_main() 里，心跳就停了。bridge 一旦启用「心跳停摆即判定守护已死」
+#   的看门狗，就会把「正常编译中」误判成「守护崩了」，把正在跑的编译丢掉。
+#   所以心跳必须由独立线程发，语义明确为「守护进程活着」。
 def _beat():
     try:
         hb = io.open(HEARTBEAT, "w")
@@ -776,6 +786,36 @@ def _beat():
         hb.close()
     except Exception:
         pass
+
+
+_BEAT_INTERVAL = 0.5   # 秒。必须显著小于 bridge.HEARTBEAT_STALE(8s)
+_beat_stop = [False]
+
+
+def heartbeat_loop():
+    """独立心跳线程：只要本线程活着，就说明守护进程（含 Python 运行时）活着。
+    命令执行卡住不会影响它 —— 这正是「守护活着但命令慢」与「守护已死」
+    两种状态得以区分的原因。"""
+    while not _beat_stop[0]:
+        _beat()
+        try:
+            time.sleep(_BEAT_INTERVAL)
+        except Exception:
+            pass
+
+
+def read_cancel_gen():
+    """读当前取消代数；文件不存在或读不出都当 0。"""
+    try:
+        if not os.path.exists(CANCEL_GEN_FILE):
+            return 0
+        f = io.open(CANCEL_GEN_FILE, "r")
+        try:
+            return int((f.read() or u"0").strip() or u"0")
+        finally:
+            f.close()
+    except Exception:
+        return 0
 
 
 def loop():
@@ -789,7 +829,6 @@ def loop():
         pass
     # 注意：不用 mtime+size 签名判重，改用「领取-改名」机制（见循环内注释）
     while True:
-        _beat()
         try:
             if os.path.exists(STOP_FILE):
                 log(u"stop flag detected, exiting loop")
@@ -818,28 +857,56 @@ def loop():
                         log(u"read cmd err: %s" % e)
                         cmd = None
                     if cmd:
-                        log(u"CMD: %s" % cmd.get("action"))
+                        # ── run_id 对账：原样回带，bridge 才能确认「这是我这轮的结果」
+                        _run_id = cmd.get(u"run_id")
+                        # ── 取消基线：命令发出时的代数
                         try:
-                            res = handle_on_main(cmd)
-                        except Exception, e:
-                            res = {u"ok": False, u"error": unicode(e),
-                                   u"traceback": traceback.format_exc()}
-                        except BaseException, e:
-                            # ⚠ 关键：IronPython 里 SystemExit / KeyboardInterrupt
-                            #   不继承 Exception。被 eval_file 执行的脚本若
-                            #   raise SystemExit（例如再注入一次 daemon 时
-                            #   _acquire_instance() 判定「已有实例存活」），
-                            #   会穿透 except Exception 一路抛出，把本守护
-                            #   的轮询线程直接干掉 —— 实测 2026-11-25：
-                            #   注入后心跳 0.7s 内停摆、bridge 全部超时。
-                            #   所以命令执行层必须兜到 BaseException。
-                            res = {u"ok": False,
-                                   u"error": u"%s: %s" % (type(e).__name__, e),
-                                   u"traceback": traceback.format_exc()}
-                            log(u"CMD raised %s: %s" % (type(e).__name__, e))
+                            _gen_at_send = int(cmd.get(u"cancel_gen_at_send") or 0)
+                        except Exception:
+                            _gen_at_send = 0
+                        log(u"CMD: %s (run_id=%s gen=%s)"
+                            % (cmd.get("action"), _run_id, _gen_at_send))
+
+                        # 领取后、执行前先看一眼：命令排队期间就被取消了？
+                        if read_cancel_gen() > _gen_at_send:
+                            res = {u"ok": False, u"cancelled": True,
+                                   u"error": u"cancelled before execution"}
+                            log(u"CMD cancelled before execution")
+                        else:
+                            try:
+                                res = handle_on_main(cmd)
+                            except Exception, e:
+                                res = {u"ok": False, u"error": unicode(e),
+                                       u"traceback": traceback.format_exc()}
+                            except BaseException, e:
+                                # ⚠ 关键：IronPython 里 SystemExit / KeyboardInterrupt
+                                #   不继承 Exception。被 eval_file 执行的脚本若
+                                #   raise SystemExit（例如再注入一次 daemon 时
+                                #   _acquire_instance() 判定「已有实例存活」），
+                                #   会穿透 except Exception 一路抛出，把本守护
+                                #   的轮询线程直接干掉 —— 实测 2026-11-25：
+                                #   注入后心跳 0.7s 内停摆、bridge 全部超时。
+                                #   所以命令执行层必须兜到 BaseException。
+                                res = {u"ok": False,
+                                       u"error": u"%s: %s" % (type(e).__name__, e),
+                                       u"traceback": traceback.format_exc()}
+                                log(u"CMD raised %s: %s" % (type(e).__name__, e))
+
+                        # ── 结果如实回带 run_id + 取消状态
+                        if not isinstance(res, dict):
+                            res = {u"result": res}
+                        if _run_id is not None:
+                            res[u"run_id"] = _run_id
+                        # 执行期间被取消（长任务如 app.build 跑完才发现）
+                        if read_cancel_gen() > _gen_at_send:
+                            res[u"cancelled"] = True
+                            log(u"CMD cancelled during execution")
+                        res.setdefault(u"cancelled", False)
+
                         try:
                             dump_json(RES_FILE, res)
-                            log(u"RESULT written ok=%s" % res.get(u"ok"))
+                            log(u"RESULT written ok=%s cancelled=%s"
+                                % (res.get(u"ok"), res.get(u"cancelled")))
                         except Exception, e:
                             log(u"write result err: %s" % e)
                         try:
@@ -856,6 +923,7 @@ def loop():
         except Exception:
             time.sleep(0.15)
     log(u"loop thread finished")
+    _beat_stop[0] = True
     for _p in (_inst_lock, HEARTBEAT, READY_FILE):
         try:
             os.remove(_p)
@@ -866,10 +934,17 @@ def loop():
 import System
 import System.Threading
 
-_boot(u"creating thread")
+_boot(u"creating threads")
 _th = System.Threading.Thread(System.Threading.ThreadStart(loop))
 _th.IsBackground = False
 _th.Name = u"PLC_MCP_Daemon"
 _th.Start()
-_boot(u"thread started")
-log(u"thread started, script returning")
+
+_boot(u"creating heartbeat thread")
+_thb = System.Threading.Thread(System.Threading.ThreadStart(heartbeat_loop))
+_thb.IsBackground = True      # 主循环结束就让它跟着走，不阻止进程退出
+_thb.Name = u"PLC_MCP_Heartbeat"
+_thb.Start()
+
+_boot(u"threads started")
+log(u"threads started, script returning")

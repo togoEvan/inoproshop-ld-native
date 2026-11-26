@@ -13,7 +13,7 @@ description: 汇川 InoProShop（CODESYS V3.5 SP11 系）LD 梯形图 native XML
 
 ## 铁律（违反必踩坑）
 
-30 条，按主题分四组；编号与 `README.md` 一致（沿用历史编号、不重排）。完整论证见 `README.md`。
+40 条，按主题分六组；编号与 `README.md` 一致（沿用历史编号、不重排）。完整论证见 `README.md`。
 
 ### A. 验收与消息
 
@@ -65,6 +65,13 @@ description: 汇川 InoProShop（CODESYS V3.5 SP11 系）LD 梯形图 native XML
 | 36 | **分度凸轮必须 `Periodic=False`**。摆动凸轮回原点（`y(360)==y(0)`）才用 `True`；分度凸轮每周期累进 H（`y(360)==y(0)+H`），沿用 `True` 会报 `在点 (0/0) 的连续性要求不能填充 位置`+`速度`。**自检**：`y(360)-y(0) != 0` 就必须 `False`。⚠ CAM 错误**只落 Cam 分类 `de128929`**，预编译/编译可能全 0——只看那两个会漏判通过；Cam 子对象也**无法脚本删除**（`remove`/`replace` 均失败），只能同名覆盖导入。详见 `references/native-structure.md §32`。 |
 | 37 | **AxesGroup（轴组）复制：`AxisGuid` 指向的物理轴不能同时属于两个轴组**。复制时只改 `MetaObject.Name` + `MetaObject.Guid` + `Object.Id` 三处（实测 diff 精确 3 处）；若 `AxisGuid` 沿用原件、而原轴已被原轴组占用，**IDE 导入时会把 `AxisGuid` 全部清成 `00000000`**，编译报 `X轴轴映射为空`。这不是脚本 bug，是 SoftMotion 的占用保护——对照实验证明：改成空闲轴（Axis9/Axis10）后 `AxisGuid` 完整保留、0 错误。⚠ 脚本**无法建虚拟轴**（`SoftMotion General Axis Pool.get_children()` 返回 `[]`），只能手工在 IDE 里加。另：轴组**必须在「轴所在的那个任务」里被引用**，本工程轴挂 `ETHERCAT` 而非 `MainTask`，挂错报 `轴组 xxx 与所选轴所在任务不同`；同一 POU 挂两个任务报 `在多任务下存在多处调用`。详见 §33。 |
 | 38 | **任务槽摘除 `pous.remove("名字")` 打印成功但实际无效**（铁律 25 的完全同源问题，2026-11-26 再次实测确认）。`MainTask.pous.remove()` / `ETHERCAT.pous.remove()` 都回读仍在。唯一可靠做法：`export_native` 导出 Task Configuration → 主机侧删 `<Single Type="{f194d1ef-7376-42ce-a729-4a5485a97a46}">`…`</Single>` 块 → 同名覆盖导入。⚠ **不能用跨行正则 `.*?</Single>`** —— 会连相邻的 `</Single>` 一起吃，导入报 `开始标记"List"与结束标记"Single"不匹配`。必须从该行起逐行走到**单独一行 `</Single>`** 为止（`scripts/examples/del_task_pou.py`）。 |
+
+### F. 桥与守护
+
+| # | 铁律 |
+|---|------|
+| 39 | **结果必须与命令对账（`run_id`），「文件出现」不等于「这是我这轮的结果」**。旧 bridge 只做「删 `result.json` → 写 `cmd.json` → 等 `result.json` 出现」。上一条命令超时后守护迟一点才写结果，这条**迟到结果**会被下一次调用当成自己的读走——`ok` 是 `true`、JSON 能解析，只有内容是错的，是最阴险的假成功。现在每条命令带唯一 `run_id`，守护原样回带，对不上就丢弃继续等；旧版守护不回带时退化为「出现即认」并标 `legacy_daemon: true`。**自检**：`python bridge.py selftest`，`ping` 结果里必须有 `run_id` 且不出现 `legacy_daemon`。 |
+| 40 | **`os.kill(pid, 0)` 在 Windows 上不能判活**，别照 POSIX 的 `ESRCH` 写。实测（Win11 / Python 3.12）：`os.kill(999999, 0)` → `errno 22 (WinError 87)`，而 `os.kill(36704, 0)`（该 pid **明明活着**）抛**同一个 `errno 22`**。按 `== ESRCH` 判活会把所有进程都判成死的——陈旧锁永远能抢，等于没锁（实测陈旧锁用例直接失败）。**正确做法**：Windows 上 `OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION)` + `GetExitCodeProcess`，拿到句柄且 `STILL_ACTIVE(259)` 才算活；判不了时**当作活着**。`bridge.py` 的 `_pid_alive()` 已按此实现。 |
 
 ## 结构速查（详见 references/）
 
@@ -183,17 +190,19 @@ description: 汇川 InoProShop（CODESYS V3.5 SP11 系）LD 梯形图 native XML
 
 | 文件 | 用途 |
 |------|------|
-| bridge.py | IPC 客户端（本地 Python 3 运行） |
+| bridge.py | IPC 客户端（本地 Python 3 运行）。**命令与结果用 `run_id` 对账**（迟到结果绝不冒充本轮）、**心跳看门狗**（守护死了一秒内报 `E_HEARTBEAT_STALE`，不干等满超时）、**取消代数 `cancel.gen`**（取消单条命令 ≠ 杀守护）、**`ipc/bridge.lock` 并发锁**（陈旧锁自动抢占）、**结构化错误码**（`E_*`，按 code 分支别 match 中文）、**`selftest`**（一条命令给出可诊断快照，fail-closed）。CLI：`bridge.py selftest` / `bridge.py cancel [reason]` |
+| check_ipy_syntax.py | **IronPython 2 语法自检**（本地 Python 3 运行）：`ide/*.py` 用 `except Exception, e:` 这类 IP2 语法，直接 `py_compile` 必报错；本脚本先把 IP2 语法降级成 Python 3 可解析形式再 `ast.parse`。新增/改动任何 `ide/*.py` 后必须跑一遍 |
+| test_bridge_protocol.py | **IPC 协议回归测试**（本地 Python 3 运行，**不碰真实 IDE**）：起一个假守护（纯文件 IPC），覆盖 8 组用例——正常往返 / 迟到结果 / 旧版守护降级 / 心跳停摆 fail-fast / 取消 / 并发 / 陈旧锁抢占 / selftest。这些机制都是「出问题才显形」的类型，不能只靠「真实工程跑一次没问题」来验证。退出码 0 = 全过 |
 | do_replace.py | 静默导入入口（本地 Python 3 运行） |
 | check_slots.py | **结构自检**（本地 Python 3 运行）：校验所有功能框「`OutputItems` 项数 == `OutputParam` 个数」与「`InputItems` 槽数 == `InputParam` 个数」，`AND` 框校验至少 2 槽，并断言 **`Instance.Operand` 三态**（`FunctionBlock`→`<Single>实例名</Single>`；`Action`/`Function`/`Program`→`<Null/>`，写空 `<Single>` 会让 IDE 多画可填参数小方框）。⚠ 容器不对称：`InputItems` 直接挂 `List2`、`OutputItems` 是 `Single>List2`；⚠ MOVE 豁免：IDE 原生「嵌套框接 EN」与「多槽触点链」形态下输入槽 ≠ InputParam 数是正常的（详见 native-structure.md「MOVE 三形态」）。**唯一能发现「编译器查不出来的结构错误」的手段**（预编译/编译/往返 diff 都查不出来）。退出码 0/1，可当 CI 断言 |
 | check_symbols.py | **符号自检**（本地 Python 3 运行）：校验 POU 网络里引用的符号是否都在声明区定义过。用于「编译器没报错、消息窗口读不到，但 POU 打开就是红的」这类问题——不依赖 IDE 消息，直接比对操作数与声明 |
 | ld_logic.py | **逻辑层验收**（本地 Python 3 运行）：把 native 图形拓扑还原成布尔表达式并 DNF 规范化。单文件打印逻辑签名 / 双文件逻辑等价比对。**第四层验收**，补前三层盲区：双分类 0 错误只证明「编译器不报错」、往返 diff 只证明「IDE 没改写结构」、check_slots 只证明「槽位数对得上」——都不证明「画的是你要的逻辑」。学自 `Wayan123/multi-plc-agent`（`The verification compares logic, not XML`）：Id 重编号、节点顺序变化都不影响比对。已知局限：分支组内 MOVE 框 / EXECUTE 块无法还原成布尔式，显示为 `TRUE` 或 `BLOCK:类型(实例)` |
 | launch_ide_daemon.py | 启动 IDE + 注入 daemon（本地 Python 3 运行） |
 | ide/boot_daemon.py | **守护注入的唯一推荐入口**（IDE 内 IronPython 2.7）。`ide_trigger.ps1` 的 UIA 自动注入在 InoProShop 上**根本不可能成功**——菜单是自绘的，UIA 枚举整个窗口树 `MenuBar`=0、`MenuItem`=0，Win32 `GetMenu` 也返回 0（2026-11-25 实测）。所以必须人工点一次菜单：`工具 → 脚本 → 执行脚本文件... → 选本文件`。它解决三个坑：① 自解析目录（`PLC_IDE_DIR` > `sys.argv[0]` > 已加载 `plc_daemon.__file__`），避开「守护挂到历史遗留的 `D:\plc_mcp` 导致 bridge 误判未启动」；② 强制改写 `sys.argv[0]` 让 BASE 恒等于本技能包；③ 命名空间钉在 `sys._plc_mcp_keep` 防止被 GC、并单独捕获 `SystemExit` 防止重复注入掀掉正在跑的线程 |
-| ide/probe_daemon.py | **守护诊断**（本地 Python 3）：一次打印 IDE 进程 / 各候选 BASE 的 `ready.flag` 与心跳年龄 / `bridge` 解析到的 BASE / `ping` 结果。**卡住时先跑它**，能直接判出「没注入」还是「注入了但挂错目录」 |
+| ide/reload_daemon.py | **热重载守护**（IDE 内 IronPython 2.7）：改完 `plc_daemon.py` 后不用人工点菜单，`bridge.call("eval_file", path=.../reload_daemon.py)` 即可换新。做法是「写 `stop.flag` → **后台线程**等 `ready.flag` 消失 → 清残留 → exec `boot_daemon.py`」。⚠ 不能主线程等：`stop.flag` 是在本条命令执行期间写的，旧循环要等本命令返回才看到它，主线程等就是自己等自己。实测 <1s 完成，`daemon_boot.log` 出现新版独有的 `creating heartbeat thread` |
 | ide_trigger.ps1 | UIA 触发 daemon 注入（⚠ **对 InoProShop 无效**，菜单自绘不暴露 UIA；保留仅供其它 CODESYS 系 IDE 参考） |
 | ide/_base.py | 路径自解析（IDE 内环境变量无效，靠它从脚本路径反推 BASE） |
-| ide/plc_daemon.py | IDE 内守护（IronPython 2.7）。⚠ **循环与命令执行层必须兜 `BaseException`**：IronPython 里 `SystemExit`/`KeyboardInterrupt`/`SystemError` 都**不继承 `Exception`**，只写 `except Exception` 会让一个 `raise SystemExit` 穿透并杀死整个轮询线程（实测现象：注入后 0.7s 心跳停摆、bridge 全超时，日志里却只有一行无关信息） |
+| ide/plc_daemon.py | IDE 内守护（IronPython 2.7）。**两个线程**：`loop()` 轮询命令 + `heartbeat_loop()` 每 0.5s 写 `heartbeat`（独立线程，命令慢不会让心跳停——这是「守护活着但命令慢」与「守护已死」能区分开的原因）。每条命令带 `run_id` 原样回带、执行前后比对 `cancel.gen`。⚠ **循环与命令执行层必须兜 `BaseException`**：IronPython 里 `SystemExit`/`KeyboardInterrupt`/`SystemError` 都**不继承 `Exception`**，只写 `except Exception` 会让一个 `raise SystemExit` 穿透并杀死整个轮询线程（实测现象：注入后 0.7s 心跳停摆、bridge 全超时，日志里却只有一行无关信息） |
 | ide/task_check.py | 验收检查（**验收必用**，单次快照、零 sleep、零循环——IDE 脚本跑主线程，sleep/轮询会冻死界面，计时全部放主机侧；同时读预编译 `217bc73e` + 编译 `97f48d64` + 格式检查三分类，匹配不到分类必须 `raise` 防假通过） |
 | ide/task_silent_import.py | 静默导入核心（由 do_replace.py 调用） |
 | ide/task_readnow.py | 不清空直接读全部消息（排查异步） |
@@ -226,10 +235,10 @@ description: 汇川 InoProShop（CODESYS V3.5 SP11 系）LD 梯形图 native XML
 4. 打开 InoProShop 并打开工程，**人工点一次菜单注入守护**：
    `工具 → 脚本 → 执行脚本文件... → 选 <BASE>\ide\boot_daemon.py`
    （菜单是自绘的，UIA 读不到，`ide_trigger.ps1` 走不通，只能人工点这一次）
-5. 跑 `python ide/probe_daemon.py` 确认 `ping` 通
+5. 跑 `python scripts/bridge.py selftest` 确认 `ok: true`（它会逐条列出 `problems`，每条写明下一步做什么）
 6. 之后全程静默：do_replace.py 导入 → task_check.py 验证预编译
 
-**卡住时先跑 `ide/probe_daemon.py`**，它会直接告诉你是「守护没起」还是「守护起在别的 BASE 上了」。后者是换机部署最常见的问题：如果之前手工执行过别处的 `plc_daemon.py`，`sys.argv[0]` 会固定成那条旧路径，守护就把 `ready.flag` 写进旧目录，`bridge.py` 找不到就误判「未启动」，转去点菜单（而菜单点不到），最终报 `Tools not found`——**看到 `Tools not found` 不要以为是权限问题，先查 BASE 一致性**。
+**卡住时先跑 `bridge.py selftest`**，它会直接告诉你是「守护没起」还是「守护起在别的 BASE 上了」——看 `base` / `ipc` / `heartbeat_age` / `ping` 四项即可。换机部署最常见的问题是「守护起在别的 BASE 上」：如果之前手工执行过别处的 `plc_daemon.py`，`sys.argv[0]` 会固定成那条旧路径，守护就把 `ready.flag` 写进旧目录，`bridge.py` 找不到就误判「未启动」，转去点菜单（而菜单点不到），最终报 `Tools not found`——**看到 `Tools not found` 不要以为是权限问题，先查 BASE 一致性**。
 
 ### assets/natives/（克隆模板样本）
 

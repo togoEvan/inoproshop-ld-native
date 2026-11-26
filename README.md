@@ -31,7 +31,7 @@ InoProShop 的梯形图存在一个 native XML 结构里。这个仓库提供：
 
 ## 铁律（先读这段，能省几小时）
 
-30 条，按主题分四组。编号沿用历史编号、不重排，方便 `SKILL.md` / `CHANGELOG.md` 交叉引用。
+40 条，按主题分六组。编号沿用历史编号、不重排，方便 `SKILL.md` / `CHANGELOG.md` 交叉引用。
 
 | 组 | 主题 | 条目 |
 |---|---|---|
@@ -39,6 +39,8 @@ InoProShop 的梯形图存在一个 native XML 结构里。这个仓库提供：
 | B | 结构合法性 | 2、3、4、5、9、10、11、14、15、16、21、22 |
 | C | 挂载与实例 | 6、7、8、12、19、20 |
 | D | 任务配置与 GVL | 25、26、27、28、29、30 |
+| E | 枚举/凸轮/轴组 | 31、32、33、34、35、36、37、38 |
+| F | 桥与守护 | 39、40 |
 
 （编号沿用历史编号，不重排，方便 `SKILL.md` / `CHANGELOG.md` 交叉引用。）
 
@@ -100,6 +102,13 @@ InoProShop 的梯形图存在一个 native XML 结构里。这个仓库提供：
 | 37 | **AxesGroup（轴组）复制：`AxisGuid` 指向的物理轴不能同时属于两个轴组**。复制时只改 `MetaObject.Name` + `MetaObject.Guid` + `Object.Id` 三处（实测 diff 精确 3 处）；若 `AxisGuid` 沿用原件、而原轴已被原轴组占用，**IDE 导入时会把 `AxisGuid` 全部清成 `00000000`**，编译报 `X轴轴映射为空`。这不是脚本 bug，是 SoftMotion 的占用保护——对照实验证明：改成空闲轴（Axis9/Axis10）后 `AxisGuid` 完整保留、0 错误。⚠ 脚本**无法建虚拟轴**（`SoftMotion General Axis Pool.get_children()` 返回 `[]`），只能手工在 IDE 里加。另：轴组**必须在「轴所在的那个任务」里被引用**，本工程轴挂 `ETHERCAT` 而非 `MainTask`，挂错报 `轴组 xxx 与所选轴所在任务不同`；同一 POU 挂两个任务报 `在多任务下存在多处调用`。详见 §33。 |
 | 38 | **任务槽摘除 `pous.remove("名字")` 打印成功但实际无效**（铁律 25 的完全同源问题，2026-11-26 再次实测确认）。`MainTask.pous.remove()` / `ETHERCAT.pous.remove()` 都回读仍在。唯一可靠做法：`export_native` 导出 Task Configuration → 主机侧删 `<Single Type="{f194d1ef-7376-42ce-a729-4a5485a97a46}">`…`</Single>` 块 → 同名覆盖导入。⚠ **不能用跨行正则 `.*?</Single>`** —— 会连相邻的 `</Single>` 一起吃，导入报 `开始标记"List"与结束标记"Single"不匹配`。必须从该行起逐行走到**单独一行 `</Single>`** 为止（`scripts/examples/del_task_pou.py`）。 |
 
+### F. 桥与守护
+
+| # | 铁律 |
+|---|------|
+| 39 | **结果必须与命令对账（`run_id`），「文件出现」不等于「这是我这轮的结果」**。旧 bridge 只做「删 `result.json` → 写 `cmd.json` → 等 `result.json` 出现」。上一条命令超时后守护迟一点才写结果，这条**迟到结果**会被下一次调用当成自己的读走——`ok` 是 `true`、JSON 能解析，只有内容是错的，是最阴险的假成功。现在每条命令带唯一 `run_id`，守护原样回带，对不上就丢弃继续等；旧版守护不回带时退化为「出现即认」并标 `legacy_daemon: true`（向后兼容但失去保护）。**自检**：`python bridge.py selftest`，`ping` 结果里必须有 `run_id` 且 `legacy_daemon` 不出现。 |
+| 40 | **`os.kill(pid, 0)` 在 Windows 上不能判活**，别照 POSIX 的 `ESRCH` 写。实测（Win11 / Python 3.12）：`os.kill(999999, 0)` → `errno 22 (WinError 87)`，`os.kill(36704, 0)`（这个 pid **明明活着**，InoProShop）→ **同一个 `errno 22`**，`os.kill(4, 0)` → `errno 13`。也就是说「不存在的 pid」和「活着的 pid」抛的是同一个 errno，按 `== ESRCH` 判活会把所有进程都判成死的——陈旧锁永远能抢，等于没锁（实测 T7 直接失败）。**正确做法**：Windows 上走 `OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION)` + `GetExitCodeProcess`，拿得到句柄且 `STILL_ACTIVE(259)` 才算活；判不了时**当作活着**（宁可等锁超时，也不要抢活人的锁）。`bridge.py` 的 `_pid_alive()` 已按此实现。 |
+
 ### 三条元教训
 
 > **① 往返 diff PASS 不等于内容正确**（铁律 14）。`rt_diff` 报 0 只说明「IDE 没改写我的结构」；源文件本身错时 IDE 原样保留，diff 当然一致。必须配合双分类 0 错误 + 语义抽查。
@@ -147,15 +156,16 @@ python "$BASE\launch_ide_daemon.py" --project="E:\你的工程\xxx.project"
 
 **为什么不能自动点**：InoProShop 的菜单栏是**自绘**的，UIA 枚举整个窗口树拿到 `MenuBar` = 0、`MenuItem` = 0，Win32 `GetMenu` 也返回 0（2026-11-25 实测）。所以 `ide_trigger.ps1` / `start_daemon.cmd` 走 UIA 的这条路在 InoProShop 上**根本不可能成功**，会报 `Tools not found`。这一次人工点击是唯一入口，注入之后全程静默——日常写入走 IPC 文件，IDE 界面不会跳到前台。
 
-注入完跑一下诊断确认：
+注入完跑一下自检确认：
 
 ```
-python scripts\ide\probe_daemon.py
+python scripts\bridge.py selftest
 ```
 
-它会打印 IDE 进程、各候选 BASE 的 `ready.flag` 与心跳年龄、`bridge` 解析到的 BASE，最后 ping 一次。
+它一次给出 `base` / `ipc` / `ide_running` / `ready_flag` / `heartbeat_age` / `ping` / `cancel_gen`，
+并逐条列出 `problems`（每条都写明下一步该做什么）。`ok: true` 才算通了。
 
-> **看到 `Tools not found` 不要以为是权限问题。** 十有八九是「守护挂错目录」：如果你之前手工执行过别处的 `plc_daemon.py`，`sys.argv[0]` 就固定成那条旧路径，守护把 `ready.flag` 写进旧目录，`bridge.py` 在 `<BASE>\ipc` 找不到就误判「未启动」，转去点菜单、点不到，于是报 `Tools not found`。先跑 `probe_daemon.py` 看第 2 段「候选 BASE」，哪个心跳是新的、而 `bridge` 用的是哪个，一对就出来了。
+> **看到 `Tools not found` 不要以为是权限问题。** 十有八九是「守护挂错目录」：如果你之前手工执行过别处的 `plc_daemon.py`，`sys.argv[0]` 就固定成那条旧路径，守护把 `ready.flag` 写进旧目录，`bridge.py` 在 `<BASE>\ipc` 找不到就误判「未启动」，转去点菜单、点不到，于是报 `Tools not found`。先跑 `bridge.py selftest`，把 `base` 与 `ipc` 跟实际部署目录一对就出来了。
 
 命令行调用也可以走 `scripts\bridge.cmd`（自动挑一个能跑的 Python 3，避开 Windows 应用商店的 0 字节 python.exe 存根）：
 
@@ -248,7 +258,7 @@ inoproshop-ld-native/
 │   ├── ide/                      # IDE 内 IronPython 2.7 脚本
 │   │   ├── _base.py              # 路径自解析（IDE 内环境变量无效，靠它定位）
 │   │   ├── boot_daemon.py        # 守护注入入口（人工点菜单执行本文件）
-│   │   ├── probe_daemon.py       # 守护诊断（卡住时先跑它）
+│   │   ├── reload_daemon.py      # 热重载守护（改完 plc_daemon.py 后用它换新）
 │   │   ├── plc_daemon.py         # 守护进程（命令分发）
 │   │   ├── task_check.py         # 验收检查（必用，三分类单次快照）
 │   │   ├── task_silent_import.py # 静默导入核心

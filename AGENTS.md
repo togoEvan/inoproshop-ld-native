@@ -25,7 +25,7 @@
 README.md  →  references/native-structure.md  →  assets/natives/ 里的样本
 ```
 
-1. **先读 README 的「铁律」表格**（38 条）。违反任何一条都会浪费大量时间。
+1. **先读 README 的「铁律」表格**（40 条）。违反任何一条都会浪费大量时间。
 2. **读 `references/native-structure.md`** 拿到节点 GUID、层级、槽位规则、合法挂载位置。
 3. **打开 `assets/natives/` 里最接近的样本**，看清楚实际 XML 长什么样。**生成新结构必须从这里克隆节点**，不要凭空手写 GUID 和字段。
 

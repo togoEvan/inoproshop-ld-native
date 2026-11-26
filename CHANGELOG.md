@@ -7,6 +7,63 @@
 
 ## [Unreleased]
 
+### 修改（2026-11-26，bridge/daemon 可靠性重写：run_id 对账 + 心跳看门狗 + 取消代数 + 并发锁 + selftest）
+
+参考 `dsh-computer-use-win`（v0.6.4，MIT）的工程实践重写 `scripts/bridge.py`、补丁 `scripts/ide/plc_daemon.py`。
+**动机**：这些机制都属于「出问题时才显形」的类型——平时跑得好好的，一旦守护慢一拍就会给出**错误的成功**，
+所以不能只靠「在真实工程里跑一次没问题」来验收，必须能在不启动 IDE 的前提下把每个失败路径精确复现。
+
+**六项改动**：
+
+| # | 机制 | 解决的真实问题 |
+|---|---|---|
+| 1 | **`run_id` 对账** | 旧实现只做「删 `result.json` → 写 `cmd.json` → 等 `result.json` 出现」。上一条命令超时后守护迟一点才写结果，这条**迟到结果**会被下一次调用当成自己的读走——`ok` 是 `true`、JSON 能解析，只有内容是错的。**最阴险的一类假成功**。现在每条命令带唯一 `run_id`，守护原样回带，对不上就丢弃继续等 |
+| 2 | **心跳看门狗** | 旧实现只有一个死等循环，守护线程崩了也要等满 180s，且报「超时」不是「守护已死」，排查方向直接跑偏。现在每 ~1s 查 `heartbeat` mtime，超 8s 立刻抛 `E_HEARTBEAT_STALE` |
+| 3 | **独立心跳线程** | 旧实现 `_beat()` 写在 `loop()` 里，**长命令一跑心跳就停**，看门狗会误报「守护已死」。改为独立 `heartbeat_loop()` 线程（0.5s 一跳），语义明确为「守护进程活着」。实测：命令占住主线程跑 6s 期间，心跳年龄最大值仅 **0.50s** |
+| 4 | **取消代数 `cancel.gen`** | 旧 `stop_daemon()` 写 `stop.flag` 让守护退出，取消一条命令的代价是丢掉整个守护，下次还得重新注入；布尔 flag 也无法区分「这条的取消」和「上一条的取消」。现在 `cancel.gen` 单调递增，只影响正在跑的那条 |
+| 5 | **`ipc/bridge.lock` 并发锁** | 旧实现两个线程同时 `send()` 会互相删/覆盖 `cmd.json`，可能一条被执行两遍或两条都丢。现在具名锁 + 陈旧锁自动抢占 |
+| 6 | **`bridge.py selftest`** | 旧文档三处（README/SKILL/mcp-bridge）都让人跑 `ide/probe_daemon.py`，**而那个文件长期不存在**（坏链）。现在 selftest 内置，fail-closed，`problems` 里每条都写明下一步做什么 |
+
+**新增文件**：
+
+- `scripts/ide/reload_daemon.py` —— **热重载守护**。改完 `plc_daemon.py` 后不用人工点菜单：写 `stop.flag` →
+  **后台线程**等 `ready.flag` 消失 → 清残留 → exec `boot_daemon.py`。⚠ 不能主线程等：`stop.flag` 是在本条命令
+  执行期间写的，旧循环要等本命令返回才看到它，主线程等就是**自己等自己**。实测 <1s 完成。
+- `scripts/check_ipy_syntax.py` —— IronPython 2 语法自检（`except Exception, e:` 无法被 Python 3 `py_compile`，
+  先降级再 `ast.parse`）。
+- `scripts/test_bridge_protocol.py` —— 8 组协议回归（假守护，不碰真实 IDE）：正常往返 / 迟到结果 / 旧版守护降级 /
+  心跳停摆 fail-fast / 取消 / 并发 / 陈旧锁抢占 / selftest。**22 项断言全过**。
+
+**⚠ 过程中发现并修掉的真实缺陷（铁律 40）**：`_IpcLock._holder_dead()` 原本照 POSIX 用 `os.kill(pid, 0)` +
+`errno == ESRCH` 判活。实测 Windows 11 / Python 3.12：`os.kill(999999, 0)` → `errno 22 (WinError 87)`，
+而 `os.kill(36704, 0)`（该 pid **明明活着**，就是 InoProShop）抛**同一个 `errno 22`**。也就是说
+「不存在的 pid」与「活着的 pid」不可区分 → 所有进程都被判成死的 → **陈旧锁永远能抢，等于没锁**（T7 直接失败）。
+改为 `OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION)` + `GetExitCodeProcess` + `STILL_ACTIVE(259)`，
+判不了时**当作活着**（宁可等锁超时，也不要抢活人的锁）。
+
+**真实 IDE 验收（2026-11-26 13:16，InoProShop V1.10.0.3 / PID 36704 / `D:\plc_study\study.project`）**：
+
+| 项 | 结果 |
+|---|---|
+| 热重载守护 | `reload_daemon.log`：`old daemon gone (0.2s)` → `NEW daemon ready (0.2s)`；`daemon_boot.log` 出现新版独有的 `creating heartbeat thread` |
+| `bridge.py selftest` | `ok: true`，`problems: []`，`ping` 带回 `run_id: 20261126131644-881fe782`，**无** `legacy_daemon` |
+| 取消（真实 6s 长命令） | `cancel()` 后调用方拿到 `E_CANCELLED`；守护**没被杀**，后续 `ping` 正常 |
+| 并发 3 线程 | 全部 `ok: true`，3 个 `run_id` 互不相同 |
+| 长命令期间心跳 | 12 次采样最大 **0.50s**（阈值 8.0s），证明「命令慢 ≠ 守护死」 |
+| 真实动作回归 | `status` / `list_pous` 正常返回（`status` 的 `online_error: 堆栈为空。` 是已知的非主线程问题，已降级成字段） |
+
+**兼容性**：`send()/call()` 签名与返回值不变，`do_replace.py` 等老调用方无需改；结果新增 `run_id` / `cancelled`
+两个字段，老代码忽略即可；守护若是旧版（不回带 `run_id`）会退化为「出现即认」并标 `legacy_daemon: true`。
+
+### 修改（2026-11-26，铁律 39、40）
+
+- **铁律新增 39、40**（README + SKILL 双写，`AGENTS.md` 条数说明同步为 40 条）：
+  39 = 结果必须与命令对账（`run_id`），「文件出现」不等于「这是我这轮的结果」；
+  40 = `os.kill(pid, 0)` 在 Windows 上不能判活（不存在的 pid 与活着的 pid 抛同一个 `errno 22`）。
+- **README 铁律分组表从 4 组扩到 6 组**，补上此前漏登记的 E 组（31~38，枚举/凸轮/轴组）和 F 组（39、40，桥与守护）。
+- **`probe_daemon.py` 坏链清理**：README / SKILL / mcp-bridge 三处引用改为 `bridge.py selftest`；
+  README 目录树里的 `probe_daemon.py` 换成实际存在的 `reload_daemon.py`。
+
 ### 新增（2026-11-26，F08_AxisGroup 轴组复制验证）
 
 - **AxesGroup（运动轴组）对象全流程验证：`F08_AxisGroup_Verify / AxesGroup_A1_F08V + AxesGroup_C1_F08V`**。`F08_AxisGroup` 下两个轴组（`AxesGroup_A1` 擦拭 A1 侧 XY 二轴、`AxesGroup_C1` 擦拭 C1 侧 XY 二轴），是**设备侧运动配置对象**——`is_folder=False`、`has_textual_implementation=False`、`get_children()` 返回 `[]`、`dir()` 只有 6 个 .NET 基础方法，**脚本接口几乎完全不可见，所有信息只能靠 `export_native` 拿**。复制只改 3 处（`MetaObject.Name` / `MetaObject.Guid` / `Object.Id`，实测 diff 精确 3 处、其余字节完全保留）。**验收**：预编译 101/0、编译 104/0，合计 **0 错误**。**A/B**：正样本 `stGroup := AxesGroup_A1_F08V;` 0 错误；负样本 `ZZZ_NoSuchGroup_F08V` 编译 **2 条**错误。**三个关键新发现**：① **`AxisGuid` 指向的物理轴不能同时属于两个轴组**——沿用原件轴时 IDE 导入会把 `AxisGuid` 全清成 `00000000`，编译报 `X轴轴映射为空`；对照实验（改成空闲 Axis9/Axis10）证明 `AxisGuid` 完整保留、0 错误，**这不是脚本 bug 而是 SoftMotion 占用保护**；② **轴组必须在「轴所在的那个任务」里被引用**（本工程轴挂 `ETHERCAT` 而非 `MainTask`，挂错报 `轴组 xxx 与所选轴所在任务不同`；同一 POU 挂两任务报 `在多任务下存在多处调用`）；③ **`PAXES_GROUP_REF` 不能与 `0`/BIT 比较**（报 `不能比较类型 'PAXES_GROUP_REF' 和类型'BIT'`）。另：`SoftMotion General Axis Pool.get_children()` 返回 `[]`，**脚本无法建虚拟轴**，共用轴方案必须手工加轴。详见 `references/native-structure.md §33`。新增脚本：`task_scan_f08.py`、`task_probe_f08.py`、`task_deep_f08.py`、`task_guidref_f08.py`、`task_device_f08.py`、`task_usage_f08.py`、`task_pool_f08.py`、`task_tasks_f08.py`、`task_import_f08.py`、`task_readback_f08.py`、`task_alt_import_f08.py`、`task_ab_f08.py`、`task_export_taskcfg_f08.py`、`examples/make_f08_axesgroup_copy.py`、`examples/make_f08_alt_mapping.py`、`examples/del_task_pou.py`。
@@ -140,7 +197,7 @@
 - **`scripts/ld_logic.py`：逻辑层验收（第四层）**——把 native 图形拓扑还原成布尔表达式，DNF 规范化后比对，
   Id 重编号/节点顺序不影响结论。补前四层盲区（双分类 0 错误只证明编译器不报错，往返 diff 只证明 IDE
   没改写结构，`check_slots` 只证明槽位对得上——**都不证明「画的是你要的逻辑」**）。
-- `boot_daemon.py`（唯一守护注入入口）、`probe_daemon.py`（守护诊断）、`scan_all_native.py`（全工程批量导出）、
+- `boot_daemon.py`（唯一守护注入入口）、`probe_daemon.py`（守护诊断；⚠ 该文件当时只在文档里写了、实际未落地，2026-11-26 起由 `bridge.py selftest` 正式取代）、`scan_all_native.py`（全工程批量导出）、
   `task_cmd_list.py` / `task_cmd_run.py`（枚举/执行 817 条 IDE 命令）、`task_msg_text.py`
   （`system.get_messages` 字符串接口 dump 消息）。
 

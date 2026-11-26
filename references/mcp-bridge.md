@@ -42,7 +42,7 @@ daemon 轮询发现 `cmd.json` 后，先**原子改名为 `running.json`** 再�
 |---|---|---------|---------|
 | 1 | **BASE 路径解析** | 跑 `task_check.py`，看 `ipc/check.log` 第一行 `BASE = ... (source: ...)` | source 是 `fallback` 说明推导失败，会用 `D:\plc_mcp` |
 | 2 | **IPC 目录**（与 BASE 可能不同） | `ls ipc/ready.flag ipc/heartbeat` | ready.flag 写在旧目录 → bridge 傻等 30s 报"守护未就绪" |
-| 3 | **daemon 存活** | `python bridge.py ping` | 无 `{"ok":true,"pong":true}` |
+| 3 | **daemon 存活** | `python bridge.py selftest` | `ok` 不是 `true`；`problems` 里会直接写明下一步该做什么 |
 | 4 | **IDE 进程与工程** | `Get-Process InoProShop` + 日志里的 `project = ...` | 无进程 / 工程路径对不上 |
 | 5 | **IronPython 语法** | 新增 `ide/*.py` 后先 `eval_file` 试跑一次 | `except Exception, e` 被 Python 3 化会直接 SyntaxError |
 | 6 | **Git 凭据** | `printf "protocol=https\nhost=github.com\n\n" \| git credential fill` | 弹「选择凭据助手」窗口 = 被 `helper-selector` 接管 |
@@ -98,6 +98,80 @@ python bridge.py eval_file '{\"path\": \"D:\\\\plc_mcp\\\\ide\\\\task_check.py\"
 
 > PowerShell 里 JSON 的每个双引号都要反斜杠转义，反斜杠本身还要再转义一层，
 > 所以路径写成 `\\\\`。这就是上面推荐用 Python 调用的原因。
+> ⚠ bash heredoc 写 JSON 同样会吃反斜杠（`\\` 变 `//`），路径参数请用 `python -c` 或
+> 直接写 `.py` 文件传参，别用 heredoc 拼 JSON。
+
+### 结果与命令对账：`run_id`（2026-11-26）
+
+每条命令由 `bridge.send()` 自动补一个唯一 `run_id`（`时间戳-8位hex`），守护写回结果时原样带回。`bridge` 只认 `run_id` 相同的那份结果，**迟到结果一律丢弃继续等**。
+
+- 结果 dict 里多两个字段：`run_id`、`cancelled`（老代码忽略即可）。
+- 守护是旧版（不回带 `run_id`）时，`bridge` 退化为「`result.json` 出现即认」，并在返回值里标 `legacy_daemon: true` —— 能用，但失去对账保护。
+- **看到 `legacy_daemon: true` 就该重新注入守护**（见下面「热重载」一节）。
+
+### 心跳看门狗（2026-11-26）
+
+守护有**两个线程**：`loop()`（轮询命令）+ `heartbeat_loop()`（每 0.5s 写 `heartbeat`）。
+心跳线程独立，所以「命令执行慢」不会让心跳停 —— 这正是「守护活着但命令慢」与「守护已死」能区分开的原因。
+
+`bridge.send()` 轮询期间每 ~1s 检查一次 `heartbeat` 的 mtime，超过 `HEARTBEAT_STALE = 8.0s` 立刻抛 `E_HEARTBEAT_STALE`（**不等满 timeout**），并清掉 `cmd.json` 免得守护复活后补跑一条过期命令。
+
+> ⚠ 实测（2026-11-26）：命令占住 IDE 主线程跑 6s 期间，心跳年龄最大值仅 **0.50s**。旧实现把 `_beat()` 写在 `loop()` 里，长命令一跑心跳就停，看门狗会误报「守护已死」——独立线程就是为了消除这个假报警。
+
+### 取消：`cancel.gen` 不是 `stop.flag`（2026-11-26）
+
+| | `cancel()` | `stop_daemon()` |
+|---|---|---|
+| 语义 | 取消**当前正在跑的那条命令** | 让守护**退出** |
+| 落盘 | `ipc/cancel.gen`（单调递增整数） | `ipc/stop.flag` |
+| 后续命令 | 天然不受影响 | 下次调用要重新注入 |
+
+守护在**执行前**和**执行后**各读一次代数，与命令携带的 `cancel_gen_at_send` 比对：变了就标 `cancelled=True` 并尽快收尾。实测真实 IDE：`cancel()` 后 1.2s 内调用方拿到 `E_CANCELLED`，守护**没被杀**，后续 `ping` 正常。
+
+### 并发：`ipc/bridge.lock`
+
+`bridge.send()` 用「原子创建 + 内容带 pid/ts」的锁文件串行化写 `cmd.json`，陈旧锁（持有者已死）自动抢占。实测 3 线程并发 `call()` 全部成功且 `run_id` 互不相同。
+
+⚠ **陈旧锁判活的 Windows 坑**（铁律 40）：`os.kill(pid, 0)` 在 Windows 上对**不存在的 pid** 和**活着的 pid** 抛的是同一个 `errno 22`，按 `ESRCH` 判活会让所有进程都判成死的（锁等于失效）。`bridge._pid_alive()` 改用 `OpenProcess` + `GetExitCodeProcess`，判不了时**当作活着**。
+
+### 自检：`python bridge.py selftest`
+
+一次给出可诊断快照，**fail-closed**（任何一项失败都显式列进 `problems`）：
+
+```bash
+python bridge.py selftest
+```
+
+```json
+{
+  "ok": true,
+  "base": "...\\inoproshop-ld-native\\scripts",
+  "ipc_writable": true,
+  "ide_running": true,
+  "ready_flag": true,
+  "heartbeat_age": 0.04,
+  "ping": {"run_id": "20261126131644-881fe782", "cancelled": false,
+           "ok": true, "pong": true, "time": "13:16:44"},
+  "cancel_gen": 0,
+  "problems": []
+}
+```
+
+`problems` 里每条都带「下一步该干什么」。这取代了旧文档里引用的 `probe_daemon.py`（那个文件**长期不存在**，README/SKILL/mcp-bridge 三处引用都是坏链）。
+
+### 热重载守护（改完 `plc_daemon.py` 后）
+
+改了守护代码，IDE 里跑的还是旧代码（脚本已 exec 完）。不用人工点菜单，让旧守护帮你换：
+
+```python
+import bridge
+bridge.call("eval_file", timeout=60,
+            path=r"<BASE>\ide\reload_daemon.py")
+```
+
+`reload_daemon.py` 的做法：写 `stop.flag` → 起**后台线程**等 `ready.flag` 消失 → 清残留 → exec `boot_daemon.py` 起新守护。
+⚠ 不能在主线程等 —— `stop.flag` 是在本条命令执行期间写的，旧循环要等本命令返回才看到它，主线程等就是自己等自己（死锁）。
+实测耗时 < 1s，`daemon_boot.log` 会出现新版独有的 `creating heartbeat thread`。
 
 ## 常用诊断脚本（ide/ 目录）
 
@@ -154,8 +228,7 @@ Win32 GetMenu(hwnd) = 0
 | 单独 `except SystemExit` | 见上一节。重复注入时不掀掉正在跑的线程 |
 | 显式注入 `projects` / `online` / `system` | 用 `import plc_daemon` 加载时这三个名字不在模块命名空间里，`a_eval_file` 自己会 `NameError` |
 
-**排错顺序**（别乱猜）：`python scripts/ide/probe_daemon.py` → 看第 2 段「候选 BASE」哪个心跳是新的、
-第 3 段 `bridge` 用的是哪个，两者不一致就是挂错目录；全都没心跳就是没注入。
+**排错顺序**（别乱猜）：先 `python scripts/bridge.py selftest` —— 它一次给出 `base`/`ipc`/`ide_running`/`ready_flag`/`heartbeat_age`/`ping`/`cancel_gen` 和逐条 `problems`，并明确告诉你「守护没注入」还是「守护挂了」。`base` 与 `ipc` 对不上就是挂错目录（换机部署最常见）；`heartbeat_age` 大就是守护线程死了；`ping` 带 `legacy_daemon` 就是守护是旧版。
 
 ## 找对象（勿用全局 find_named）
 
