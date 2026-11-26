@@ -1923,3 +1923,164 @@ fbCamIn(Master := Master, Slave := Slave, CamTableID := refCam);
 
 ⚠ 注意：本轮曲线出错时（`Periodic=True` 与 p1 写错），**错误只落在 `de128929` Cam 分类**，
 预编译 101/0、编译 104/0 全是 0 —— **只看这两个分类会漏判通过**。详见 `mcp-bridge.md` 分类表。
+
+## 33 AxesGroup（运动轴组）对象结构与复制（2026-11-26 实测，F08_AxisGroup）
+
+`F08_AxisGroup` 下有两个轴组：`AxesGroup_A1`（擦拭 A1 侧 XY 二轴）、`AxesGroup_C1`（擦拭 C1 侧 XY 二轴）。
+轴组是与 FB/FC/DUT/CAM 都不同的**设备侧运动配置对象**。
+
+### 33.1 对象能力（探测结果）
+
+| 探测项 | 结果 |
+|---|---|
+| `TypeGuid` | `ad3ae438-9dc8-4473-b82c-f59e508baec4` |
+| `is_folder` | `False` |
+| `has_textual_implementation` | `False` |
+| `textual_declaration` / `textual_implementation` | `AttributeError`（**没有文本层**） |
+| `get_children()` | `[]`（**没有子对象**） |
+| `type_guid` | `AttributeError`（**没有该属性**，只能从导出的 native 里读） |
+| `guid` | 有（`ScriptObject.guid`） |
+| `dir()` | 只有 `Equals/GetHashCode/GetType/MemberwiseClone/ReferenceEquals/ToString` |
+
+**结论**：脚本接口对轴组几乎完全不可见，**所有信息只能靠 `export_native` 拿到**。
+这与 CAM（§32）一样属于「结构化对象」，但比 CAM 更封闭——CAM 至少有 `Name/Periodic/Points` 等可读属性路径。
+
+### 33.2 native 结构（`Object` 下的字段）
+
+```
+<Object Type="{ad3ae438-...}">
+  <Id>                        uint，同文件夹内递增（A1=0, C1=1）
+  <Type>                      CART_XY（笛卡尔 XY 二轴；其它值未实测）
+  <AxisMappingCollection>
+    <AxisMappings>            4 个槽（固定 4，未用的填 00000000）
+      <AxisGuid>              指向 Device/ETHERCAT_C/ServoXX/AxisXX 的 guid
+      <Description>           组内轴名（A1/A2/A3/A4）
+      <ZeroingIndex>          int
+  <WorkspaceConfig>
+    <PositionConfig>          MaxVelocity/MaxAcceleration/MaxDeceleration/MaxJerk/UnitTyp
+    <AttitudeConfig>          同上（姿态轴，单位「度」）
+  <ReadInputsPouGuid>         ⚠ 轴组内部自动生成的 4 个 POU
+  <WriteOutputsPouGuid>       ⚠ 全工程树里都找不到，脚本不可见
+  <InitPouGuid>               ⚠
+  <gvlPouGuid>                ⚠ 唯一例外：导入后不被改写（见 33.5）
+  <PositionDimensionType>     Metre
+  <AttitudeDimensionType>     Degrees
+  <UserMasterDimensionType>   Position
+  <AltitudeHeightL0> / <BigArmBoomLengthL1> / <SmallArmBoomLengthL2>     机器人学参数
+  <CurveType>                 T
+  <ContinuousPathEnable> / <SavingsLength> / <ForwardLookingLength> /
+  <ForwardLookingAccuracy>    前瞻配置
+  <StBaseX..C> / <StPartX..C> / <StToolX..C>                            基坐标 / 工件 / 工具
+  <StPartCoordinateSystemModels> / <StToolCoordinateSystemModels>       Part1..Part10 各 10 组
+  <AxisSettingEnable>         bool
+```
+
+`AxisGuid` 实测归属（从设备树解析）：
+
+| 轴组 | 槽位 | AxisGuid | 真实对象 |
+|---|---|---|---|
+| A1 | 0 | `2b9e1a51-…` | `Device/ETHERCAT_C/Servo7_擦拭A1侧X轴/Axis7_擦拭A1侧X轴` |
+| A1 | 1 | `39176bc8-…` | `Device/ETHERCAT_C/Servo8_擦拭A1侧Y轴/Axis8_擦拭A1侧Y轴` |
+| C1 | 0 | `abafabd0-…` | `Device/ETHERCAT_C/Servo15_擦拭C1侧X轴/Axis15_擦拭C1侧X轴` |
+| C1 | 1 | `d9285e5b-…` | `Device/ETHERCAT_C/Servo16_擦拭C1侧Y轴/Axis16_擦拭C1侧Y轴` |
+
+### 33.3 ⚠ 铁律：复制轴组必须换 `MetaObject.Guid` 和 `Object.Id`，但不能沿用被占用的 AxisGuid
+
+复制只需改三处（实测 diff 精确为 3 处，其余字节完全保留）：
+
+| 字段 | 原件 A1 | 副本 |
+|---|---|---|
+| `MetaObject.Name` | `AxesGroup_A1` | `AxesGroup_A1_F08V` |
+| `MetaObject.Guid` | `d7035b48-…` | 新 guid（不换则导入冲突） |
+| `Object.Id` | `0` | 新值（同文件夹内不能重复） |
+
+**`AxisGuid` 与 4 个内部 POU Guid 原样保留，但结果不同**：
+
+- **AxisGuid 会被 IDE 清空成 `00000000`**（若原轴已被原轴组占用）
+- 内部 POU Guid（`ReadInputs`/`WriteOutputs`/`Init`）会被 IDE 重写为新值 —— 正常
+- `gvlPouGuid` 保持不变
+
+**根因（实测对照实验确认）**：SoftMotion 物理轴**不能同时属于两个轴组**。
+把副本的 `AxisGuid` 改成空闲轴（Axis9/Axis10）后重新导入，**AxisGuid 完整保留、0 错误**。
+所以「清空」不是脚本 bug，是 IDE 的占用保护。
+
+**判定方法**：复制前先确认目标轴没被其它轴组占用。工程树里 `SoftMotion General Axis Pool` 是空的，
+说明本工程的轴全在 `Device/ETHERCAT_C/ServoXX/` 下，且已被原轴组绑定。
+
+**若确实要两个组共用同一批轴**：做不到。必须先建独立轴（本工程 Axis Pool 为空、
+`pool.get_children()` 返回 `[]`，脚本无法建虚拟轴，只能手工在 IDE 里加），再让副本映射过去。
+
+### 33.4 ⚠ 铁律：轴组必须在「轴所在的那个任务」里被引用
+
+实测报错原文：
+
+```
+轴组 AxesGroup_A1_F08V 与所选轴所在任务不同: 不能再在任务 MainTask 中被引用
+```
+
+本工程轴挂在 `ETHERCAT` 任务下（8 ms，优先级 0），所以引用轴组的 POU 必须也挂 `ETHERCAT`。
+`MainTask`（20 ms）里引用会直接报错。
+
+**并且同一 POU 不能同时挂两个任务**，否则报：
+
+```
+程序 prg_F08VerifyUse 在多任务下存在多处调用，可能会产生不符合预期的结果
+```
+
+### 33.5 任务槽摘除：`pous.remove()` 依然无效（铁律 25 的同类问题）
+
+实测 `main_task.pous.remove("名字")` **日志打印成功、回读仍在**，与铁律 25 完全同源。
+唯一可靠做法（`scripts/examples/del_task_pou.py`）：
+
+1. `export_native([taskConfig], out, True)` 导出 Task Configuration
+2. 主机侧按「行」删除 `<Single Type="{f194d1ef-7376-42ce-a729-4a5485a97a46}">` … `</Single>` 块
+3. `run_overwrite_import.py` 同名覆盖导入（弹框自动点「全部(A)」）
+
+⚠ **不能用跨行正则 `.*?</Single>`** —— 会连相邻的 `</Single>` 一起吃，导入报
+`第 89 行，位置 10 上的开始标记"List"与结束标记"Single"不匹配`。
+必须从 `<Single Type="{f194d1ef…}">` 行起，逐行走到**单独一行 `</Single>`** 为止。
+
+### 33.6 POU 里引用轴组的正确写法
+
+工程里已有的写法（`M010_插补控制`，实测可编译）：
+
+```pascal
+VAR
+    io_stAxesGroup : PAXES_GROUP_REF;
+END_VAR
+
+io_stAxesGroup := AxesGroup_A1;
+```
+
+⚠ **不要写 `stGroup <> 0` 做非空判断**，实测报：
+
+```
+不能比较类型 'PAXES_GROUP_REF' 和类型'BIT'
+```
+
+`PAXES_GROUP_REF` 是指针类型，不能与整型/BIT 比较。
+
+### 33.7 导入验证结果（F08_AxisGroup_Verify）
+
+| 分类 | total | errors |
+|---|---|---|
+| 预编译 `217bc73e` | 101 | **0** |
+| 编译 `97f48d64` | 104 | **0** |
+| 合计 | — | **0** |
+
+**A/B 验证**：
+- 正样本 `stGroup := AxesGroup_A1_F08V;` → 预编译 0 / 编译 0
+- 负样本 `stGroup := ZZZ_NoSuchGroup_F08V;` → 编译 **2 条**错误：
+  `不能将类型 '未知类型: 'ZZZ_NoSuchGroup_F08V'' 转换为类型'PAXES_GROUP_REF'`
+  `没有定义标识符'ZZZ_NoSuchGroup_F08V'`
+
+**往返 diff（映射到空闲轴后）**：13 个 Guid 字段全部一致，仅 `Timestamp`、`Id`（IDE 重排为 2）、
+`ParentSVNodeGuid`（改指向 Verify 文件夹）三处由 IDE 更新，均属预期。
+
+### 33.8 与 §27 / §32 的关系
+
+| 章节 | 对象 | 层级 | 有无文本层 | 复制方式 |
+|---|---|---|---|---|
+| §27 | 单轴轴控 | POU 代码 | 有 | 翻译改写 |
+| §32 | CAM 电子凸轮 | Application 下 | 无 | 只改 Name |
+| §33 | AxesGroup 轴组 | Application 下 | 无 | 改 Name + Guid + Id，AxisGuid 需目标轴空闲 |

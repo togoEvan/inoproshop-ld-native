@@ -7,6 +7,19 @@
 
 ## [Unreleased]
 
+### 新增（2026-11-26，F08_AxisGroup 轴组复制验证）
+
+- **AxesGroup（运动轴组）对象全流程验证：`F08_AxisGroup_Verify / AxesGroup_A1_F08V + AxesGroup_C1_F08V`**。`F08_AxisGroup` 下两个轴组（`AxesGroup_A1` 擦拭 A1 侧 XY 二轴、`AxesGroup_C1` 擦拭 C1 侧 XY 二轴），是**设备侧运动配置对象**——`is_folder=False`、`has_textual_implementation=False`、`get_children()` 返回 `[]`、`dir()` 只有 6 个 .NET 基础方法，**脚本接口几乎完全不可见，所有信息只能靠 `export_native` 拿**。复制只改 3 处（`MetaObject.Name` / `MetaObject.Guid` / `Object.Id`，实测 diff 精确 3 处、其余字节完全保留）。**验收**：预编译 101/0、编译 104/0，合计 **0 错误**。**A/B**：正样本 `stGroup := AxesGroup_A1_F08V;` 0 错误；负样本 `ZZZ_NoSuchGroup_F08V` 编译 **2 条**错误。**三个关键新发现**：① **`AxisGuid` 指向的物理轴不能同时属于两个轴组**——沿用原件轴时 IDE 导入会把 `AxisGuid` 全清成 `00000000`，编译报 `X轴轴映射为空`；对照实验（改成空闲 Axis9/Axis10）证明 `AxisGuid` 完整保留、0 错误，**这不是脚本 bug 而是 SoftMotion 占用保护**；② **轴组必须在「轴所在的那个任务」里被引用**（本工程轴挂 `ETHERCAT` 而非 `MainTask`，挂错报 `轴组 xxx 与所选轴所在任务不同`；同一 POU 挂两任务报 `在多任务下存在多处调用`）；③ **`PAXES_GROUP_REF` 不能与 `0`/BIT 比较**（报 `不能比较类型 'PAXES_GROUP_REF' 和类型'BIT'`）。另：`SoftMotion General Axis Pool.get_children()` 返回 `[]`，**脚本无法建虚拟轴**，共用轴方案必须手工加轴。详见 `references/native-structure.md §33`。新增脚本：`task_scan_f08.py`、`task_probe_f08.py`、`task_deep_f08.py`、`task_guidref_f08.py`、`task_device_f08.py`、`task_usage_f08.py`、`task_pool_f08.py`、`task_tasks_f08.py`、`task_import_f08.py`、`task_readback_f08.py`、`task_alt_import_f08.py`、`task_ab_f08.py`、`task_export_taskcfg_f08.py`、`examples/make_f08_axesgroup_copy.py`、`examples/make_f08_alt_mapping.py`、`examples/del_task_pou.py`。
+
+### 修复（2026-11-26，任务槽摘除）
+
+- **`pous.remove("名字")` 打印成功但实际无效（铁律 25 同源，本轮再次确认）**：`MainTask.pous.remove()` 与 `ETHERCAT.pous.remove()` 都回读仍在。新增 `scripts/examples/del_task_pou.py` 走「导出 TaskConfig native → 按行删 POU 块 → 同名覆盖导入」。⚠ 期间踩过一个坑：用跨行正则 `.*?</Single>` 删除会**连相邻的 `</Single>` 一起吃**，导入报 `第 89 行，位置 10 上的开始标记"List"与结束标记"Single"不匹配`；正确做法是从 `<Single Type="{f194d1ef…}">` 行起**逐行走到单独一行 `</Single>`** 为止。
+
+### 修改（2026-11-26，铁律 37、38）
+
+- **铁律新增 37、38**（README + SKILL 双写，`AGENTS.md` 条数说明同步为 38 条）：37 = 轴组 `AxisGuid` 不能共用物理轴 + 必须挂轴所在任务；38 = 任务槽 `remove` 无效，走 native 覆盖且不能跨行正则。
+- **`assets/natives/` 新增两个轴组样本**：`axesgroup_cart_xy_sample.native`（原件 `AxesGroup_A1`，21 KB）、`axesgroup_cart_xy_copy_sample.native`（副本 `AxesGroup_A1_F08V`，映射到空闲轴，21 KB）。
+
 ### 新增（2026-11-26，F07_CAM 复制验证 + Cam1 曲线规划落地）
 
 - **CAM（电子凸轮）对象全流程验证 + 曲线规划落地：`F07_CAM_Verify / Cam1_F07V`**。`F07_CAM` 只有一个对象 `Cam0`，无子文件夹无 POU。两轮工作：① **复制验证**——导出 `Cam0_folder.native` → `scripts/examples/make_f07_cam_copy.py` 只改 `MetaObject.Name` 加 `_F07V`（CAM 无 `TextLines`/`Implementation`，不存在跨对象文本引用）→ 导入新建 `F07_CAM_Verify`，1/1 成功无空文件夹；② **曲线规划落地**——`scripts/examples/make_cam1_curve.py` 按停-升-停 3-4-5 五次多项式重写 `Points`+`Segments`+`Dimension`+`Periodic`，生成 `Cam1_F07V`（3 段：停歇 0-120 / 分度 120-240 / 停歇 240-360，H=45°，β=120°，`p3=450 p4=-675 p5=270`）。**验收**：预编译 101/errors=**0**、编译 104/errors=**0**、Cam 分类 `de128929` errors=**0**，合计 **0 错误**；往返 diff 写入 13 字段 vs 回读 13 字段 **0 差异**；接缝 x=120 / x=240 位移·速度·加速度全部连续。**三个关键新发现**：① **CAM 直线段 `p1` 是段内增量不是终点绝对值**（`y=p0+p1·u`，按绝对值写会让停歇段斜率非零、与多项式段零速度冲突）；② **分度凸轮必须 `Periodic=False`**（`y(360)≠y(0)`，沿用模板 `True` 报 `在点 (0/0) 的连续性要求不能填充 位置/速度`）；③ **Cam 错误只落 `de128929` Cam 分类**，预编译/编译可能全 0，只看那两个会漏判通过。另：Cam 子对象**无法脚本删除**（`remove(obj)` 报 `takes no arguments`、`replace(idx,"")` 报 `no attribute`），改曲线只能同名覆盖导入。详见 `references/native-structure.md §32`。新增脚本：`task_scan_f07.py`、`task_export_f07.py`、`task_export_f07_top.py`、`task_import_f07.py`、`task_f07_ab_test.py`、`task_f07_cleanup.py`、`task_import_cam1.py`、`task_export_cam1.py`、`task_delete_cam1.py`（实测无效，留作反面记录）、`examples/make_f07_cam_copy.py`、`examples/make_cam1_curve.py`。

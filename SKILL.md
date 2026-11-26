@@ -63,6 +63,8 @@ description: 汇川 InoProShop（CODESYS V3.5 SP11 系）LD 梯形图 native XML
 |---|------|
 | 35 | **CAM 直线段的 `p1` 是段内增量，不是终点绝对值**。`y(u) = p0 + p1·u`（u 为段内归一化 0..1），故 `p1 = y1 - y0`。按「p0=起点、p1=终点」写停歇段（`p0=45 p1=45`）会算出 `y(1)=90`、斜率 45，与相邻五次多项式段的零速度冲突，Cam 分类报 `在点 (240/45) 的连续性要求不能填充 速度`。**自检**：`p0 == cp0.Y` 且 `p0+p1 == cp1.Y`，两条都成立才对。 |
 | 36 | **分度凸轮必须 `Periodic=False`**。摆动凸轮回原点（`y(360)==y(0)`）才用 `True`；分度凸轮每周期累进 H（`y(360)==y(0)+H`），沿用 `True` 会报 `在点 (0/0) 的连续性要求不能填充 位置`+`速度`。**自检**：`y(360)-y(0) != 0` 就必须 `False`。⚠ CAM 错误**只落 Cam 分类 `de128929`**，预编译/编译可能全 0——只看那两个会漏判通过；Cam 子对象也**无法脚本删除**（`remove`/`replace` 均失败），只能同名覆盖导入。详见 `references/native-structure.md §32`。 |
+| 37 | **AxesGroup（轴组）复制：`AxisGuid` 指向的物理轴不能同时属于两个轴组**。复制时只改 `MetaObject.Name` + `MetaObject.Guid` + `Object.Id` 三处（实测 diff 精确 3 处）；若 `AxisGuid` 沿用原件、而原轴已被原轴组占用，**IDE 导入时会把 `AxisGuid` 全部清成 `00000000`**，编译报 `X轴轴映射为空`。这不是脚本 bug，是 SoftMotion 的占用保护——对照实验证明：改成空闲轴（Axis9/Axis10）后 `AxisGuid` 完整保留、0 错误。⚠ 脚本**无法建虚拟轴**（`SoftMotion General Axis Pool.get_children()` 返回 `[]`），只能手工在 IDE 里加。另：轴组**必须在「轴所在的那个任务」里被引用**，本工程轴挂 `ETHERCAT` 而非 `MainTask`，挂错报 `轴组 xxx 与所选轴所在任务不同`；同一 POU 挂两个任务报 `在多任务下存在多处调用`。详见 §33。 |
+| 38 | **任务槽摘除 `pous.remove("名字")` 打印成功但实际无效**（铁律 25 的完全同源问题，2026-11-26 再次实测确认）。`MainTask.pous.remove()` / `ETHERCAT.pous.remove()` 都回读仍在。唯一可靠做法：`export_native` 导出 Task Configuration → 主机侧删 `<Single Type="{f194d1ef-7376-42ce-a729-4a5485a97a46}">`…`</Single>` 块 → 同名覆盖导入。⚠ **不能用跨行正则 `.*?</Single>`** —— 会连相邻的 `</Single>` 一起吃，导入报 `开始标记"List"与结束标记"Single"不匹配`。必须从该行起逐行走到**单独一行 `</Single>`** 为止（`scripts/examples/del_task_pou.py`）。 |
 
 ## 结构速查（详见 references/）
 
