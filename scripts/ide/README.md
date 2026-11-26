@@ -72,7 +72,7 @@ daemon 再 `exec` 这里的脚本。
 | `tasks/task_import_overwrite.py` | 覆盖式导入：不改名让位，直接 import_native，遇到同名覆盖弹框由主机侧点「全部」 |
 | `tasks/task_list_folders.py` | 列出 Application 下所有 F0x 开头的 Folder / GVL 及成员，用于确认 F02 内容 |
 | `tasks/task_msg_text.py` | 用 get_messages(cat) 直接 dump 每个分类的全部消息文本（返回的是字符串） |
-| `tasks/task_mount_assert.py` | 验收前置断言：给定 POU 名必须已挂进某任务的调用列表（不挂=不进编译单元=假通过） |
+| `tasks/task_mount_assert.py` | 验收前置断言：给定 POU 名必须已挂进某任务的调用列表（不挂=不进编译单元=假通过）；结果落 `ipc/task_mount_result.json`，主机侧读 json 判定（eval_file 下退出码无意义） |
 | `tasks/task_readback_pou.py` | 读回 prg_GvlVerifyUse 的声明/实现原文，确认 replace 是否真的写进工程 |
 | `tasks/task_readnow.py` | 不清空，直接读当前 5 个分类的所有消息 |
 | `tasks/task_rename_children.py` | 把某个文件夹下的子对象（GVL）批量改名，统一加后缀 |
@@ -80,7 +80,7 @@ daemon 再 `exec` 这里的脚本。
 | `tasks/task_rt_funcret.py` | 往返验证 prg_FuncRetTest：导出导入后的 POU，比对 Function 框结构是否保持 |
 | `tasks/task_show_state.py` | 显示 MainTask 调用列表 + prg_NoTaskTest 是否存在 |
 | `tasks/task_silent_import.py` | 静默导入 native：改名让位 → import_native → 同 tick 读消息 → 失败回滚 → 删旧 → 保存 |
-| `tasks/task_snap.py` | 消息池快照（before/after 各一拍）→ 主机侧 delta_snap.py 差分，baseline 截断的正解（lead 方案） |
+| `tasks/task_snap.py` | 消息池快照（before/after 各一拍）→ 主机侧 delta_snap.py 差分，baseline 截断的正解（lead 方案）；含 meta.which 自证 + err_total/err_addrs 对象级兜底；severity 读不到直接 raise（不产坏快照） |
 | `tasks/task_tree_dump.py` | 列出 Application 下的全部对象（含 Folder/GVL），并展开 F01_Variable |
 | `tasks/task_unhook_task.py` | 彻底把 prg_GvlVerifyUse 从 MainTask 调用列表摘掉（remove 传名字无效，改试索引/其它方式） |
 

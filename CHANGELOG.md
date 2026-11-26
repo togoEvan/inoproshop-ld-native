@@ -7,6 +7,33 @@
 
 ## [Unreleased]
 
+### 修复（2026-11-26，delta 四态退出码 + severity 静默降级 + 地址互撞兜底 —— 回应 lead 15:18 四个实验）
+
+lead 在主机侧拿 delta_snap.py 真实跑了四个构造实验，挖出两个数据级假通过，本轮全修：
+
+- **退出码扩到四态**：`0=PASS / 1=FAIL / 2=UNKNOWN / 3=TOOL_ERROR`。之前删掉
+  `snap_after.json` 会抛 FileNotFoundError 被 shell 当 exit 1，与 FAIL 同码 ——
+  工具链故障被误报成工程质量事故。`load()` 现在包 try，缺文件/JSON 损坏 → TOOL_ERROR(3)。
+- **severity 静默降级（最隐蔽的假通过）**：`prop()` 吞异常 → severity 全变 `"?"`，
+  而 delta 只认字符串 `error` → 新增 error 被判 PASS。修两层：
+  `task_snap.py` severity 取不到直接 raise（宁缺毋滥，不产出坏快照）；
+  `delta_snap.py` 兜底扫描 `"?"`，命中即 UNKNOWN（兼容旧快照）。
+  text 读不到单独计数并报数（偏保守，不掩盖 sev）。
+- **地址重复错误互撞兜底**：归一化后 13 条 `%MB... 地址重复` 全撞成一条 key，
+  before 13 / after 13（地址全换仍全错）→ 文本 delta=0 → 假 PASS。
+  `task_snap.py` 每分类增采 `err_total`（error 条数）+ `err_addrs`（`%MB/%MW/%MX/%I*`
+  地址去重集）；`delta_snap.py` 对二者做集合差分，地址变化或 after 存量 error
+  而文本差分看不见 → UNKNOWN。
+- **before 截断判定收紧**：之前 `dn>0` 才 UNKNOWN，导致「截断但 total 不变」判 PASS。
+  截断本身即文本不可信（可能一消一增），改为截断即 UNKNOWN。真实模板工程
+  （baseline 101/104 常驻截断）因此如实返回 UNKNOWN，FAIL 优先级不变。
+- **stdout 改 ASCII 安全串**：GBK 控制台打中文变乱码，判定不能 grep stdout。
+  `print` 只打 ASCII 摘要（`=== delta : PASS === new_err=0`），中文细节全写 `delta.log`。
+
+验证：语法 132/132；协议 22/22；构造 12 个场景全过（TOOL_ERROR/severity/地址互撞/
+截断收紧/FAIL 优先/拍子错/干净 PASS）；真机 PID 36704 实测 296 条消息
+`n_sev_ok=296 / n_txt_miss=0`，err_total/err_addrs 采集正常，如实返回 UNKNOWN。
+
 ### 修复（2026-11-26，delta_snap 假 PASS 漏洞 + mount 假退出码 —— 回应 lead 14:58 审查）
 
 lead 逐个读了三个脚本，找到两个真问题 + 一个自证要求，本轮全部落地并真机/构造验证：
