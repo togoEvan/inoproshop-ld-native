@@ -1,0 +1,7 @@
+taskcfg = Task Configuration
+task = MainTask
+before pous = ['M000_MAIN']
+added prg_NoTaskTest
+after pous = ['M000_MAIN', 'prg_NoTaskTest']
+saved
+=== done ===

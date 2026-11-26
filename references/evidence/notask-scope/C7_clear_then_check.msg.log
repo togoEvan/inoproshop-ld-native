@@ -1,0 +1,10 @@
+=== 预编译 : 101 条 ===
+    ZZZ> 没有定义标识符'ZZZ_NotExist_Symbol' 
+    (ZZZ 命中 1)
+=== 导出/导入 : 0 条 ===
+=== 编译 : 106 条 ===
+    ZZZ> 不能将类型 '未知类型: 'ZZZ_NotExist_Symbol'' 转换为类型'BOOL'
+    ZZZ> 没有定义标识符'ZZZ_NotExist_Symbol' 
+    (ZZZ 命中 2)
+=== 脚本消息 : 0 条 ===
+=== done ===

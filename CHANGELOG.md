@@ -7,6 +7,25 @@
 
 ## [Unreleased]
 
+### 修正（重要）
+- **铁律 24/25 纠正：「不挂任务」只对编译分类成立，对预编译分类不成立**（2026-11-26 实测）。旧结论「没挂进任务调用列表的 POU 根本不参与编译、`app.build()` 恒 0 错误」只对**编译分类** `97f48d64` 成立。用户反馈「我点检查程序，预编译就有错误」，用「清空消息 + 单一动作 + 主机侧等待 20s + 读」的判定实验复核，六个场景对照如下（负样本 `prg_NoTaskTest` 里 `xOut := ZZZ_NotExist_Symbol;`）：
+
+  | 场景 | 预编译 `217bc73e` ZZZ | 编译 `97f48d64` ZZZ |
+  |---|---|---|
+  | 未挂任务，什么都不做（对照组） | 0 | 0 |
+  | 未挂任务 + `app.build()` | **1** | 0 |
+  | 未挂任务 + 「检查程序」`ab02b3c3` | **1** | 0 |
+  | 挂进 MainTask + `app.build()` | **1** | **2** |
+  | 挂进 MainTask + 「检查程序」 | **1** | **2** |
+  | 删除 POU 后（对照组） | 0 | 0 |
+
+  ⇒ **预编译分类 = autocheck，覆盖 Application 下全部 POU**（这正是用户在 IDE 里点「检查程序」看到的报错来源）；**编译分类 = 只含挂进任务调用列表的 POU**。**验收必须两分类都看**：只看编译分类会漏掉未挂任务 POU 的语法错误（假通过），只看预编译会漏构建期错误（类型转换、`E3_SystemTime` 多任务冲突等）。
+- **预编译消息是异步补齐的**：`system.clear_messages(cat)`（**必须传分类参数**，无参调用报 `takes exactly 1 argument (0 given)`）后立刻读是 0 条，5 秒后变 101 条；清空后空闲 20s 仍是 0 条（不会自行恢复）。等待必须放主机侧 Python，IDE 脚本里 sleep 会冻死界面。
+- 同步更新 `README.md` 铁律 24、`SKILL.md` 铁律 25、`references/native-structure.md` 的「POU 参与编译的前提」整节（含六场景对照表）。
+
+### 新增
+- **判定实验脚本族**（`scripts/ide/`）：`task_exp_clear.py`（清空消息 + 单一动作）、`task_exp_dump.py`（只 dump 分类）、`task_exp_cmd.py`（按 GUID 只执行命令）、`task_exp_build.py`（只 `app.build()`）、`task_exp_op.py`（只删/只导入对象）、`task_exp_task.py`（挂/摘任务槽）、`task_exp_notask.py`（旧版合并实验，保留备查）。参数统一走 `ipc/exp_args.json`，日志落 `ipc/exp/`。
+
 ### 文档
 - **铁律扩到 30 条**：新增第 24（没挂任务调用列表的 POU 根本不参与编译）、25（`ScriptPouObjectList.remove` 留空槽项）、26（`Task Configuration` 不允许改名）、27（`AT %MBxxxx` 副本必冲突）、28（RETAIN 段被 IDE 自动改写，无法字节级往返）、29/30（GVL 对象层级 + Folder 四条 GUID 关系）七条，README + SKILL.md 双写；`references/native-structure.md` 新增「GVL（全局变量列表）与 Folder 的 native 结构」整章（约 110 行）。
 

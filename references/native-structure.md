@@ -1441,15 +1441,41 @@ Gv_xRetain2  :BOOL;          →  Gv_xRetain2 AT %MB146918 : BOOL;
 （上一轮 `F01_Variable` 8 个 GVL 重建时能字节级一致，是因为那次保留了原地址、
 且原文件本来就是 IDE 已改写过的形态。）
 
-### POU 参与编译的前提
+### POU 参与编译的前提（2026-11-26 修正）
 
-`app.build()` 只编译**挂进任务调用列表**的 POU。游离在 Application 下的 POU
-（哪怕代码里写的是不存在的标识符）**恒 0 错误**。必须：
+**「不挂任务」只对编译分类成立，对预编译分类不成立。** 两个分类作用域不同：
+
+| 分类 | GUID | 作用域 | 未挂任务 POU 的负样本 |
+|---|---|---|---|
+| 预编译 | `217bc73e-759b-4a3c-bfa1-991c938a6541` | **Application 下全部 POU**（autocheck / 「检查程序」） | **报错**（ZZZ 命中 1） |
+| 编译 | `97f48d64-a2a3-4856-b640-75c046e37ea9` | **只含挂进任务调用列表的 POU**（`app.build()` / 菜单「编译」） | 不报错（ZZZ 命中 0） |
+
+实测（负样本 `xOut := ZZZ_NotExist_Symbol;`，`clear_messages` 后单一动作、主机侧等 20s 再读）：
+
+| 场景 | 预编译 ZZZ | 编译 ZZZ |
+|---|---|---|
+| 未挂任务，什么都不做 | 0 | 0 |
+| 未挂任务 + `app.build()` | **1** | 0 |
+| 未挂任务 + 「检查程序」 | **1** | 0 |
+| 挂进 MainTask + `app.build()` | **1** | **2** |
+| 挂进 MainTask + 「检查程序」 | **1** | **2** |
+| 删除 POU 后（对照组） | 0 | 0 |
+
+⇒ 用户点「检查程序」看到 `没有定义标识符'ZZZ_NotExist_Symbol'`，而 `app.build()`
+的编译分类干净，这不是矛盾——是**两个分类的作用域不同**。
+
+要让 POU 真正参与构建：
 
 ```python
 main_task = <Application / "Task Configuration" / "MainTask">
 main_task.pous.add("POU名")      # ScriptPouObjectList.add(str)
 ```
+
+⚠ **预编译消息是异步补齐的**。`system.clear_messages(cat)`（注意：要传分类参数，
+无参调用报 `takes exactly 1 argument (0 given)`）后立刻读是 0 条，
+5 秒后变 101 条。所以「清空 + 单一动作 + 等待 + 读」的判定实验，等待必须放在
+主机侧 Python（IDE 脚本里 sleep 会冻死界面）。判据：清空后空闲 20s 仍是 0 条
+（不会自行恢复），只有 `app.build()` / 「检查程序」/ 导入 才会把它填回来。
 
 `app.create_pou` 的第 2 个参数必须是 CLR 枚举
 `_3S.CoDeSys.ScriptEngine.BasicFunctionality.PouType`（反射取后 `System.Enum.Parse`），
