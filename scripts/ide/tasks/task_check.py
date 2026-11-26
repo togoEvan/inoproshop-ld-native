@@ -114,7 +114,14 @@ try:
                     shown_warn += 1
         if nw > shown_warn:
             L(u"  ... 另有 %d 条 Warning 未列出（模板自带，非本次新增）" % (nw - shown_warn))
-        L(u"=== %s : total=%d errors=%d warnings=%d ===" % (label, len(objs), ne, nw))
+        # ⚠ IDE 消息池有 100 条上限（lead 交叉验证发现）：溢出时会在分类里
+        #   塞「多于100个消息发生：跳过更多的消息信息」占位条目 ——
+        #   total≥100 即视为可能被截断，Error 计数可能低估，绝不静默通过。
+        truncated = len(objs) >= 100
+        if truncated:
+            L(u"  ⚠ total=%d ≥100，消息池可能被截断，Error 计数可能低估 —— 不可单独作为通过依据" % len(objs))
+        L(u"=== %s : total=%d errors=%d warnings=%d%s ===" % (
+            label, len(objs), ne, nw, u" [TRUNCATED]" if truncated else u""))
         return len(objs), ne, nw
 
     pre_total, pre_err, pre_warn = dump(CAT_PRE, cat_desc.get(CAT_PRE) or u"预编译")
@@ -143,10 +150,13 @@ try:
 
     total_err = pre_err + bld_err + other_err
     total_warn = pre_warn + bld_warn
+    # 任一分类 total≥100 即整体标记：Error 可能被 100 条上限截断而低估
+    truncated = (pre_total >= 100) or (bld_total >= 100)
 
-    L(u"=== 验收结论 : %s (预编译 %d + 编译 %d + 其它 %d = 合计 %d 错误, %d 警告) ===" % (
+    L(u"=== 验收结论 : %s (预编译 %d + 编译 %d + 其它 %d = 合计 %d 错误, %d 警告)%s ===" % (
         u"通过" if total_err == 0 else u"不通过",
-        pre_err, bld_err, other_err, total_err, total_warn))
+        pre_err, bld_err, other_err, total_err, total_warn,
+        u" ⚠ 消息池≥100 可能截断，结果存疑" if truncated else u""))
 
     if pre_total == 0 and bld_total > 0:
         L(u"⚠ 预编译 0 条而编译有消息，疑似撞上 build 后的异步重建窗口，请等 10s 后重跑本脚本")

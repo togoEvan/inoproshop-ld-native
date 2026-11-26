@@ -209,7 +209,14 @@ def parse_network(net):
             if og == G_OPERAND:
                 iscoil = text_of(o, "IsCoil", "False")
                 nm = operand_name(o)
-                kind = "COIL" if iscoil == "True" else "OPERAND"
+                if iscoil == "True":
+                    # S/R 线圈区分（lead 交叉验证发现漏洞：只判 IsCoil 时
+                    # Flags 2(S)→3(R) 负样本能通过——置位改复位，状态机永不进 IDLE）
+                    # 实测：0=普通线圈，2=Set，3=Reset。Flags 在线圈节点直接下面。
+                    fl = flag_of(o, "Flags", "Flags") or 0
+                    kind = {0: "COIL", 2: "COIL_S", 3: "COIL_R"}.get(fl, "COIL_F%s" % fl)
+                else:
+                    kind = "OPERAND"
                 outputs.append({"kind": kind, "target": nm})
             elif og == G_BOX:
                 outputs.append({"kind": "BLOCK",
