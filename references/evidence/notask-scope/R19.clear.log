@@ -1,0 +1,18 @@
+=== op=nothing ===
+-- clear_messages 前 --
+  [before] 预编译 : 101 条 (ZZZ 0)
+  [before] 导出/导入 : 0 条 (ZZZ 0)
+  [before] 编译 : 105 条 (ZZZ 0)
+  [before] 脚本消息 : 0 条 (ZZZ 0)
+-- 清空后 --
+  [after_clear] 预编译 : 0 条 (ZZZ 0)
+  [after_clear] 导出/导入 : 0 条 (ZZZ 0)
+  [after_clear] 编译 : 0 条 (ZZZ 0)
+  [after_clear] 脚本消息 : 0 条 (ZZZ 0)
+什么都不做（对照组）
+-- 动作后（注意：命令可能是异步的，结果见后续 dump）--
+  [after_action] 预编译 : 0 条 (ZZZ 0)
+  [after_action] 导出/导入 : 0 条 (ZZZ 0)
+  [after_action] 编译 : 0 条 (ZZZ 0)
+  [after_action] 脚本消息 : 0 条 (ZZZ 0)
+=== done ===

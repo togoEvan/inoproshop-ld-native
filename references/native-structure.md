@@ -1,6 +1,43 @@
 # LD Native XML 结构与节点类型
 
-## 语言 GUID（本机反射所得）
+> **阅读路径**：先看 §1~§4 摸清基础（GUID / 层级 / 节点类型 / 位掩码），
+> 再按要画的元素跳到对应章节。带 ⚠ 的章节是踩过坑、有实测纠正的，**必读**。
+
+## 目录
+
+**基础**
+- §1 语言 GUID（本机反射所得）
+- §2 层级结构
+- §3 关键节点类型
+- §4 Operand 内部 Flags 位掩码
+
+**元素标准结构**
+- §5 单条件 rung：不要 AND 框，触点直挂 RValue ⚠
+- §6 MOVE 框标准结构
+- §7 功能框容器不对称规律 + MOVE 三形态
+- §8 FUNCTION 调用框（CallType=Function）
+- §9 功能块（FB）调用标准结构
+- §10 挂载位置规则
+- §11 ENO 引脚
+- §12 Id 分配
+- §13 OUT 操作数
+- §14 NETITEM 的 Flags 位：整级输出取反
+- §15 RValue 的类型可以是分支组本身
+- §16 RValue 容器的完整值域
+- §17 真实业务工程的全量结构普查（解析别人的工程先读这节）
+- §18 触点取反位掩码与网络级字段
+- §19 LD 文档级转换标志字段群
+- §20 ⚠ 铁律：分支组的 Trees 必须有 ≥ 2 条支路
+- §21 分支组 Input 槽的公共前缀
+- §22 新建 POU 的完整流程
+- §23 定时器功能框（TON）标准结构
+- §24 EXECUTE 框：LD 内嵌 ST 代码块
+- §25 FUNCTION_BLOCK 里的 LD 写法
+- §26 ⚠ 线圈 / 输出引脚的 Operand 不带 Name 属性
+- §27 轴控指令（HC_MovePtpV / HC_MovePtpR）
+- §28 GVL（全局变量列表）与 Folder 的 native 结构
+
+## 1 语言 GUID（本机反射所得）
 
 - LD（梯形图）: `29148beb-8dd2-4bb8-8b77-ab9fe196c1ba`
 - ST: `cc393387-a21c-4f68-a3e3-84c36951965d`
@@ -8,7 +45,7 @@
 
 取法：`Activator.CreateInstance(ScriptImplementationLanguages).ladder`
 
-## 层级结构
+## 2 层级结构
 
 ```
 NetworkList
@@ -22,7 +59,7 @@ NetworkList
 `NetworkItems` 的直接子节点可以不是 NETITEM —— **EXECUTE 框（内嵌 ST）就直挂这一层**，
 见下文「EXECUTE 框」一节。
 
-## 关键节点类型
+## 3 关键节点类型
 
 | GUID | 含义 | 要点 |
 |------|------|------|
@@ -39,7 +76,7 @@ NetworkList
 | `{a5de0b0b-1cb5-4913-ac21-9d70293ec00d}` | TextLines 行 | 每行含 Id/Tag/Text |
 | `{d9a99d73-b633-47db-b876-a752acb25871}` | Network 单网络容器 | |
 
-## Operand 内部 Flags 位掩码
+## 4 Operand 内部 Flags 位掩码
 
 | 值 | 含义 | 适用 |
 |----|------|------|
@@ -48,7 +85,7 @@ NetworkList
 | 2 | S 置位 | 线圈置位 |
 | 3 | R 复位 | 线圈复位 |
 
-## 单条件 rung：**不要 AND 框**，触点直挂 RValue（2026-11-25 实测纠正）
+## 5 单条件 rung：**不要 AND 框**，触点直挂 RValue（2026-11-25 实测纠正）
 
 ⚠ **本节曾写错，现已实测纠正。** 旧结论是「单条件必须补一个 TRUE 触点占位」，用户看图形后指出「TRUE 常开一直接通，相当于没加，多此一举」——**用户是对的**，正确做法是压根不建 AND 框。
 
@@ -87,7 +124,7 @@ netitem_box_rvalue(and_box([contact(u"xCond"), contact(u"TRUE")]), [coil(u"xOut"
 
 > 详细报错对照见 [precompile-errors.md §2b](precompile-errors.md)。
 
-## MOVE 框标准结构（已验证预编译 0 错误）
+## 6 MOVE 框标准结构（已验证预编译 0 错误）
 
 ```xml
 <Single Type="{acfc6f68...}">   <!-- 直接挂 Network/NetworkItems -->
@@ -101,7 +138,7 @@ netitem_box_rvalue(and_box([contact(u"xCond"), contact(u"TRUE")]), [coil(u"xOut"
 </Single>
 ```
 
-## 功能框容器不对称规律 + MOVE 三形态（2026-11-25 全工程 126 个 POU 实测）
+## 7 功能框容器不对称规律 + MOVE 三形态（2026-11-25 全工程 126 个 POU 实测）
 
 用 `scripts/ide/scan_all_native.py` 一键导出全工程所有对象后全量统计，得到两条**容器形态铁律**：
 
@@ -132,7 +169,7 @@ netitem_box_rvalue(and_box([contact(u"xCond"), contact(u"TRUE")]), [coil(u"xOut"
 用途：①学习时**批量扫描未知 BoxType**（`glob('scan_*.native')` 一把梭）；
 ②回归对比（新生成结构与模板原生 POU 同场跑 check_slots）。
 
-## FUNCTION 调用框（CallType=Function，2026-11-25 全工程实测）
+## 8 FUNCTION 调用框（CallType=Function，2026-11-25 全工程实测）
 
 **函数（有返回值）在 LD 里的调用框**，全工程 35 处（EtcStatusV2 / EventRecordV2 /
 PackMLSCCmdSum / PackMLConfiguer / PackMLScCmdInit）。与 FB 框的关键差异：
@@ -159,7 +196,7 @@ PackMLSCCmdSum / PackMLConfiguer / PackMLScCmdInit）。与 FB 框的关键差�
   **直接接工程全局实例成员**（`PML0.stCmd.stSc`），不要自己声明局部变量
   （`PML0` 是全局实例，check_symbols 需加 `PLC_GLOBAL_SYMBOLS=Master,PML0` 白名单）
 
-## 功能块（FB）调用标准结构（act04 / act90 实测，2026-11-25）
+## 9 功能块（FB）调用标准结构（act04 / act90 实测，2026-11-25）
 
 **FB 调用与 MOVE 框同属 `{acfc6f68}` 功能框，但关键字段全不一样。**
 
@@ -273,7 +310,7 @@ GetOEE           EN=True  ENO=True   OutputParam=['ENO','xError','xBusy','eMessa
 | `assets/natives/fb_call_test.native` | **可直接克隆的 FB 调用模板**（上述三类合并成一个 POU） |
 | 生成器 `scripts/examples/make_fb_call_test.py` | 三类 CallType 各一个，全部往返一致、双分类 0 错误 |
 
-## 挂载位置规则
+## 10 挂载位置规则
 
 MOVE 框（功能框）有两个合法位置：
 
@@ -359,17 +396,17 @@ MOVE 框（功能框）有两个合法位置：
 - NETITEM.OutputItems 可挂**多个线圈**
 - 分支组的 `Input` 槽可放一个公共前缀触点（如 `TRUE`），实现「公共条件只画一次 + 竖线分叉」
 
-## ENO 引脚
+## 11 ENO 引脚
 
 - 功能框的 `ENO` 是一个 `Single Name="ENO" Type="bool">True` 节点，表示该框的 ENO 输出已启用/接线
 - **功能链末端的框可以删掉 `ENO` 节点**（不往后连接），实测预编译 0 错误
 - 中间框若需串接到下一框，保留 `ENO`
 
-## Id 分配
+## 12 Id 分配
 
 - 全部唯一；`UniqueIdGenerator` 需 ≥ 最大 Id（建议 +100 余量）
 
-## OUT 操作数
+## 13 OUT 操作数
 
 - OUT 输出操作数节点自身就是 `{c9b2f165}`（无 Operand 子层），取值用 `child(outop, "Operand")`
 
@@ -420,7 +457,7 @@ Object
 ├─ tree0: AND[ MOVE( IN← AND[ TRUE, xAlarm̄, ... ] ), CONN ]   ← 这个 TRUE 多余
 ```
 
-## NETITEM 的 Flags 位：整级输出取反
+## 14 NETITEM 的 Flags 位：整级输出取反
 
 `NETITEM.Flags`（`{668066f2}` 容器里的 `Flags` int）的 **bit 0 = 该梯级输出取反**，
 图形上表现为线圈前的小圆圈 `○`。
@@ -444,7 +481,7 @@ xStopped(常闭) ─┬─( ) xProduction
                 └─○─( ) xManual        ← 第二个 NETITEM 的 Flags=1
 ```
 
-## RValue 的类型可以是分支组本身
+## 15 RValue 的类型可以是分支组本身
 
 `NETITEM.RValue` 的 `Type` **不一定是** `{5f9848d3 RValue 容器}`：
 
@@ -463,7 +500,7 @@ xStopped(常闭) ─┬─( ) xProduction
 
 在 `{5f9848d3}` 里再包一层分支组会报 **「已标识项中有一项的格式无效」**。
 
-## RValue 容器的完整值域（2026-11-25 全工程 127 对象扫描）
+## 16 RValue 容器的完整值域（2026-11-25 全工程 127 对象扫描）
 
 NETITEM 的 `RValue` 字段首节点形态统计（143 处，全工程实测）：
 
@@ -478,7 +515,7 @@ NETITEM 的 `RValue` 字段首节点形态统计（143 处，全工程实测）�
 **要点**：功能框是最常见的 RValue 形态（52 处）——NETITEM 条件直接放 AND/比较框，
 不一定先包 `{5f9848d3}` 容器。生成时保持现有「AND 框当 RValue」写法即可。
 
-## 真实业务工程的全量结构普查（2026-11-25「除油倒盘-擦拭机-PLCV20261124」实测）
+## 17 真实业务工程的全量结构普查（2026-11-25「除油倒盘-擦拭机-PLCV20261124」实测）
 
 前面各节来自小样本 + 手写骨架。本节是对一个**真实产线工程**（403 对象 / 400 个
 export entry / 5804 个功能框 / 940 个分支组）逐字段统计的结果，用来校正「小样本
@@ -673,7 +710,7 @@ ExportFile
 4. `Flags` 是 `<Single Name="Flags">` 里再嵌 `<Single Name="Flags" Type="int">N`
    —— **取数值要取两层**。
 
-## 触点取反位掩码与网络级字段（2026-11-25 全工程实测补充）
+## 18 触点取反位掩码与网络级字段（2026-11-25 全工程实测补充）
 
 - **触点 `Operand.Flags.Flags` 值域仅 0/1**（1295 处 =0 正开、62 处 =1 常闭取反）——
   本机 IDE 的 LD 不用其它位（无 P/N 边沿形态；边沿检测要用 R_TRIG/F_TRIG FB）
@@ -684,7 +721,7 @@ ExportFile
   为 True（307 处），其余为 False——生成常量引脚时 BOOL 用 `Boolean=True`，
   数值/时间型用 `Boolean=False` + `Type=INT/UINT/TIME`
 
-## LD 文档级转换标志字段群（2026-11-25 全工程实测）
+## 19 LD 文档级转换标志字段群（2026-11-25 全工程实测）
 
 每个 LD `NetworkList` 所在的文档节点（`{25e509de...}` Implementation 容器内）还带
 一批**转换标志字段**（127 对象 × 恒定值；`user_fixed.native` 骨架已含，生成器不用管）：
@@ -702,7 +739,7 @@ ExportFile
 **生成新 POU 不需要写这些字段**——骨架 `user_fixed.native` 已带，改 NetworkList/TextLines
 时不碰它们。列在这里是为了：读别人工程时知道这些字段是**文档级元数据**，别当网络内容解析。
 
-## ⚠ 铁律：分支组的 Trees 必须有 ≥ 2 条支路
+## 20 ⚠ 铁律：分支组的 Trees 必须有 ≥ 2 条支路
 
 **单支路分支组会让 IDE 绘制网络时崩溃**，而且**预编译和编译都报 0 错误**，
 极易被误判为"验收通过"。
@@ -766,7 +803,7 @@ nets.append(network([branch([and_box([...]), and_box([...])])], u"注释"))
 - 但 **分支组必须 ≥2 条支路**
 - **单支路** 时：既不要套 `NETITEM`，也不要用 `branch()`，直接挂 AND 框
 
-## 分支组 Input 槽的公共前缀
+## 21 分支组 Input 槽的公共前缀
 
 分支组 `Input` 槽（`<Single Name="Input" Type=...>`）放公共前缀时，有两种合法形态：
 
@@ -786,7 +823,7 @@ inp = prefix.replace('<Single Type="', '<Single Name="Input" Type="', 1)
 Input 若是 AND 框，必须是**完整** AND 框（含 `CallType`/`Instance`/`BoxType`/`Id`），
 不能只写 `ContainsExtensibleInputs…InputItems` 的截断版本。
 
-## 新建 POU 的完整流程（实测通过）
+## 22 新建 POU 的完整流程（实测通过）
 
 以 `prg_PackMLCmdTest` 为例，7 网络、预编译 0 错误：
 
@@ -810,7 +847,7 @@ Input 若是 AND 框，必须是**完整** AND 框（含 `CallType`/`Instance`/`
 
 ---
 
-## 定时器功能框（TON）标准结构（act05 / HC_ValveCtrl 实测，2026-11-25）
+## 23 定时器功能框（TON）标准结构（act05 / HC_ValveCtrl 实测，2026-11-25）
 
 **TON 是 `{acfc6f68}` 功能框的一个特例，与普通 FB 调用有两处硬差异**：
 
@@ -896,7 +933,7 @@ OutputItems 长度 == OutputParam 个数（TON 固定 2 个：Q / ET）
 
 ---
 
-## EXECUTE 框：LD 内嵌 ST 代码块（HC_ValveCtrl 网络9 实测，2026-11-25）
+## 24 EXECUTE 框：LD 内嵌 ST 代码块（HC_ValveCtrl 网络9 实测，2026-11-25）
 
 **这是 LD 里直接嵌一段 ST 的官方写法**，`references/` 之前完全没有记载。
 
@@ -982,7 +1019,7 @@ STSnippet {b2131366}
 
 ---
 
-## FUNCTION_BLOCK 里的 LD 写法（HC_ValveCtrl 实测，2026-11-25）
+## 25 FUNCTION_BLOCK 里的 LD 写法（HC_ValveCtrl 实测，2026-11-25）
 
 **结论：FB 内部的 LD 与 PROGRAM 内部的 LD 在 native 层完全同构，没有任何额外字段。**
 
@@ -1023,7 +1060,7 @@ END_VAR
 
 ---
 
-## ⚠ 线圈 / 输出引脚的 Operand 不带 `Name` 属性（实测证伪）
+## 26 ⚠ 线圈 / 输出引脚的 Operand 不带 `Name` 属性（实测证伪）
 
 生成器里最容易写错的一处。`{c9b2f165}` Operand 节点的 `Name` 属性**分两种**：
 
@@ -1043,7 +1080,7 @@ END_VAR
 
 ---
 
-## 轴控指令（InoPack HC_MovePtpV / HC_MovePtpR 实测，2026-11-25）
+## 27 轴控指令（InoPack HC_MovePtpV / HC_MovePtpR 实测，2026-11-25）
 
 InoPack 模板的轴控封装是**两层结构**：
 
@@ -1360,7 +1397,7 @@ Busy 时就排队。这正是 AM521 蚊香形螺旋插补里踩到的同一个�
   「改声明区必须锚定 `Interface`」那条铁律的由来（一份 native 里 `TextLines` 有多处）
 - 轴控 FB 在 LD 里的调用框是常规 `CallType=FunctionBlock`，槽位规则同「功能块（FB）调用标准结构」
 
-## GVL（全局变量列表）与 Folder 的 native 结构（2026-11-25 实测，1319 行 / 8 个 GVL）
+## 28 GVL（全局变量列表）与 Folder 的 native 结构（2026-11-25 实测，1319 行 / 8 个 GVL）
 
 ### 对象层级
 
@@ -1441,28 +1478,33 @@ Gv_xRetain2  :BOOL;          →  Gv_xRetain2 AT %MB146918 : BOOL;
 （上一轮 `F01_Variable` 8 个 GVL 重建时能字节级一致，是因为那次保留了原地址、
 且原文件本来就是 IDE 已改写过的形态。）
 
-### POU 参与编译的前提（2026-11-26 修正）
+### POU 参与编译的前提（2026-11-26 二次修正）
 
-**「不挂任务」只对编译分类成立，对预编译分类不成立。** 两个分类作用域不同：
+**两个消息分类的作用域不同**，这是理解「为什么 build 干净但 IDE 里报错」的关键：
 
-| 分类 | GUID | 作用域 | 未挂任务 POU 的负样本 |
-|---|---|---|---|
-| 预编译 | `217bc73e-759b-4a3c-bfa1-991c938a6541` | **Application 下全部 POU**（autocheck / 「检查程序」） | **报错**（ZZZ 命中 1） |
-| 编译 | `97f48d64-a2a3-4856-b640-75c046e37ea9` | **只含挂进任务调用列表的 POU**（`app.build()` / 菜单「编译」） | 不报错（ZZZ 命中 0） |
-
-实测（负样本 `xOut := ZZZ_NotExist_Symbol;`，`clear_messages` 后单一动作、主机侧等 20s 再读）：
-
-| 场景 | 预编译 ZZZ | 编译 ZZZ |
+| 分类 | GUID | 作用域 |
 |---|---|---|
-| 未挂任务，什么都不做 | 0 | 0 |
-| 未挂任务 + `app.build()` | **1** | 0 |
-| 未挂任务 + 「检查程序」 | **1** | 0 |
-| 挂进 MainTask + `app.build()` | **1** | **2** |
-| 挂进 MainTask + 「检查程序」 | **1** | **2** |
-| 删除 POU 后（对照组） | 0 | 0 |
+| 预编译 | `217bc73e-759b-4a3c-bfa1-991c938a6541` | **`build()` 阶段覆盖 Application 下全部 POU**，与是否挂任务**无关** |
+| 编译 | `97f48d64-a2a3-4856-b640-75c046e37ea9` | **只含挂进任务调用列表的 POU** |
 
-⇒ 用户点「检查程序」看到 `没有定义标识符'ZZZ_NotExist_Symbol'`，而 `app.build()`
-的编译分类干净，这不是矛盾——是**两个分类的作用域不同**。
+实测（负样本 `prg_NoTaskTest` 里 `xOut := ZZZ_NotExist_Symbol;`；
+每次先 `clear_messages` 逐分类清空，再做**单一动作**，主机侧等 ≥10s 后独立读）：
+
+| 动作（清空后单独执行） | 预编译 ZZZ | 编译 ZZZ |
+|---|---|---|
+| 什么都不做（对照） | 0 | 0 |
+| 菜单「检查程序」`ab02b3c3` | **0**（不产生任何消息） | 0 |
+| `import_native` 导入 POU | 0 | 0 |
+| `app.build()`（POU **未挂**任务） | **1** | 0 |
+| `app.build()`（POU **已挂** MainTask） | **1** | **2** |
+| 删除 POU 后（对照） | 0 | 0 |
+
+⇒ **结论**：
+1. **预编译分类的报错来自 `app.build()`**，不是菜单「检查程序」。用户点「检查程序」
+   看到报错，是因为该菜单触发了构建/检查，消息由构建阶段写入；消息留在分类里不会消失。
+2. **菜单「检查程序」本身是只读的**，不产生任何消息，**不能用于验收**。
+3. **预编译覆盖全部 POU**（含未挂任务的），**编译只覆盖挂进任务的**。
+   所以「build 的编译分类干净」不能说明未挂任务的 POU 没问题。
 
 要让 POU 真正参与构建：
 
@@ -1471,11 +1513,11 @@ main_task = <Application / "Task Configuration" / "MainTask">
 main_task.pous.add("POU名")      # ScriptPouObjectList.add(str)
 ```
 
-⚠ **预编译消息是异步补齐的**。`system.clear_messages(cat)`（注意：要传分类参数，
+⚠ **预编译消息是异步补齐的**。`system.clear_messages(cat)`（**必须传分类参数**，
 无参调用报 `takes exactly 1 argument (0 given)`）后立刻读是 0 条，
-5 秒后变 101 条。所以「清空 + 单一动作 + 等待 + 读」的判定实验，等待必须放在
-主机侧 Python（IDE 脚本里 sleep 会冻死界面）。判据：清空后空闲 20s 仍是 0 条
-（不会自行恢复），只有 `app.build()` / 「检查程序」/ 导入 才会把它填回来。
+**约 10 秒**后才补齐到 101 条；清空后空闲 20s 仍是 0 条（不会自行恢复）。
+所以「清空 + 单一动作 + 等待 + 读」的判定实验，等待必须放主机侧 Python
+（IDE 脚本里 sleep 会冻死界面）。**等待不足会造成假阴性**——本轮曾因只等 10s 而漏读。
 
 `app.create_pou` 的第 2 个参数必须是 CLR 枚举
 `_3S.CoDeSys.ScriptEngine.BasicFunctionality.PouType`（反射取后 `System.Enum.Parse`），

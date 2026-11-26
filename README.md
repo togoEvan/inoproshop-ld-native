@@ -31,47 +31,74 @@ InoProShop 的梯形图存在一个 native XML 结构里。这个仓库提供：
 
 ## 铁律（先读这段，能省几小时）
 
+30 条，按主题分四组。编号沿用历史编号、不重排，方便 `SKILL.md` / `CHANGELOG.md` 交叉引用。
+
+| 组 | 主题 | 条目 |
+|---|---|---|
+| A | 验收与消息 | 1、13、17、18、23、24 |
+| B | 结构合法性 | 2、3、4、5、9、10、11、14、15、16、21、22 |
+| C | 挂载与实例 | 6、7、8、12、19、20 |
+| D | 任务配置与 GVL | 25、26、27、28、29、30 |
+
+（编号沿用历史编号，不重排，方便 `SKILL.md` / `CHANGELOG.md` 交叉引用。）
+
+### A. 验收与消息
+
 | # | 铁律 |
 |---|------|
-| 1 | **验收 = 预编译分类 0 错误 _且_ 编译分类 0 错误**。预编译 `217bc73e-…` 抓结构错误（槽位、IsContact、声明缺失），编译 `97f48d64-…` 抓语义错误（如 AND 操作数不足）。**只读预编译会漏掉后者**——2026-11-25 实测：预编译 0，构建报 N 条 `'AND'需要至少'2' 个操作数`。`task_check.py` 已同时跑「检查程序」+ `build()` 并输出合计结论。 |
-| 2 | 功能框 `InputItems` 槽位数 **必须等于** `InputParam` 参数数（MOVE = `[EN, IN]` 2 槽）。 |
-| 3 | 值输入引脚（IN 槽）必须 `IsContact=False`。从触点克隆残留 `True` → 预编译报 `不允许对类型 'SINT' 进行 'NOT' 操作`。 |
-| 4 | 操作数内部 `Flags/Flags=1` 是 **NOT 取反**标志。常量引脚必须清 0；触点取反才用 1。 |
-| 5 | 常量引脚 `Type=INT`、`Boolean=False`（写成 `BOOL` 会红框）。 |
-| 6 | 绝不 SetCursorPos / mouse_event / SetForegroundWindow。只走文件 IPC + PostMessage。 |
-| 7 | 不关 IDE。静默替换用「改名让位法」：`prg_X → prg_X_old_tmp` → import → 删旧。 |
-| 8 | 导出文件名每次唯一（`silent_after_HHMMSS.native`），否则弹覆盖确认框。 |
-| 9 | **图形里引用的每个符号，声明区必须有一行对应声明**。`import_native` 不会替你补声明，漏一个就报一串 `C0046: 没有定义标识符`（每个引用点一条）。 |
-| 10 | **单条件 rung 不要建 AND 框**，触点直接作为 `NETITEM.RValue`。AND 框只约束「框」——1 个槽时预编译报 `'AND'需要至少'2' 个操作数` + `检测到不一致元素 (不正确的输入序列)`；而裸触点直挂 RValue 实测 0 错误、往返结构不变。（旧结论「补一个 `TRUE` 触点占位」已作废：TRUE 恒通等于没加，用户看图形后指出「多此一举」，2026-11-25 三方对照实测纠正。） |
-| 11 | **分支组 `{827b9ec2}` 的 `Trees` 必须 ≥ 2 条支路**。只有 1 条时**预编译 0 错误、编译 0 错误，但 IDE 绘制该网络直接崩**（「在绘制该网络的时候遇到错误 / 不能显示内容 / 索引超出了数组界限」，堆栈在 `IBoxTreeParallel`）。单支路**不要用 `branch()`、不要套 `NETITEM`**，直接把 AND 框挂 `NetworkItems`。 |
-| 12 | **改声明区必须锚定 `Interface` 再找 `TextLines`，禁止裸 `find('<Array Name="TextLines"')`**。一份 native 里 `TextLines` 至少有 2 处：`Interface` 下的 POU 声明区，以及 EXECUTE 框 `STSnippet` 里的 ST 代码。`find()` 取到的是**文档中靠前的那个**——只要网络里有 EXECUTE 框（在网络列表里排在 Interface 前面），裸 `find` 就会把 POU 声明写进 ST 代码块、真正的声明区留着骨架旧变量，**预编译报 40+ 条 `符号 'PROGRAM'/'FUNCTION_BLOCK'/'BOOL' 不能识别` + `应该用';' 替换'...'`**（2026-11-25 实测 48 条）。正确写法：`p = raw.find('<Array Name="TextLines"', raw.find('<Single Name="Interface"'))`。 |
-| 13 | **验收脚本「读不到消息」必须抛错，绝不能返回空列表当 0 错误**。`get_message_objects` 需要分类对象；按 GUID 匹配分类时若写成 `except Exception: continue` + `return []`，一旦匹配失败就静默输出 `total=0 / 验收通过`——**这是假通过**。2026-11-25 实测：预编译真实有 48 条 Error，脚本却报 `预编译 : total=0 errors=0` 并判「通过」。`task_check.py` 已改为匹配不到分类即 `raise`，并先打印全部 5 个分类便于核对。 |
-| 14 | **`OutputItems` 项数必须等于 `OutputParam` 个数，且 `OutputParam` 含不含 `ENO` 由 `EN`/`ENO` 字段决定**。`EN/ENO=True` 的框（Function/Program/常规 FB/EXECUTE）第一项是 `ENO`，之后才是真输出；**`TON` 是 `EN/ENO=False`，`OutputParam=['Q','ET']` 不含 ENO**。别把「第 0 项恒为 `<Null/>` 对应 ENO」当死规矩——照抄会给 TON 少写一个输出项。19/19 样本实测 0 例外。⚠ 这条**预编译、编译、往返 diff 全都查不出来**（IDE 静默接受），只能靠「项数 vs 参数数」比对发现。 |
-| 15 | **往 XML 文本节点里塞自由文本，必须转义 `<` `>` `&`**。网络注释、声明区、ST 代码都是直接拼进 `<Single Name="Comment" Type="string">…</Single>` 的；注释里只要出现 `<Null/>`、`<>` 之类的字面量，XML 解析器就把它当成**真实子节点**。2026-11-25 实测：注释写 `不是 <Null/>`，导入后该 Network 的 `Comment` 下凭空多出一个 `Null` 子节点，节点数 363 vs 362，`rt_diff` 从 #275 起整段错位报 55 处 diff。**排查提示**：`rt_diff` 报「节点数不同 + 从某一处开始整段错位」时，先看那一处的父节点是不是 `Comment`/`Text`——十有八九是没转义。统一用 `make_ld_learn.xml_text()`。 |
+| 1 | **验收 = 预编译 `217bc73e` 0 错误 _且_ 编译 `97f48d64` 0 错误**。预编译抓结构错误（槽位、`IsContact`、声明缺失），编译抓语义错误（AND 操作数不足等）。只读一个分类必漏。⚠ **`task_check.py` 只读不编译**——`app.build()` 会**清空预编译分类再异步重建**，build 返回后立刻读是 0 条（假通过）；要强制重建须「`task_build.py` → 主机侧等 ≥10s → `task_check.py`」。 |
+| 13 | **验收脚本「读不到消息」必须抛错，绝不能返回空列表当 0 错误**。两个独立的假通过来源：① `except Exception: continue` + `return []` 把「读失败」伪装成「没错误」（实测真实 48 条 Error 却报「通过」）；② **`severity` 用 `getattr` 读不到值**——它是 .NET 枚举，必须 `m.GetType().GetProperty('severity').GetValue(m, None)`，否则恒空、统计恒 0。匹配不到分类即 `raise`，并先打印全部分类清单。 |
+| 17 | **不要在 IDE 脚本里 `sleep()` 或轮询消息**——IDE 脚本跑在主线程，会把界面冻死（用户两次反馈「软件卡死了」）。IDE 侧只做「读一次、写文件、立刻返回」（<1s），**计时与重试全部放主机侧 Python**。 |
+| 18 | **消息来源只有两个可靠通道**：① `import_native` 导入瞬间；② `app.build()`。**编译/检查类菜单命令走缓存，读不到真实错误**（逐个实测 8 条命令，预编译分类全部 0 条）。菜单「检查程序」`ab02b3c3` 实测**不产生任何消息**。⚠ 另两个致命细节：**绝不能 `clear_messages` 后就指望消息回来**（除非再 build）；「改一个字符再改回」强制变脏实测无效。 |
+| 23 | **从未构建过的工程，编译分类 `97f48d64` 不存在**。`get_message_categories()` 只返回 2 个；必须先跑一次 `app.build()`（**不 clear**）才出现第 3 个。别因分类不存在就当 0 错误通过。真实工程构建后剩下的错误不一定是你的——先 `grep 你的 POU 名`，为 0 即无关，结论须如实区分「模板原有」与「本次新增」。 |
+| 24 | **两分类的作用域不同（2026-11-26 实测）**：① **预编译分类**在 `build()` 阶段覆盖 **Application 下全部 POU**，与是否挂任务**无关**；② **编译分类**只含**挂进任务调用列表**的 POU。负样本 `xOut := ZZZ_NotExist_Symbol;`：未挂任务 → 预编译 ZZZ **1**、编译 ZZZ **0**；挂上 MainTask → 预编译 **1**、编译 **2**。**预编译消息异步补齐**：`clear_messages(cat)`（**必须传分类参数**）后立刻读 0 条，约 10s 后 101 条；空闲 20s 仍是 0 条（不自恢复）。 |
 
-| 16 | **`Instance.Operand` 只有 FB 才写实例名，其余一律 `<Null/>`；写成空 `<Single>` 会在框上方多画一个可填写的小方框**。规律（按 `CallType`）：`FunctionBlock` → `<Single Type="string">实例名</Single>`；`Action` / `Function` / `Program` / `And` / `Move` → `<Null Name="Operand" />`。2026-11-25 实测：`action_box()` 写成空 Single，IDE 在 actAbs 框上方画出一个**可填参数的红色小方框**；用户两次指出「正常调用没有这个小方块」「actAbs_NOPE 上面还是有小方框可以填写参数」——第二句正是关键线索：连名字错误的框也带方框，说明与 `Flags.Fixed`、与 BoxType 是否合法**都无关**，纯粹是 Operand 节点形态问题。全量对照 16 个真实 Action 框，**全部是 `<Null/>`**。⚠ 这条预编译/编译/往返 diff 全都查不出来。 |
-| 17 | **不要在 IDE 脚本里 `time.sleep()` 或轮询消息——会把 InoProShop 界面冻住**。IDE 脚本跑在主线程上，`sleep(8)` + `process_messageloop()` 循环直接导致用户反馈「你在等待的时候软件卡死了」「还是卡死」。正确分工：**IDE 侧脚本只做「读一次、写文件、立刻返回」（<1s），计时与重试全部放主机侧 Python**。`scripts/ide/task_check.py` 已改为单次快照、零 sleep、零循环。 |
-| 18 | **验收消息只能靠「导入后立刻读」，任何编译命令都走缓存、都读不到真实错误**。2026-11-25 逐个实测（工程里放必然报错的 `BoxType=actAbs_NOPE`）：`清理` / `重新编译` / `（旧）编译` / `检查所有对象` / `运行静态分析` / `生成代码` / `生成二进制文件` / `编译` → **预编译分类全部 0 条**；只有 `（旧）重新编译` 会真跑构建，但预编译仍是 0。**只有导入动作触发的自动检查会产出真实预编译消息**。⚠ 另有两个致命细节：① **绝不能 `clear_messages`**——错误消息是导入时产生的，清掉就永久丢失；② 不要用「把声明改一个字符再改回」来强制变脏，实测无效。 |
-| 19 | **action 的 ST 体只能引用宿主 POU 声明区里的变量**。action 属于哪个 POU，就只认那个 POU 的 `VAR`。2026-11-25 实测：`prg_AxisCallTest` 的 `actAbs` 写了 `xPtpCond := ...`，而 `xPtpCond` 只在 `fb_AxisSkelTest` 里声明 → 预编译报 `[Error] actAbs | 没有定义标识符'xPtpCond'`。三个特征：① 消息归属对象是 **action 名**不是 POU 名；② 只在**预编译**分类，不在编译分类；③ 编译分类照样报「0 错误,0 警告」。 |
-| 20 | **造负样本必须精确替换目标字段，不能连带改掉同名字段**。2026-11-25 踩坑：用 `s.replace('>actAbs<', '>actAbs_ZZZ<')` 造负样本，结果把 `BoxType` **和** action Entry 的 `Name` 一起改了 → `actAbs_ZZZ` 成了真实存在的合法 action，编译 0 错误是**正确结果**，却被误判为「验收链路失效」，白折腾一轮。正确做法：只改 `<Single Name="BoxType" Type="string">actAbs</Single>` 这一处，Entry 名保持 `actAbs`；改完先 `grep -c` 自查（BoxType 1 处、Entry Name 1 处）。 |
+### B. 结构合法性
 
-| 21 | **FB 类框（TON / FB_xxx）的 `Instance.Type` 必须填 BoxType 名，`Instance.Operand` 必须填实例名**。2026-11-25 实测：给 TON 写 `Instance.Type` 为空 → `import_native` 抛 **「已标识项中有一项的格式无效。」**，而且**这是模态弹窗**：主线程被阻塞 → 守护进程心跳停止 → `bridge.py` 全部 180s 超时（看起来像「API 挂了」）→ `task_silent_import.py` 日志停在 `children before:` 没有 FATAL 行。必须人工点掉「确定」才恢复。**判断方法**：枚举该 PID 的可见窗口，主窗口 `IsWindowEnabled=False` + 另有窗口挂着 `确定` 按钮即是。**解除**：`SendMessage(hButton, BM_CLICK=0x00F5, 0, 0)`。⚠ `ET.parse()` 只验 XML 合法性，验不出这类语义错误。 |
-| 22 | **`check_slots.py` 不能按「输入槽数 == InputParam 名数」校验比较框 / MOVE / 算术框**。2026-11-25 真实产线工程实测：比较框（EQ/NE/GT/LT/GE/LE，共 911 处）`InputParam` 只有 `['EN']` 一个名字，但 `InputItems` **恒为 3 槽**（槽0=EN 触点、槽1/2=左右操作数）；MOVE `InputParam=['EN']` 但恒 2 槽（槽0=电源流）；ADD `InputParam=['EN']` 但恒 3 槽。旧版 `check_slots.py` 会把**模板原生 POU 全部误报**。已加 `_input_exempt(el, bt)` 豁免。**元教训**：校验脚本的「规则」本身也要拿真实工程回归，否则它会把正确结构判成错的。 |
-| 23 | **新打开的工程 / 从未构建过的工程，编译分类 `97f48d64` 根本不存在**。2026-11-25 实测：`get_message_categories()` 只返回 2 个（预编译 + 导出/导入）。必须先跑一次 `app.build()`（**不 clear_messages**）才会出现第 3 个分类。`scripts/ide/task_build_check.py` 就是干这个的。**不要**因为分类不存在就当 0 错误通过。另：真实工程构建后剩下的错误不一定是你的错——先 `grep 你的 POU 名`，为 0 即无关，结论要如实区分「模板原有」和「本次新增」。 |
-| 24 | **「不挂任务」只对编译分类成立，对预编译分类不成立**（2026-11-26 实测修正）。两类消息的作用域不同：<br>① **编译分类 `97f48d64`（`app.build()` / 菜单「编译」）= 只含挂进任务调用列表的 POU**。未挂任务的 POU 写 `xOut := ZZZ_NotExist_Symbol;` → 编译分类 105 条、**ZZZ 命中 0**；`main_task.pous.add("POU名")` 后 → 106 条、**ZZZ 命中 2**（`不能将类型 '未知类型: …' 转换为类型'BOOL'` + `没有定义标识符…`）。<br>② **预编译分类 `217bc73e`（autocheck / 「检查程序」）= 覆盖整个 Application 下的全部 POU，未挂任务照样检查**。同一负样本未挂任务时 → 预编译 **ZZZ 命中 1**（`没有定义标识符'ZZZ_NotExist_Symbol'`）。用户点「检查程序」看到的报错就在这里。<br>**推论**：验收必须**两个分类都看**。只看编译分类会漏掉未挂任务 POU 的语法错误（假通过）；只看预编译分类会漏掉构建期错误（类型转换、任务冲突等）。⚠ 预编译消息是**异步补齐**的：`clear_messages(cat)` 后立刻读是 0 条，5s 后变 101 条——**必须主机侧等待再读，不能在 IDE 脚本里 sleep**。 |
-| 25 | **`ScriptPouObjectList.remove("名字")` 不报错，但会留下 `Name=""` 的空槽项**，之后编译报 `MainTask: 期望标识符，而不是''`。`remove(idx)` / `remove(item)` / `replace(idx,'')` / `Item[i]` 全都摘不掉（`replace` 只是置空，`remove(idx)` 报「未在指定的集合中找到指定的项」）。**唯一可靠修法**：导出 Task Configuration native → 删掉那个空 `<Single Type="{f194d1ef-…}">` 块 → 覆盖导入。 |
-| 26 | **`Task Configuration` 不允许改名**。`task_silent_import.py` 的「改名让位」策略对它报 `名称 'Task Configuration_old_tmp' 对于本工程无效。` 必须走「直接 `import_native` 同名覆盖 + 主机侧自动点『全部(&A)』模态按钮」（`run_overwrite_import.py`）。 |
-| 27 | **`AT %MBxxxx` 是绝对物理地址，副本沿用原件地址必然冲突**。2026-11-25 实测：把 `F01_Variable` 的 8 个 GVL 复制一份、变量名加后缀、`AT` 地址原样保留 → 编译 **13 条「地址重复」错误**（`"Hr_xBuzzerShield_GVLVerify"地址重复(重复地址范围为：%MB131076~%MB131076)`）。**两条合法路线**：① 剥掉 `AT` 交给 IDE 分配；② 保留但整体平移到空闲区间（实测 `MB +311228 / MW +2000` 后 50 个地址与原件重叠 0，A/B 对照正样本 0 错误、负样本 2 条）。⚠ 正则要吃 `AT%MW1000` 这种**无空格**写法，用 `\s*` 不是 `\s+`。 |
-| 28 | **含 `PERSISTENT RETAIN` / `RETAIN PERSISTENT` 段的 GVL 无法「往返逐字节一致」**。IDE 导入时会自动给这些变量补绝对地址并规范化字面量：`Gv_xSaved :BOOL :=TRUE;` → `Gv_xSaved AT %MB131099 : BOOL := TRUE;`、`Gv_diTotal :DINT :=0;` → `Gv_diTotal AT %MB149512 : DINT := DINT#0;`。普通 `VAR_GLOBAL` 段和 `VAR_GLOBAL CONSTANT` 段**不被改写**。这类 GVL 只能逐字段比对类型/名字，别拿 diff 结果当失败证据。 |
-| 29 | **GVL = `Object > Interface > TextDocument > TextLines`**（没有 `NetworkList`，没有 `Implementation`）。一个 GVL 内可以有多段 `VAR_GLOBAL`；`PERSISTENT RETAIN` 与 `RETAIN PERSISTENT` 两种顺序都存在。`MetaObject.EmbeddedTypeGuids` 是 `Array[a9ed5b7e]` 单元素（Folder 的是 `<Null/>`）。Folder 生成的四条 GUID 关系见 `references/native-structure.md`。 |
+| # | 铁律 |
+|---|------|
+| 2 | 功能框 `InputItems` 槽位数 **==** `InputParam` 参数数（MOVE = `[EN, IN]` 2 槽）。 |
+| 3 | 值输入引脚（IN 槽）必须 `IsContact=False`。从触点克隆残留 `True` → `不允许对类型 'SINT' 进行 'NOT' 操作`。 |
+| 4 | 操作数内部 `Flags/Flags=1` 是 **NOT 取反**。常量引脚必须清 0；触点取反才用 1。`2`=S、`3`=R。 |
+| 5 | 常量引脚 `Type=INT`、`Boolean=False`（写 `BOOL` 会红框）。 |
+| 9 | **图形里引用的每个符号，声明区必须有一行对应声明**。`import_native` 不补声明，漏一个就每个引用点报一条 `C0046`（8 个未声明变量共 45 次引用 → 45 个错误）。 |
+| 10 | **单条件 rung 不要建 AND 框**，触点直接作为 `NETITEM.RValue`。AND 框 ≥2 槽约束的是「框」：1 槽报 `'AND'需要至少'2' 个操作数` + `检测到不一致元素`；裸触点直挂 0 错误、往返不变。旧结论「补一个 `TRUE` 触点占位」**已作废**（TRUE 恒通等于没加）。 |
+| 11 | **分支组 `{827b9ec2}` 的 `Trees` 必须 ≥ 2 条支路**。只有 1 条时**预编译 0 / 编译 0，但 IDE 绘制该网络直接崩**（`IBoxTreeParallel` 索引越界）。单支路**不要 `branch()`、不要套 `NETITEM`**，AND 框直挂 `NetworkItems`。 |
+| 14 | **往返 diff PASS ≠ 内容正确**。它只证明「IDE 没改写我的结构」；源文件本身错时 IDE 原样保留，diff 照样 0。必须配合双分类 0 错误 + **语义抽查**（打印声明区首行确认 `PROGRAM xxx` / `FUNCTION_BLOCK xxx`）。 |
+| 15 | **`OutputItems` 项数 == `OutputParam` 个数**；含不含 `ENO` 由 `EN`/`ENO` 字段决定。`EN/ENO=True`（Function/Program/常规 FB/EXECUTE）第一项是 `ENO`；**`TON` 是 `EN/ENO=False`、`OutputParam=['Q','ET']` 不含 ENO**，不接线要写**两个** `<Null/>`。19/19 样本 0 例外。⚠ 这条预编译/编译/往返 diff **全都查不出来**，只能靠 `check_slots.py`。 |
+| 16 | **往 XML 文本节点塞自由文本必须转义 `<` `>` `&`**。注释里写 `<Null/>` 会被解析成**真实子节点**，导致节点数不等、`rt_diff` 整段错位报几十处。统一走 `xml_text()`，且必须定义在 `textlines_block()` **之前**。**排查提示**：diff 报「节点数不同 + 整段错位」时先看父节点是不是 `Comment`/`Text`/`Title`/`Label`——是就 100% 是转义问题。 |
+| 21 | **FB 类框（TON / FB_xxx）的 `Instance.Type` 必须填 BoxType 名、`Instance.Operand` 必须填实例名**。写空 `Instance.Type` → `import_native` 抛 **「已标识项中有一项的格式无效。」**，且是**模态弹窗**：主线程阻塞 → 守护心跳停 → `bridge.py` 全部超时（看起来像「API 挂了」）。判断：枚举该 PID 可见窗口，主窗口 `IsWindowEnabled=False` + 另有窗口挂 `确定`；解除：`SendMessage(hButton, BM_CLICK=0x00F5, 0, 0)`。⚠ `ET.parse()` 验不出这类语义错误。 |
+| 22 | **`check_slots.py` 不能按「输入槽数 == `InputParam` 名数」校验比较框 / MOVE / 算术框**。比较框 `InputParam` 只有 `['EN']` 但 `InputItems` **恒 3 槽**；MOVE 恒 2 槽；ADD 恒 3 槽。旧规则会把模板原生 POU 全部误报，已加 `_input_exempt()`。**元教训**：校验脚本的规则本身也要拿真实工程回归。 |
 
-完整对照见 [`references/precompile-errors.md`](references/precompile-errors.md)。
+### C. 挂载与实例
 
-> **铁律 12/13 的元教训**：往返 diff PASS **不等于**内容正确。上次 `rt_diff.py` 两个 POU 都是 `total structural diffs: 0`，但源文件本身就是错的——IDE 把错误原样保留，往返当然一致。**往返一致只能证明「IDE 没改写我的结构」，不能证明「我的结构是对的」**，必须配合双分类 0 错误 + 语义抽查（如打印声明区首行确认是 `PROGRAM xxx` / `FUNCTION_BLOCK xxx`）。
+| # | 铁律 |
+|---|------|
+| 6 | **绝不动真实鼠标/不抢焦点**：只用消息式自动化（文件 IPC、`PostMessage`）；绝不 `SetCursorPos` / `mouse_event` / `SetForegroundWindow`。 |
+| 7 | **不关闭 IDE**：静默替换用「改名让位法」（`prg_X → prg_X_old_tmp` → import → 删旧）。 |
+| 8 | **导出文件每次唯一命名**（`silent_after_HHMMSS.native`），否则弹覆盖确认框。 |
+| 12 | **改声明区必须锚定 `Interface` 再找 `TextLines`**，禁止裸 `find('<Array Name="TextLines"')`。一份 native 里 `TextLines` 至少 2 处（声明区 + EXECUTE 框 `STSnippet`），而网络列表排在 `Interface` 之前——只要网络里有 EXECUTE 框，裸 `find` 就会把声明写进 ST 代码块，预编译报 40+ 条 `符号 'PROGRAM'/'BOOL' 不能识别`（实测 48 条）。正确：`raw.find('<Array Name="TextLines"', raw.find('<Single Name="Interface"'))`。 |
+| 19 | **action 的 ST 体只能引用宿主 POU 声明区的变量**。三个特征：① 消息归属对象是 **action 名**不是 POU 名；② 只在**预编译**分类；③ 编译分类照样报「0 错误, 0 警告」。 |
+| 20 | **造负样本必须精确替换目标字段**。`s.replace('>actAbs<', '>actAbs_ZZZ<')` 会把 `BoxType` **和** Entry `Name` 一起改 → `actAbs_ZZZ` 成了合法 action，0 错误是**正确结果**却被误判「验收链路失效」。只改 `<Single Name="BoxType">` 一处，改完 `grep -c` 自查。 |
+
+### D. 任务配置与 GVL
+
+| # | 铁律 |
+|---|------|
+| 25 | **`ScriptPouObjectList.remove("名字")` 不报错，但留下 `Name=""` 空槽项**，之后编译报 `MainTask: 期望标识符，而不是''`。`remove(idx)` / `remove(item)` / `replace(idx,'')` / `Item[i]` 全都摘不掉。**唯一可靠修法**：导出 Task Configuration native → 删掉空 `<Single Type="{f194d1ef-…}">` 块 → 覆盖导入。 |
+| 26 | **`Task Configuration` 不允许改名**（报 `名称 'Task Configuration_old_tmp' 对于本工程无效。`）。必须走「`import_native` 同名覆盖 + 主机侧自动点『全部(&A)』」（`run_overwrite_import.py`）。 |
+| 27 | **`AT %MBxxxx` 是绝对物理地址，副本沿用原件地址必然冲突**（实测 13 条「地址重复」）。两条合法路线：① 剥掉 `AT` 交给 IDE 分配；② 保留但整体平移到空闲区间（实测 `MB +311228 / MW +2000` 后重叠 0）。⚠ 正则要吃 `AT%MW1000` 无空格写法，用 `\s*` 不是 `\s+`。 |
+| 28 | **含 `PERSISTENT RETAIN` / `RETAIN PERSISTENT` 段的 GVL 无法字节级往返**。IDE 会自动补绝对地址并规范化字面量（`:=TRUE` → `AT %MB131099 : BOOL := TRUE`）。普通 `VAR_GLOBAL` 与 `CONSTANT` 段不被改写。这类 GVL 只能逐字段比对。 |
+| 29 | **GVL = `Object > Interface > TextDocument > TextLines`**（无 `NetworkList`、无 `Implementation`）。一个 GVL 内可有多段 `VAR_GLOBAL`；`EmbeddedTypeGuids` 是 `Array[a9ed5b7e]` 单元素（Folder 的是 `<Null/>`）。 |
+| 30 | **Folder 的四条 GUID 关系**：`Properties.ParentObjects` 的 Key = 导出根 SV Guid、Value = 父容器 guid；`ParentSVNodeGuid` = 该 Value；`MetaObject.ParentGuid` = **祖父** guid（直属 Application 的 Folder → 全零）；被导出的 Folder 自身 `IsRoot=True`。详见 `references/native-structure.md`。 |
+
+### 三条元教训
+
+> **① 往返 diff PASS 不等于内容正确**（铁律 14）。`rt_diff` 报 0 只说明「IDE 没改写我的结构」；源文件本身错时 IDE 原样保留，diff 当然一致。必须配合双分类 0 错误 + 语义抽查。
 >
-> **铁律 15 的反向提醒**：这条与 12/13 互补——12/13 说「diff PASS 不算数」，15 说「diff FAIL 可能是自己生成的 XML 不合法」。看到 diff FAIL 先别改结构，**先确认报错位置是不是 `Comment`/`Text` 这类文本节点**。
+> **② 「必须补占位 / 必须加冗余元素」这类绕行修法要追问一句：不绕行能不能直接不建这个东西**。铁律 10 就是靠用户看图形发现「TRUE 恒通等于没加」。生成器四层自检（`check_slots` / 双分类 / 往返 diff / `ld_logic`）全过却仍错，因为它们校验的是「结构合法」，没有一层校验「这个结构该不该存在」。
 >
-> **铁律 18 的元教训（本轮最大教训）**：我连续三轮把「编译命令报 0 错误」当成「代码没问题」，实际上**所有编译命令都在读缓存**。真正的错误消息只在**导入瞬间**产生一次，`clear_messages` 一清就永久消失。所以验收流程必须是：**导入 → 等 1~2 秒（主机侧）→ 单次读快照**，而不是「清消息 → 编译 → 读」。另外，反向验证是唯一能证明验收链路有效的手段——但负样本本身必须造对（铁律 20）。
+> **③ 反向验证是唯一能证明验收链路有效的手段，但负样本必须造对**（铁律 20）。同时，等待时长不足会造成**假阴性**——比假阳性更危险：本轮曾因只等 10s 而漏读消息。
 
 ---
 

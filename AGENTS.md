@@ -46,7 +46,8 @@ README.md  →  references/native-structure.md  →  assets/natives/ 里的样�
 
 **只读预编译会漏掉编译分类的错误。** 2026-11-25 实测：预编译 0 错误，构建报 N 条 AND 操作数不足。原因是单条件 rung 的顶层 AND 只有 1 个输入槽——预编译阶段不校验元数，构建阶段才报。
 
-- `scripts/ide/task_check.py` 已同时执行「检查程序」+ `app.build()`，并输出 `=== 验收结论 : 通过/不通过 ===`。
+- `scripts/ide/task_check.py` 执行 `app.build()` 并读预编译 + 编译两个分类，输出 `=== 验收结论 : 通过/不通过 ===`。
+- ⚠ 菜单「检查程序」是**只读命令**（2026-11-26 实测不产生任何消息），不能用于验收；真正写消息的是 `import_native` 和 `app.build()`。
 - 报告完成前必须实际跑一次 `task_check.py` 并贴出**验收结论**那一行。
 - 任一分类不为 0 时，**禁止**说「已完成」「应该没问题」。
 

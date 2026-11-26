@@ -103,7 +103,7 @@ python bridge.py eval_file '{\"path\": \"D:\\\\plc_mcp\\\\ide\\\\task_check.py\"
 
 | 脚本 | 用途 |
 |------|------|
-| task_check.py | 执行「检查程序」+ 读预编译/编译分类 → ipc/check.log（**验收必用**） |
+| task_check.py | `app.build()` + 读预编译/编译分类 → ipc/check.log（**验收必用**） |
 | task_readnow.py | 不清空直接读当前 5 个分类 → ipc/readnow.log（排查异步消息） |
 | task_export_fixed.py | 导出工程内指定 POU → ipc/user_fixed.native（学结构用） |
 | task_silent_import.py | 静默导入核心（由 do_replace.py 调用，一般不直接跑） |
@@ -190,7 +190,7 @@ Win32 GetMenu(hwnd) = 0
 
 ## system.commands
 
-- 索引 91 ≈「检查程序」（tokens=project/buildactiveapp，触发预编译）
+- 索引 91 ≈「检查程序」（tokens=project/buildactiveapp）—— ⚠ 2026-11-26 实测该命令**不产生任何消息**，只读，不能用于验收；验收走 `app.build()`
 - 索引 102 ≈「检查所有对象」（tokens=project/checkall）
 - 命令有 `execute()` 方法
 

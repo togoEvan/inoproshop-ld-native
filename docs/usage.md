@@ -106,7 +106,7 @@ BASE = D:\plc_mcp (source: derive:D:\plc_mcp\ide)
 ### 3.2 验收步骤
 
 ```python
-# 经桥在 IDE 内执行检查脚本（内部先「检查程序」，再 build()）
+# 经桥在 IDE 内执行检查脚本（内部跑 app.build()，再读两个分类）
 import bridge
 bridge.call("eval_file", path=r"<BASE>/ide/task_check.py", timeout=120)
 ```

@@ -1,61 +1,41 @@
 # -*- coding: utf-8 -*-
-"""验收：动态枚举全部消息分类并全量扫描，单次快照，绝不阻塞 IDE。
-
-已知四分类：预编译(217bc73e) + 编译(97f48d64) + 格式检查(0986c5dd)
-+ 附加代码检查(220493a1)。大工程里编译错误还可能落到其它分类
-（Library Manager、POU 专属、工程树等），所以其余分类也全量扫描
-（学自 inoproshop-mcp 的 compile_project.py，2026-11-25）。
+"""验收：只读两个分类的消息并统计 Error / Warning，单次快照，绝不阻塞 IDE。
 
 ═══════════════════════════════════════════════════════════════════════
-为什么这个脚本「不编译、不清消息、不 sleep、不轮询」（2026-11-25 最终定论）
+设计要点（2026-11-25 定论 + 2026-11-26 两次修订）
 ═══════════════════════════════════════════════════════════════════════
-前几轮踩了一串坑，全部记在这里，别再重犯：
 
-【坑 1】在 IDE 脚本里 sleep + 轮询 → 界面卡死
-  IDE 脚本跑在 InoProShop 主线程上，time.sleep() 和 process_messageloop()
-  循环会把界面冻住，用户直接反馈「你在等待的时候软件卡死了」「还是卡死」。
-  → 铁律：IDE 侧脚本只做「读一次、写文件、立刻返回」，单次耗时控制在 1s 内。
-    计时/重试全部放主机侧（Python 主进程），IDE 毫不知情。
+【要点 1】本脚本**不编译、不清消息、不 sleep、不轮询**
+  ① IDE 脚本跑在 InoProShop 主线程，sleep / process_messageloop 循环会冻死界面
+     （用户两次反馈「你在等待的时候软件卡死了」）。
+  ② **`app.build()` 会清空预编译分类**，然后异步重建——实测 build 返回后立刻读
+     预编译是 **0 条**，约 10s 后才回到 101 条。所以「build 后立刻读」必然假通过。
+     → 构建与读取必须**分成两个脚本**，中间由主机侧 Python 等待 ≥10s。
+  ③ `clear_messages` 同理，清掉之后不会自行恢复（空闲 20s 仍是 0 条）。
 
-【坑 2】clear_messages 之后再也读不到错误
-  实测：导入 prg_AxisCallTest（actAbs 的 ST 体引用了不存在的 xPtpCond）后，
-  直接读快照 → 预编译分类里有
-      [Error] actAbs | 没有定义标识符'xPtpCond'
-  但如果先 clear_messages 再跑「重新编译」，预编译分类恒为 0 条，
-  编译分类只回一句「此应用程序是最新的」。
-  → 铁律：**不要 clear_messages**。错误消息是导入动作触发的自动检查产生的，
-    清掉就没了，而且后续任何编译命令都不会重算（走缓存）。
+【要点 2】severity 必须用反射读，且按枚举名判断（2026-11-26 实测）
+  `ScriptMessage` 的属性：`text` / `severity` / `object` / `number` / `prefix` ...
+  `severity` 是枚举 `_3S.CoDeSys.Core.Messages.Severity`，实测取值有
+  `Text`（普通信息）/ `Error` / `Warning`。
+  ⚠ **`getattr(m, 'severity')` 读不到值**（返回空/未知），必须走
+  `m.GetType().GetProperty('severity').GetValue(m, None)`。
+  旧版用 getattr + 字符串匹配 'err'，导致真实 1 条 Error 被统计成 0 —— **假通过**。
 
-【坑 3】「重新编译 / 清理+重新编译 / 检查程序 / 运行静态分析 / 生成代码」
-        全部走缓存，报 0 错误
-  逐个实测（工程里放一个必然报错的 BoxType=actAbs_NOPE）：
-      清理            → 预编译 0，编译「此应用程序是最新的」
-      重新编译        → 预编译 0，编译「此应用程序是最新的」
-      （旧）重新编译  → 预编译 0，编译「开始构建 / 代码典型化 / 编译完成 0 错误」
-      （旧）编译      → 预编译 0，编译「此应用程序是最新的」
-      检查所有对象    → 预编译 0
-      运行静态分析    → 预编译 0
-      生成代码        → 预编译 0
-      生成二进制文件  → 预编译 0
-      编译            → 预编译 0
-  → 结论：**没有任何一条编译命令能替代导入触发的自动检查**。
-    验收的正确时机 = 导入刚结束时立刻读一次。
+【要点 3】两个分类作用域不同，缺一不可
+  预编译 217bc73e = build 阶段覆盖 Application 下**全部 POU**（含未挂任务的）
+  编译   97f48d64 = 只含**挂进任务调用列表**的 POU
 
-【坑 4】负样本本身写错了，导致「以为验收链路坏了」
-  用 s.replace('>actAbs<', '>actAbs_ZZZ<') 造负样本，结果把
-  BoxType **和** action Entry 的 Name 一起改了 —— 于是 actAbs_ZZZ 变成一个
-  真实存在的合法 action，编译 0 错误是**正确结果**，不是假通过。
-  → 造负样本必须精确替换目标字段，只改 BoxType，Entry 名保持不动。
-    改完先 grep 自查两处（BoxType 1 处、Entry Name 1 处）。
+【要点 4】读不到分类 / 取不到消息必须抛错，绝不能静默返回空列表当 0 错误
 
 ═══════════════════════════════════════════════════════════════════════
-正确用法
+正确用法（主机侧串起来）
 ═══════════════════════════════════════════════════════════════════════
-  1. 导入 native（do_replace.py，导入瞬间会自动跑一次检查并落消息）
-  2. 等 1~2 秒（主机侧 time.sleep，不在 IDE 里）
-  3. 调本脚本读一次快照，看 check.log
-
-⚠ 铁律：读不到分类 / 取不到消息必须抛错，绝不能静默返回空列表当 0 错误。
+  A. 导入后验收：
+     do_replace.py 导入 → 主机侧 sleep 3 → task_check.py 读快照
+  B. 强制重新构建后验收：
+     task_build.py（只 app.build()）→ 主机侧 sleep 12 → task_check.py 读快照
+  C. 若 check.log 里预编译 total=0 而编译 total>0，说明刚好撞上异步窗口，
+     主机侧再 sleep 10s 重跑一次 task_check.py 即可。
 """
 import io
 import os
@@ -77,8 +57,21 @@ def L(m):
 
 CAT_PRE = u"217bc73e-759b-4a3c-bfa1-991c938a6541"
 CAT_BUILD = u"97f48d64-a2a3-4856-b640-75c046e37ea9"
-CAT_FMT = u"0986c5dd-ca06-40a7-94e5-bf42de3dfd91"
-CAT_CHECKS = u"220493a1-f49b-4416-9a3f-a545db707cbe"
+
+
+def prop(obj, name):
+    """反射读 .NET 属性（getattr 对 ScriptMessage 不可靠）。"""
+    try:
+        p = obj.GetType().GetProperty(name)
+        if p is not None:
+            return p.GetValue(obj, None)
+    except Exception:
+        pass
+    try:
+        return getattr(obj, name)
+    except Exception:
+        return None
+
 
 try:
     proj = projects.primary
@@ -89,12 +82,9 @@ try:
     # 只处理一次待办消息，绝不循环、绝不 sleep
     system.process_messageloop()
 
-    # ═══ 动态枚举全部消息分类（学自 inoproshop-mcp / multi-plc-agent）═══
-    # 硬编码 GUID 只覆盖常见分类；大工程里编译错误会落到其它分类
-    # （Library Manager、POU 专属、工程树等）。这里枚举运行时暴露的
-    # 每一个分类，全部扫描，防止漏读。
-    # 分类名称用 system.get_message_category_description() 动态取（实测可用），
-    # 不再硬编码中文标签——GUID 集合因版本/配置而异，名称才是稳定语义。
+    # ═══ 动态枚举全部消息分类 ═══
+    # GUID 集合因版本/配置而异，枚举运行时暴露的每一个分类；
+    # 名称用 get_message_category_description() 动态取，名称才是稳定语义。
     cats = {}
     for c in list(system.get_message_categories()):
         cats[unicode(c)] = c
@@ -102,7 +92,6 @@ try:
         raise RuntimeError(u"get_message_categories() 返回空，不得当作 0 错误")
 
     def cat_name(c):
-        """取分类可读名（实测本机 SP11 返回中文：编译/预编译/格式检查/导出导入/脚本消息）。"""
         try:
             d = unicode(system.get_message_category_description(c))
             if d:
@@ -118,67 +107,50 @@ try:
         cat_desc[guid] = nm
         L(u"  %s  %s" % (guid, nm))
 
-    def read_cat(guid, label):
-        """读一个分类；分类不存在直接抛错（不得当作 0 错误）。"""
+    def sev_of(m):
+        """取 severity 枚举名（Text / Error / Warning ...）。"""
+        v = prop(m, u"severity")
+        if v is None:
+            return u""
+        s = unicode(v)
+        if u"." in s:
+            s = s.rsplit(u".", 1)[-1]
+        return s
+
+    def dump(guid, label):
         c = cats.get(guid)
         if c is None:
             raise RuntimeError(u"消息分类 %s(%s) 不存在，不得当作 0 错误" % (label, guid))
-        return list(system.get_message_objects(c))
-
-    def msg_text(m):
-        for a in ("text", "message"):
-            try:
-                v = getattr(m, a)
-                if v:
-                    return unicode(v)
-            except Exception:
-                pass
-        return u""
-
-    def msg_sev(m):
-        try:
-            return unicode(getattr(m, 'severity', u''))
-        except Exception:
-            return u""
-
-    def msg_obj(m):
-        try:
-            return unicode(m.object.get_name())
-        except Exception:
-            return u""
-
-    def dump_cat(label, objs):
-        ne = 0
-        nw = 0
+        objs = list(system.get_message_objects(c))
+        ne = nw = 0
+        shown_err = shown_warn = 0
         for m in objs:
-            sev = msg_sev(m)
+            sev = sev_of(m)
             low = sev.lower()
-            if 'err' in low:
+            txt = prop(m, u"text")
+            txt = unicode(txt) if txt is not None else u""
+            if low == u"error":
                 ne += 1
-            elif 'warn' in low:
+                # Error 全打印（这是验收要看的）
+                L(u"  [Error] %s" % txt)
+            elif low == u"warning":
                 nw += 1
-            L(u"  [%s] %s | %s" % (sev, msg_obj(m), msg_text(m)))
-        return ne, nw
+                # Warning 只打前 10 条，避免刷屏
+                if shown_warn < 10:
+                    L(u"  [Warning] %s" % txt)
+                    shown_warn += 1
+        if nw > shown_warn:
+            L(u"  ... 另有 %d 条 Warning 未列出（模板自带，非本次新增）" % (nw - shown_warn))
+        L(u"=== %s : total=%d errors=%d warnings=%d ===" % (label, len(objs), ne, nw))
+        return len(objs), ne, nw
 
-    # ① 三个基础分类：缺一个就抛错（本机 SP11 实测必存在）
-    # ② 其余分类（含已知的 220493a1 附加代码检查）存在才读。
-    #    实测（2026-11-25 本机 SP11）：运行时只暴露 5 个分类，没有 220493a1——
-    #    外部项目记录的分类集合与本机不同，GUID 因版本/配置而异，
-    #    所以非基础分类不能设为「缺了就 raise」，否则验收永远过不去。
-    total_err = 0
-    total_warn = 0
-    for guid in (CAT_PRE, CAT_BUILD, CAT_FMT):
-        label = cat_desc.get(guid) or u"?"
-        objs = read_cat(guid, label)
-        L(u"=== %s : total=%d ===" % (label, len(objs)))
-        ne, nw = dump_cat(label, objs)
-        total_err += ne
-        total_warn += nw
-        L(u"  -> %s errors=%d warnings=%d" % (label, ne, nw))
+    pre_total, pre_err, pre_warn = dump(CAT_PRE, cat_desc.get(CAT_PRE) or u"预编译")
+    bld_total, bld_err, bld_warn = dump(CAT_BUILD, cat_desc.get(CAT_BUILD) or u"编译")
 
-    # 可选分类：其余全部分类，存在就读、计入合计
+    # 其余分类：存在才读，只报 Error
+    other_err = 0
     for guid in sorted(cats.keys()):
-        if guid in (CAT_PRE, CAT_BUILD, CAT_FMT):
+        if guid in (CAT_PRE, CAT_BUILD):
             continue
         label = cat_desc.get(guid) or u"?"
         try:
@@ -186,24 +158,25 @@ try:
         except Exception, e:
             L(u"=== %s %s : 读取失败 %s（忽略） ===" % (label, guid, e))
             continue
-        ne, nw = 0, 0
+        ne = 0
         for m in objs:
-            sev = msg_sev(m)
-            low = sev.lower()
-            if 'err' in low:
+            if sev_of(m).lower() == u"error":
                 ne += 1
-                L(u"  [%s] %s | %s" % (sev, msg_obj(m), msg_text(m)))
-            elif 'warn' in low:
-                nw += 1
-        if ne or nw:
-            L(u"=== %s %s : errors=%d warnings=%d ===" % (label, guid, ne, nw))
-        else:
-            L(u"=== %s %s : total=%d（无错误警告） ===" % (label, guid, len(objs)))
-        total_err += ne
-        total_warn += nw
+                txt = prop(m, u"text")
+                L(u"  [Error] %s | %s" % (label, unicode(txt) if txt else u""))
+        if ne:
+            L(u"=== %s : errors=%d ===" % (label, ne))
+        other_err += ne
 
-    L(u"=== 结论 : %s (合计 %d 错误, %d 警告，覆盖全部分类) ===" % (
-        u"通过" if total_err == 0 else u"不通过", total_err, total_warn))
+    total_err = pre_err + bld_err + other_err
+    total_warn = pre_warn + bld_warn
+
+    L(u"=== 验收结论 : %s (预编译 %d + 编译 %d + 其它 %d = 合计 %d 错误, %d 警告) ===" % (
+        u"通过" if total_err == 0 else u"不通过",
+        pre_err, bld_err, other_err, total_err, total_warn))
+
+    if pre_total == 0 and bld_total > 0:
+        L(u"⚠ 预编译 0 条而编译有消息，疑似撞上 build 后的异步重建窗口，请等 10s 后重跑本脚本")
 except Exception, e:
     L(u"FATAL %s\n%s" % (e, traceback.format_exc()))
 finally:
