@@ -105,14 +105,17 @@ def main():
         time.sleep(1.0)
         for pid in pids_of("InoProShop"):
             for h, title, cls, enabled in windows_of(pid):
-                if enabled:
-                    continue
-                # 主窗口被禁用 => 有模态框
+                # ⚠ 2026-11-26 实测修正：覆盖确认模态框挂在**未被禁用**的
+                # 框架窗口（标题 InoProShop(V1.10.0.3)）下，主工程窗口才被禁用。
+                # 旧逻辑 `if enabled: continue` 跳过了它，导致弹框永远扫不到、
+                # import_native 卡 400+ 秒直到人工干预。
+                # 修法：不再看 enabled，直接在每个顶层窗口的子控件里找按钮。
                 kids = children(h)
                 names = [k[1] for k in kids if k[1]]
-                if any(u"全部" in (n or "") for n in names):
+                if any(u"全部" in (n or u"") for n in names):
                     hit = click_all(h)
-                    print("clicked dialog button: %s (pid=%d)" % (hit, pid))
+                    print("clicked dialog button: %s (pid=%d, window=%r)"
+                          % (hit, pid, title))
                     clicked += 1
         if p.poll() is not None:
             break

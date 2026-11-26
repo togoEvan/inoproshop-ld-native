@@ -1522,3 +1522,36 @@ main_task.pous.add("POU名")      # ScriptPouObjectList.add(str)
 `app.create_pou` 的第 2 个参数必须是 CLR 枚举
 `_3S.CoDeSys.ScriptEngine.BasicFunctionality.PouType`（反射取后 `System.Enum.Parse`），
 传字符串报 `expected PouType, got str`，传数字报 `Cannot convert numeric value`。
+
+## 29 Struct DUT 的 native 结构（2026-11-26 实测，F02_Struct / 17 个顶层 DUT + SF01_Alarm 子文件夹 14 个）
+
+### 与 GVL 的同构关系
+
+Struct DUT（TypeGuid `2db5746d-d284-4425-9f7f-2663a34b0ebc`）与 GVL 高度同构：
+
+| 项 | GVL（`ffbfa93a`） | Struct DUT（`2db5746d`） |
+|---|---|---|
+| 声明载体 | `Object > Interface > TextDocument > TextLines` | 同左 |
+| `Object` 直属子节点 | `Interface` + `NetVarProperties` + `AddAttributeSubsequent` + `ParameterList` | **只有 `Interface` + `UniqueIdGenerator`（单 string）** |
+| `EmbeddedTypeGuids` | `Array[a9ed5b7e]` 单元素 | 同左（`Array[a9ed5b7e]` 单元素） |
+| 声明语法 | `VAR_GLOBAL … END_VAR`（可多段） | `TYPE 名 : STRUCT … END_STRUCT END_TYPE`（UNION 同理 `UNION … END_UNION`） |
+| 绝对地址 | `AT %MBxxxx` 写在声明行 | 不占内存地址，**无 AT 问题** |
+
+### ⚠ 类型名写在声明文本里（与 GVL 的最大差异）
+
+GVL 只有「变量名」；DUT 的**类型名**写在声明首行 `TYPE Struct_Clock :`。
+复制 DUT 时必须**同时改两处**，只改 `MetaObject.Name` 不改声明首行会导致类型名对不上：
+
+```
+MetaObject.Name                 : Struct_Clock_StructVerify
+TextLines[0] : TYPE Struct_Clock_StructVerify :     ← 必须一起改
+```
+
+成员行与 GVL 变量行同构（`标识符 : 类型;//注释`），跳过 `TYPE/STRUCT/UNION/END_*` 段标记行。
+
+### 实测记录（F02_Struct_Verify，2026-11-26）
+
+- 复制 17 个顶层 DUT（加 `_StructVerify` 后缀，成员名同加后缀）→ 逐个 `import_native` 到新建文件夹，17/17 成功，无一弹窗（无同名冲突时 import 不弹框）
+- 新建 Folder `F02_Struct_Verify` 复用 `make_gvl.folder_entry`（ParentGuid 全零、EmbeddedTypeGuids `<Null/>`）成功
+- **A/B 验证**：ST POU `prg_StructVerifyUse`（挂 MainTask）正样本引用副本成员 `stClock.xBlink_1Hz_StructVerify` 等 → 预编译 0 错误、编译仅模板原有 1 条 `E3_SystemTime`；负样本 `stClock.ZZZ_NotExist_Member` → 编译分类 **4 条真实错误**（`不是'STRUCT_CLOCK_STRUCTVERIFY'的成员` ×2、无效赋值目标、类型转换）⇒ 正样本 0 错误不是假通过
+- ⚠ 负样本报错信息里结构体名被 IDE 大写成 `STRUCT_CLOCK_STRUCTVERIFY`，grep 判定时大小写不敏感

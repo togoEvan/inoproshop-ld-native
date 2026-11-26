@@ -7,6 +7,14 @@
 
 ## [Unreleased]
 
+### 新增（2026-11-26，F02_Struct 复制验证）
+
+- **Struct DUT 全流程验证：F02_Struct_Verify**。`F02_Struct`（17 个顶层 DUT + SF01_Alarm 子文件夹 14 个报警结构体）整包导出 → `scripts/examples/make_f02_copy.py` 加 `_StructVerify` 后缀（类型名 + 成员名同加，跳过 `TYPE/STRUCT/UNION/END_*` 段标记行）→ 逐个 `import_native` 到新建文件夹 `F02_Struct_Verify`（复用 `make_gvl.folder_entry`），17/17 成功无弹窗。**A/B 验证**：ST POU `prg_StructVerifyUse` 挂 MainTask，正样本引用副本成员（`stClock.xBlink_1Hz_StructVerify` 等 + UNION 成员 `w字_StructVerify`）→ 预编译 0 错误、编译仅模板原有 1 条；负样本 `stClock.ZZZ_NotExist_Member` → 编译分类 **4 条真实错误**。结论：DUT 副本全局可见、验收链路有效。详见 `references/native-structure.md §29`。新增脚本：`task_export_f02.py`、`task_import_f02.py`、`task_f02_ab_test.py`、`task_f02_cleanup.py`、`task_list_folders.py`、`probe_windows.py`、`examples/make_f02_copy.py`。
+
+### 修正（重要，2026-11-26）
+
+- **`run_overwrite_import.py` 扫不到覆盖确认弹框（卡死 435s）**：覆盖确认模态框挂在**未被禁用**的框架窗口（标题 `InoProShop(V1.10.0.3)`）下，被禁用的是主工程窗口；旧逻辑「跳过 enabled 窗口、只扫被禁用窗口」导致弹框永远扫不到，`import_native` 卡 435s 直到人工点击。修法：不看 enabled，直接遍历每个顶层窗口的子控件找「全部(&A)」按钮；实测 `PostMessageW(BM_CLICK)` 点「全部」+「确定」即可解除。另外 bash heredoc 写 JSON 会吃反斜杠（`\\` 变 `//`），路径参数要用 `python -c` 或文件写入。
+
 ### 修正（重要）
 
 - **铁律 24 二次修正：预编译分类的报错来自 `app.build()`，不是「检查程序」菜单命令**（2026-11-26）。

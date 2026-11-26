@@ -86,7 +86,7 @@ InoProShop 的梯形图存在一个 native XML 结构里。这个仓库提供：
 | # | 铁律 |
 |---|------|
 | 25 | **`ScriptPouObjectList.remove("名字")` 不报错，但留下 `Name=""` 空槽项**，之后编译报 `MainTask: 期望标识符，而不是''`。`remove(idx)` / `remove(item)` / `replace(idx,'')` / `Item[i]` 全都摘不掉。**唯一可靠修法**：导出 Task Configuration native → 删掉空 `<Single Type="{f194d1ef-…}">` 块 → 覆盖导入。 |
-| 26 | **`Task Configuration` 不允许改名**（报 `名称 'Task Configuration_old_tmp' 对于本工程无效。`）。必须走「`import_native` 同名覆盖 + 主机侧自动点『全部(&A)』」（`run_overwrite_import.py`）。 |
+| 26 | **`Task Configuration` 不允许改名**（报 `名称 'Task Configuration_old_tmp' 对于本工程无效。`）。必须走「`import_native` 同名覆盖 + 主机侧自动点『全部(&A)』」（`run_overwrite_import.py`）。⚠ 2026-11-26 修正：覆盖确认弹框挂在**未被禁用**的框架窗口（标题 `InoProShop(V1.10.0.3)`）下，不是被禁用的主窗口——自动点击逻辑不能按「窗口被禁用」筛，直接遍历所有顶层窗口找「全部(&A)」按钮；实测 `PostMessage(BM_CLICK)` 先点「全部」再点「确定」可解除。 |
 | 27 | **`AT %MBxxxx` 是绝对物理地址，副本沿用原件地址必然冲突**（实测 13 条「地址重复」）。两条合法路线：① 剥掉 `AT` 交给 IDE 分配；② 保留但整体平移到空闲区间（实测 `MB +311228 / MW +2000` 后重叠 0）。⚠ 正则要吃 `AT%MW1000` 无空格写法，用 `\s*` 不是 `\s+`。 |
 | 28 | **含 `PERSISTENT RETAIN` / `RETAIN PERSISTENT` 段的 GVL 无法字节级往返**。IDE 会自动补绝对地址并规范化字面量（`:=TRUE` → `AT %MB131099 : BOOL := TRUE`）。普通 `VAR_GLOBAL` 与 `CONSTANT` 段不被改写。这类 GVL 只能逐字段比对。 |
 | 29 | **GVL = `Object > Interface > TextDocument > TextLines`**（无 `NetworkList`、无 `Implementation`）。一个 GVL 内可有多段 `VAR_GLOBAL`；`EmbeddedTypeGuids` 是 `Array[a9ed5b7e]` 单元素（Folder 的是 `<Null/>`）。 |
