@@ -7,6 +7,27 @@
 
 ## [Unreleased]
 
+### 修复（2026-11-26，delta_snap 假 PASS 漏洞 + mount 假退出码 —— 回应 lead 14:58 审查）
+
+lead 逐个读了三个脚本，找到两个真问题 + 一个自证要求，本轮全部落地并真机/构造验证：
+
+- **`scripts/delta_snap.py`** —— 补 after 截断盲区：之前只查 before 截断，漏了
+  「before 不截断 / after 截断且有净增量」场景（可见新增只是前 100 条，被截掉部分
+  可能有 error）→ 文本不可全信。可见部分的新增 error 仍计进 delta_err（优先判 FAIL），
+  无新增 error 时降 UNKNOWN 而非 PASS。
+- **`scripts/delta_snap.py`** + **`scripts/ide/tasks/task_snap.py`** —— 快照自证：
+  task_snap 顶层写 `{"meta":{"which"},"cats":{..}}`，delta 先校验 before/after 拍子，
+  两次拍成同一个或旧格式无 meta 一律 UNKNOWN（退出 2），杜绝「忘改 which → 恒 PASS」。
+- **`scripts/ide/tasks/task_mount_assert.py`** —— 文档/实现不符：eval_file 下进程退出码
+  不由脚本决定 → 主机侧按退出码判恒 0 假通过。改为结果落 `ipc/task_mount_result.json`
+  （含 ok/total/unmounted/mounted），主机侧读 json 判定。
+- **句柄滞留读到侧也修**：task_snap / task_mount_assert 读 args 也用 `io.open` 裸开不关
+  → 主机侧下次写 args JSON 复现 PermissionError（实测抓到），统一改 try/finally 显式 close。
+
+验证：语法对 3 文件全 OK；协议 22/22；真机（PID 36704）验证
+pass 空操作 PASS、两次同拍子 UNKNOWN、旧格式 UNKNOWN、after 截断+增量 UNKNOWN、
+可见新增 error 优先 FAIL、mount 两路 result.json（MISS→ok:false / 纯挂→ok:true）。
+
 ### 新增（2026-11-26，验收第 4.5 层：挂载断言 + 双快照差分 —— lead 交叉验证方案落地）
 
 回应 lead（DSH agent）直连信道的两个方案，均已真实 IDE 验证：

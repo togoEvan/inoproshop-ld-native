@@ -16,13 +16,14 @@
   - before 已截断（total>=100）的分类：文本不可信，只比 total 差 -> 记 UNKNOWN
   - 结论：delta.error==0 且无 UNKNOWN -> PASS；否则 FAIL/UNKNOWN
 
-输出：ipc/snap_before.json / snap_after.json / delta.log
+输出：ipc/snap_before.json / snap_after.json（{"meta":{"which",..}, "cats":{..}}）/ delta.log
 """
 import io
 import json
 import os
 import re
 import sys
+import time
 import traceback
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(sys.argv[0]))))
@@ -63,7 +64,12 @@ try:
     which = u"after"
     args_p = os.path.join(IPC, "snap_args.json")
     if os.path.isfile(args_p):
-        which = json.load(io.open(args_p, "r", encoding="utf-8")).get(u"which") or u"after"
+        # 读也显式 close，句柄滞留会堵主机侧下次写（实测）
+        _af = io.open(args_p, "r", encoding="utf-8")
+        try:
+            which = json.load(_af).get(u"which") or u"after"
+        finally:
+            _af.close()
 
     system.process_messageloop()
     snap = {}
@@ -79,12 +85,15 @@ try:
         snap[guid] = {"total": len(objs),
                       "truncated": len(objs) >= TRUNC_AT,
                       "items": items}
+    # meta 自证：delta 侧校验 before/after 拍子，两次拍成同一个立刻 UNKNOWN
+    meta = {"which": which, "ts": time.strftime(u"%H:%M:%S"),
+            "argv0": unicode(sys.argv[0])}
     out = os.path.join(IPC, u"snap_%s.json" % which)
     # 必须显式 close（不能裸 io.open().write()）——IDE 进程持有句柄不释放，
     # 主机侧 delta_snap.py 读会 PermissionError（实测）。
     _of = io.open(out, "w", encoding="utf-8")
     try:
-        _of.write(unicode(json.dumps(snap, ensure_ascii=False)))
+        _of.write(unicode(json.dumps({"meta": meta, "cats": snap}, ensure_ascii=False)))
     finally:
         _of.close()
     L(u"=== snap %s : %d 分类 -> %s ===" % (which, len(snap), out))
