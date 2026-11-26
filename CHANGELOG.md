@@ -7,6 +7,75 @@
 
 ## [Unreleased]
 
+### 新增（2026-11-26，F11_POU_MainTask 复制验证）
+
+- **F11_MainTask 任务层 POU 复制验证：`F11_POU_MainTask_Verify / 15 个副本（_F11V）`**。
+  `F11_POU_MainTask` 含 **15 个纯 ST 的 PROGRAM**（无 LD、无 DUT、无子文件夹）：
+  `M000_MAIN / M001_气缸程序 / M002_真空程序 / M003_轴程序 / M004_IO / M005_压力控制 /
+  M006_风速仪 / M007_FFU / M008_酒精 / M009_无尘布放料卷张力控制 / M010_插补控制 /
+  M012_上下游交互 / M100_模组调用 / M995_配方 / M999_产量统计`。
+  沿用 F10 管线（`make_f11_translate.py`），共 **3355 处改写**，另剥除 **2 处 `AT %MB`**（见下）。
+  **验收**：预编译 101/0、编译 104/0，合计 **0 错误**（202 条 warning 与 F08/F10 一致，模板自带）。
+
+- **新坑 1 —— 中文标识符的词边界**。`(?<![A-Za-z0-9_])名字(?![A-Za-z0-9_])` 对中文名失效：
+  `M003_轴程序` 会命中 `M003_轴程序_F11V` 的前缀。必须把中文纳入边界字符集：
+  `(?<![A-Za-z0-9_\u4e00-\u9fff])…(?![A-Za-z0-9_\u4e00-\u9fff])`。
+  自检：改写后对每个原名做「词边界计数应为 0」，且副本名计数 = 预期处数。
+
+- **新坑 2 —— `Path` 数组末元素也要改名**。每个 native 的 `<Array Name="Path">`
+  记录对象自身在树里的位置，末元素就是对象名。只改 `MetaObject.Name` 和
+  `PROGRAM <name>` 声明行，导入后会落在错误层级或报错。F11 的 `M003_轴程序` 就是靠这条才导入正确。
+
+- **新坑 3 —— 副本沿用原件的 `AT %MB` 绝对地址必然冲突**（铁律 27 在纯 ST 工程上的复现）。
+  `M003_轴程序` 的 `v_uiAxisIndexOld AT %MB131072` / `v_uiHMICurrentPageOld AT %MB131074`
+  在 A/B 正向验证时报「地址重复(重复地址范围为：%MB131072~%MB131073)」。
+  **预编译 0 错误看不到这个错**——它只在把副本挂进任务后编译时才暴露。
+  走路线①：剥掉 `AT` 让 IDE 自动分配，共 2 处。
+
+- **A/B 双向验证（本轮首次完整跑通正/负两向）**：
+  负向（挂 `ZZZ_NoSuchPou_F11V()`）→ 编译分类 **2 条**错误（`没有定义标识符` + `需要程序名、函数或功能块实例替代`）；
+  正向（挂 `M000_MAIN_F11V()`）→ 0 错误。**这证明了「预编译 0 错误」不足以验收副本可用性**，
+  必须真挂进任务跑一次编译。
+
+- **收尾：Task Configuration 的 POU 槽清理**。`prg_F11VerifyUse` 对象删除后，
+  名字仍残留在 `MainTask.pous` 里（铁律 25/38 再次实测确认）。走「导出 Task Configuration
+  native → 主机侧逐行删 `<Single>` 块 → 同名覆盖导入」，回读确认 `MainTask` 只剩 `[M000_MAIN]`。
+
+- 新增脚本：`ide/studies/task_scan_f11.py`、`task_export_f11.py`、`task_topguid_f11.py`、
+  `task_import_f11.py`、`task_f11_ab_test.py`、`task_f11_purge.py`、`task_readback_f11.py`、
+  `task_export_taskcfg_f11.py`、`task_verify_tc.py`、`examples/analyze_f11.py`、
+  `examples/make_f11_translate.py`。
+
+### 修复（2026-11-26，覆盖确认框只点「全部」不点「确定」—— 导入卡 323 秒）
+
+`run_overwrite_import.py` 的老逻辑找到「全部(&A)」就点一次然后返回，
+但「全部」只**勾选**列表项，**不关闭**对话框。结果 `import_native`
+一直阻塞在主线程等模态框返回，实测 **323.79s** 后靠人工补点「&确定」才放行。
+
+**根因**：文档（README 铁律 26 / SKILL 铁律 26）早就写了「先点全部再点确定」，
+但代码只实现了一半 —— 文档与代码不一致，而每次卡住都归因成「IDE 慢」，
+没人回头对代码。这是「文档说对了但代码没跟上」的典型。
+
+修法：
+- 新建 `scripts/click_overwrite_all.py`：单文件、纯 `SendMessageW(BM_CLICK)`，
+  先点「全部(&A)」全选 → 间隔 0.4s → 再点「&确定」提交。不动鼠标、不抢焦点。
+- `run_overwrite_import.py` 改为复用 `click_overwrite_all.click_all()`，
+  删掉自己那份只点「全部」的实现（避免下次再改一处漏一处）。
+- 新增 `scripts/run_build_check.py`：build → 等 45s（期间持续点弹框）→ check
+  一条命令跑完，收尾不再需要人工盯屏。
+
+验证（同一份 `f11_taskcfg_fixed.native`，同一工程）：
+
+| 版本 | 点击序列 | import_native 耗时 | 人工干预 |
+|---|---|---|---|
+| 修复前 | 仅「全部」 | **323.79s** | 需人工点「确定」 |
+| 修复后 | 「全部」+「确定」 | **3.45s** | 无 |
+
+修复后复跑 build + check：预编译 0 错误 / 编译 0 错误，验收通过。
+同时确认 Task Configuration 里 `MainTask` 的 POU 列表已从
+`[M000_MAIN, prg_F11VerifyUse]` 收敛为 `[M000_MAIN]`（铁律 25/38 的
+「导出→删块→覆盖导入」路线收尾成功）。
+
 ### 修复（2026-11-26，Error 池 500 上限的截断提示漏认 —— 我自己的假通过）
 
 lead 用 1300 个未定义标识符灌进干净工程实测：编译分类 `total=507`、

@@ -2034,7 +2034,7 @@ fbCamIn(Master := Master, Slave := Slave, CamTableID := refCam);
 
 1. `export_native([taskConfig], out, True)` 导出 Task Configuration
 2. 主机侧按「行」删除 `<Single Type="{f194d1ef-7376-42ce-a729-4a5485a97a46}">` … `</Single>` 块
-3. `run_overwrite_import.py` 同名覆盖导入（弹框自动点「全部(A)」）
+3. `run_overwrite_import.py` 同名覆盖导入（弹框自动点「全部(A)」→「确定」两步）
 
 ⚠ **不能用跨行正则 `.*?</Single>`** —— 会连相邻的 `</Single>` 一起吃，导入报
 `第 89 行，位置 10 上的开始标记"List"与结束标记"Single"不匹配`。
