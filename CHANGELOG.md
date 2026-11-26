@@ -38,6 +38,38 @@
 2 个未通过是 studies 里 `task_import_f04.py` / `task_import_f05.py` 的历史遗留（同一 if/else 互斥分支内各定义一次 `_ug`，
 IronPython 允许、不影响运行），**属考古脚本，按冻结原则未改**。
 
+> ⚠ **2026-11-26 复核更正（DS 整理复审）**：上述「2 个 FAIL 是历史遗留」的归因**是错的**。
+> 实测 `task_import_f04.py` 的两个 `_ug` 根本不在同一作用域（一个在 `def mk_folder()` 内、一个在模块级 `try` 内），
+> Python 3 直接 `compile` 通过，不存在重复定义。那 2 个 FAIL 是 `check_ipy_syntax.py` 自身的**假阳性**
+> （`ast.walk` 扁平遍历、不区分作用域）。已修复为按作用域分组检查，修复后 118/118 全过。详见下方「DS 整理复审」。
+
+
+### 修复（2026-11-26，DS 整理复审：真实 IDE 验证 + 两处遗留问题修复）
+
+对 828e4c3（scripts/ide 分层重构）做**真实环境复核**（不只是读 diff），结论：**重构本身质量高、可用**，
+同时修掉两处遗留问题。
+
+**真实验证（IDE PID 36704 在跑，守护旧版仍在内存）**：
+- `bridge.py selftest` → `ok: true`；走 eval_file 通道执行迁移后的 `ide/tasks/task_readnow.py`、
+  `ide/tasks/task_check.py` 均成功，`check.log` 确认 `BASE` 推导正确（`source: derive:...ide`）、双分类正常读取。
+- 这覆盖了迁移最危险的一条路径：eval_file 下 `sys.argv[0]` 是守护路径而非脚本自身，
+  两层 `dirname` 依赖「守护已 import 过 `_base`、模块缓存命中」才成立——目前可用，
+  但若未来有脚本在守护 import `_base` 之前执行（如清空 `sys.modules` 的场景）会挂，已知即可。
+- 数字核对：FILEMAP 232/49/11/10/2 全对；`ide/README.md` 索引 121 条覆盖全部 118 个脚本，无一缺漏。
+
+**修复 1 —— `check_ipy_syntax.py` 作用域假阳性**：见上方更正。修复后全量 118 个脚本 0 FAIL。
+
+**修复 2 —— 828e4c3 经 GitHub Data API 推送引入的 CRLF blob**：API 推送把工作区 CRLF 字节直接写进 blob，
+绕过 `.gitattributes` 的入库转换，导致 clone 后 `git status` 永远显示 4 个文件被修改（假差异）。
+涉及 `scripts/bridge.cmd`（按 `*.cmd eol=crlf` 归一，检出自动还原 CRLF）与 3 个
+`assets/natives/*.native`（`-text` 原样字节，工作区 CRLF 保持不动）。**内容零变化**——
+4 个文件均已核验为纯行尾差异（`tr -d '\r'` 后 `cmp` 一致）才提交。
+
+**遗留给后续（未改，仅记录）**：`tasks/` 38 个脚本中 24 个硬编码了具体工程对象名
+（`F01_Variable_GVLVerify`、`prg_GvlVerifyUse` 等），与「tasks = 可复用、studies = 一次性」的边界定义不符；
+真正被验收链路引用的 tasks 只有 7 个。这批硬编码脚本本质是「用过的收尾/验证脚本」，
+下次整理时要么参数化进 tasks，要么按 studies 冻结——不影响当前使用。
+
 
 ### 新增（2026-11-26，F10_POU_EthercatTask 复制验证）
 
