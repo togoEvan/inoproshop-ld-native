@@ -145,14 +145,20 @@ def main():
             elif pa["total"] != pb["total"]:
                 W(u"%s : Error 池 %d -> %d（减少，不算新增）"
                   % (guid, pb["total"], pa["total"]))
-            # 池自身也被截断：文本/地址不可全信
-            if pa.get("truncated"):
+            # 截断到「消息/错误」级：连 error 池都可能缺条，条数不可信。
+            # 注意「多于N个警告」不算 —— 它只截 warning，error 池仍完整
+            # （lead 的 540 条工程 / 502 条 Error 完整返回即证）。
+            if a.get("truncated_all") or b.get("truncated_all"):
+                W(u"%s : 分类截断到「消息/错误」级，error 池条数可能不全 -> 存疑"
+                  % guid)
+                unknown = True
+            elif pa.get("truncated"):
                 W(u"%s : Error 池自身已截断(total=%d)，地址集合不完整 -> 存疑"
                   % (guid, pa["total"]))
                 unknown = True
             # 地址集合变化（同类错误换地址，条数可能不变）
             aa, ab = set(pa.get("addrs") or []), set(pb.get("addrs") or [])
-            if aa != ab and not pa.get("truncated"):
+            if aa != ab and not pa.get("truncated") and not a.get("truncated_all"):
                 W(u"%s : Error 池地址集合变化 +%d/-%d（%s）"
                   % (guid, len(aa - ab), len(ab - aa),
                      u",".join(sorted(aa - ab)[:5])))

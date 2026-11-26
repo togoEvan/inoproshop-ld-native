@@ -49,7 +49,17 @@ _NUM = re.compile(u"\\d+")
 _GUID = re.compile(u"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}")
 # PLC 地址：%MB131076 / %MW100 / %MX1.2 / %IW0 等，取原始（未归一化）文本里的
 _ADDR = re.compile(u"%[IQM][BWDX]\\d+(?:\\.\\d+)?", re.IGNORECASE)
-TRUNC_AT = 100
+# 截断的【本质判据】：IDE 截断时会注入一条「多于N个消息/警告/错误发生：跳过更多的…」。
+# 不能用条数阈值代替 —— 实测 lead 的损坏工程 编译分类 all=540
+# （Error 502 + Warning 35 + Text 3）完整返回、无任何截断提示；
+# 而我的模板工程 all=104（Warning 101 + Text 3）就带提示。
+# 即：100 条上限只作用于警告，不作用于错误。条数阈值会把 502 条误判为截断。
+#
+# 两种提示必须区分（都实测到过）：
+#   「多于N个【警告】发生」→ 只有 warning 被截，error 池仍完整可信
+#   「多于N个【消息】发生」→ 所有消息都可能被截，error 池也可能缺条
+_TRUNC_WARN = re.compile(u"多于\\s*\\d+\\s*个警告发生")
+_TRUNC_ALL = re.compile(u"多于\\s*\\d+\\s*个(?:消息|错误)发生")
 
 
 def norm(text):
@@ -101,13 +111,19 @@ def err_pool(cat_guid, filt):
         return None
     items = []
     addrs = set()
+    all_trunc = False
     for m in objs:
         raw = prop(m, u"text")
-        items.append(norm(raw))
+        txt = norm(raw)
+        items.append(txt)
+        # 只有「多于N个消息/错误」才意味着 error 池本身可能缺条；
+        # 「多于N个警告」只截 warning，error 池仍完整可信。
+        if _TRUNC_ALL.search(unicode(raw or u"")):
+            all_trunc = True
         for a in _ADDR.findall(unicode(raw or u"")):
             addrs.add(a.upper())
     return {"total": len(objs),
-            "truncated": len(objs) >= TRUNC_AT,
+            "truncated": all_trunc,
             "items": items,
             "addrs": sorted(addrs)}
 
@@ -137,6 +153,8 @@ try:
         items = []
         err_addrs = set()
         n_err = 0
+        cat_trunc = False       # 有任意截断提示
+        cat_trunc_all = False   # 提示是「消息/错误」级（error 池可能缺条）
         for m in objs:
             n_msg += 1
             v = prop(m, u"severity")
@@ -151,17 +169,24 @@ try:
             raw = prop(m, u"text")
             if raw is None:
                 n_txt_miss += 1
+            sraw = unicode(raw or u"")
+            if _TRUNC_WARN.search(sraw) or _TRUNC_ALL.search(sraw):
+                cat_trunc = True
+            if _TRUNC_ALL.search(sraw):
+                cat_trunc_all = True
             txt = norm(raw)
             items.append([sev, txt])
             if sev == u"error":
                 n_err += 1
-                for a in _ADDR.findall(unicode(raw or u"")):
+                for a in _ADDR.findall(sraw):
                     err_addrs.add(a.upper())
         pool = err_pool(c, filt)
         if pool is not None:
             n_pool_ok += 1
         snap[guid] = {"total": len(objs),
-                      "truncated": len(objs) >= TRUNC_AT,
+                      "truncated": cat_trunc,
+                      # 截断到「消息/错误」级 = error 池可能缺条，必须存疑
+                      "truncated_all": cat_trunc_all,
                       "items": items,
                       # 对象级兜底：归一化会把「地址重复」这类错误全撞成一条，
                       # 靠 err_total + 地址集合才能看出「换了一批地址照样全错」。
