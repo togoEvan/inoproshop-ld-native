@@ -57,6 +57,13 @@ description: 汇川 InoProShop（CODESYS V3.5 SP11 系）LD 梯形图 native XML
 29. **GVL = `Object > Interface > TextDocument > TextLines`**（无 `NetworkList`、无 `Implementation`）。一个 GVL 内可有多段 `VAR_GLOBAL`；`EmbeddedTypeGuids` 是 `Array[a9ed5b7e]` 单元素（Folder 的是 `<Null/>`）。
 30. **Folder 的四条 GUID 关系**：`Properties.ParentObjects` 的 Key = 导出根 SV Guid、Value = 父容器 guid；`ParentSVNodeGuid` = 该 Value；`MetaObject.ParentGuid` = **祖父** guid（直属 Application 的 Folder → 全零）；被导出的 Folder 自身 `IsRoot=True`。
 
+### E. CAM（电子凸轮）与曲线
+
+| # | 铁律 |
+|---|------|
+| 35 | **CAM 直线段的 `p1` 是段内增量，不是终点绝对值**。`y(u) = p0 + p1·u`（u 为段内归一化 0..1），故 `p1 = y1 - y0`。按「p0=起点、p1=终点」写停歇段（`p0=45 p1=45`）会算出 `y(1)=90`、斜率 45，与相邻五次多项式段的零速度冲突，Cam 分类报 `在点 (240/45) 的连续性要求不能填充 速度`。**自检**：`p0 == cp0.Y` 且 `p0+p1 == cp1.Y`，两条都成立才对。 |
+| 36 | **分度凸轮必须 `Periodic=False`**。摆动凸轮回原点（`y(360)==y(0)`）才用 `True`；分度凸轮每周期累进 H（`y(360)==y(0)+H`），沿用 `True` 会报 `在点 (0/0) 的连续性要求不能填充 位置`+`速度`。**自检**：`y(360)-y(0) != 0` 就必须 `False`。⚠ CAM 错误**只落 Cam 分类 `de128929`**，预编译/编译可能全 0——只看那两个会漏判通过；Cam 子对象也**无法脚本删除**（`remove`/`replace` 均失败），只能同名覆盖导入。详见 `references/native-structure.md §32`。 |
+
 ## 结构速查（详见 references/）
 
 - [native 结构与节点类型](references/native-structure.md)：全部节点 GUID、槽位规则、合法挂载位置

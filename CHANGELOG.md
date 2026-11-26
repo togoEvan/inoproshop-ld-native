@@ -7,6 +7,20 @@
 
 ## [Unreleased]
 
+### 新增（2026-11-26，F07_CAM 复制验证 + Cam1 曲线规划落地）
+
+- **CAM（电子凸轮）对象全流程验证 + 曲线规划落地：`F07_CAM_Verify / Cam1_F07V`**。`F07_CAM` 只有一个对象 `Cam0`，无子文件夹无 POU。两轮工作：① **复制验证**——导出 `Cam0_folder.native` → `scripts/examples/make_f07_cam_copy.py` 只改 `MetaObject.Name` 加 `_F07V`（CAM 无 `TextLines`/`Implementation`，不存在跨对象文本引用）→ 导入新建 `F07_CAM_Verify`，1/1 成功无空文件夹；② **曲线规划落地**——`scripts/examples/make_cam1_curve.py` 按停-升-停 3-4-5 五次多项式重写 `Points`+`Segments`+`Dimension`+`Periodic`，生成 `Cam1_F07V`（3 段：停歇 0-120 / 分度 120-240 / 停歇 240-360，H=45°，β=120°，`p3=450 p4=-675 p5=270`）。**验收**：预编译 101/errors=**0**、编译 104/errors=**0**、Cam 分类 `de128929` errors=**0**，合计 **0 错误**；往返 diff 写入 13 字段 vs 回读 13 字段 **0 差异**；接缝 x=120 / x=240 位移·速度·加速度全部连续。**三个关键新发现**：① **CAM 直线段 `p1` 是段内增量不是终点绝对值**（`y=p0+p1·u`，按绝对值写会让停歇段斜率非零、与多项式段零速度冲突）；② **分度凸轮必须 `Periodic=False`**（`y(360)≠y(0)`，沿用模板 `True` 报 `在点 (0/0) 的连续性要求不能填充 位置/速度`）；③ **Cam 错误只落 `de128929` Cam 分类**，预编译/编译可能全 0，只看那两个会漏判通过。另：Cam 子对象**无法脚本删除**（`remove(obj)` 报 `takes no arguments`、`replace(idx,"")` 报 `no attribute`），改曲线只能同名覆盖导入。详见 `references/native-structure.md §32`。新增脚本：`task_scan_f07.py`、`task_export_f07.py`、`task_export_f07_top.py`、`task_import_f07.py`、`task_f07_ab_test.py`、`task_f07_cleanup.py`、`task_import_cam1.py`、`task_export_cam1.py`、`task_delete_cam1.py`（实测无效，留作反面记录）、`examples/make_f07_cam_copy.py`、`examples/make_cam1_curve.py`。
+
+### 修复（2026-11-26，F07_CAM）
+
+- **`make_f07_cam_copy.py` 头部注释把两个段类型 Guid 的参数个数写反**：原写「直线 `{3bfb4cba}` p0..p5、五次多项式 `{7ede90d3}` p0..p3」，实测为**直线 `{7ede90d3}` p0..p1、五次多项式 `{3bfb4cba}` p0..p5**，两个 Guid 的类型和参数个数全部颠倒。已改正，并在文件头补上两条硬规则（p1 增量、Periodic=False）与 §32 指引。
+
+### 修改（2026-11-26，消息分类表）
+
+- **`references/mcp-bridge.md` 分类表补第 6 个分类 `de128929-86dd-4c5e-82c8-09aa2f3d8abe` = Cam**。工程里存在 CAM 对象时才出现，承载凸轮曲线连续性校验错误。同轮实测 `0986c5dd`（格式检查）**反而没出现**，再次印证「GUID 集合因版本/配置而异，不能照抄」。已在表下加 `⚠` 块强调「Cam 错误不落预编译/编译分类，只看那两个会漏判通过」，并附典型错误原文。
+- **`assets/natives/` 新增两个 CAM 样本**：`cam_swing_broken_sample.native`（31 KB，**反面样本**——模板 Cam0，5 段摆动凸轮，x=200 处位移断裂 20°、3 处速度阶跃，勿照抄）、`cam_index_345_sample.native`（26 KB，**正面样本**——Cam1，3 段分度凸轮，接缝全连续，双分类 0 错误）。
+- **铁律新增 35、36**（README + SKILL 双写，`AGENTS.md` 条数说明同步为 36 条）：35 = CAM 直线段 `p1` 是段内增量；36 = 分度凸轮必须 `Periodic=False`。
+
 ### 新增（2026-11-26，F02_Struct 复制验证）
 
 - **Struct DUT 全流程验证：F02_Struct_Verify**。`F02_Struct`（17 个顶层 DUT + SF01_Alarm 子文件夹 14 个报警结构体）整包导出 → `scripts/examples/make_f02_copy.py` 加 `_StructVerify` 后缀（类型名 + 成员名同加，跳过 `TYPE/STRUCT/UNION/END_*` 段标记行）→ 逐个 `import_native` 到新建文件夹 `F02_Struct_Verify`（复用 `make_gvl.folder_entry`），17/17 成功无弹窗。**A/B 验证**：ST POU `prg_StructVerifyUse` 挂 MainTask，正样本引用副本成员（`stClock.xBlink_1Hz_StructVerify` 等 + UNION 成员 `w字_StructVerify`）→ 预编译 0 错误、编译仅模板原有 1 条；负样本 `stClock.ZZZ_NotExist_Member` → 编译分类 **4 条真实错误**。结论：DUT 副本全局可见、验收链路有效。详见 `references/native-structure.md §29`。新增脚本：`task_export_f02.py`、`task_import_f02.py`、`task_f02_ab_test.py`、`task_f02_cleanup.py`、`task_list_folders.py`、`probe_windows.py`、`examples/make_f02_copy.py`。
