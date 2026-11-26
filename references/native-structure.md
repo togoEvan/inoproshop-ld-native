@@ -1555,3 +1555,23 @@ TextLines[0] : TYPE Struct_Clock_StructVerify :     ← 必须一起改
 - 新建 Folder `F02_Struct_Verify` 复用 `make_gvl.folder_entry`（ParentGuid 全零、EmbeddedTypeGuids `<Null/>`）成功
 - **A/B 验证**：ST POU `prg_StructVerifyUse`（挂 MainTask）正样本引用副本成员 `stClock.xBlink_1Hz_StructVerify` 等 → 预编译 0 错误、编译仅模板原有 1 条 `E3_SystemTime`；负样本 `stClock.ZZZ_NotExist_Member` → 编译分类 **4 条真实错误**（`不是'STRUCT_CLOCK_STRUCTVERIFY'的成员` ×2、无效赋值目标、类型转换）⇒ 正样本 0 错误不是假通过
 - ⚠ 负样本报错信息里结构体名被 IDE 大写成 `STRUCT_CLOCK_STRUCTVERIFY`，grep 判定时大小写不敏感
+
+### 子文件夹的复制（SF01_Alarm_StructVerify，2026-11-26 二轮补做）
+
+在 `F02_Struct_Verify` 下建**子文件夹** `SF01_Alarm_StructVerify`（14 个报警结构体副本），与顶层 Folder 的差异：
+
+| 项 | 顶层 Folder（挂 Application） | 子文件夹（挂 Folder 下） |
+|---|---|---|
+| `folder_entry.parent_container_guid` | Application 的 SV 节点 guid | **父 Folder 的 SV 节点 guid**（即父 Folder entry 的 `MetaObject.Guid`） |
+| `folder_entry.parent_guid` | 全零（`00000000-…`） | 父 Folder 的 SV 节点 guid（不再是全零） |
+| `path_parts` | `[Device, PLC 逻辑, Application]` | `[Device, PLC 逻辑, Application, F02_Struct_Verify]`（含父文件夹名） |
+
+⚠ 父 Folder 的 SV 节点 guid 取法：把父 Folder `export_native` 出来，**主机侧**解析——
+`StructuredView Guid` 是**导出根** guid（每次导出 fresh 生成，不能当 parent 用），
+`MetaObject.Guid`（Name=父文件夹名的那个 entry）才是它的 SV 节点 guid。
+**解析必须放主机侧**：IDE 内的 ElementTree 是老 xmllib，解析 native 报
+`illegal character in content`。
+
+实测：14 个报警结构体（含 `ARRAY[0..49] OF BOOL` 数组成员、7 个空结构体）副本
+导入 14/14 无弹窗；正样本含 `ARRAY[0..2] OF 副本结构体` 及其成员访问 0 错误；
+负样本 `stTips.ZZZ_NotExist` → 编译分类 4 条真实检出（同顶层轮）。

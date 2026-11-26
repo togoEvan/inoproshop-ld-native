@@ -10,6 +10,8 @@
 ### 新增（2026-11-26，F02_Struct 复制验证）
 
 - **Struct DUT 全流程验证：F02_Struct_Verify**。`F02_Struct`（17 个顶层 DUT + SF01_Alarm 子文件夹 14 个报警结构体）整包导出 → `scripts/examples/make_f02_copy.py` 加 `_StructVerify` 后缀（类型名 + 成员名同加，跳过 `TYPE/STRUCT/UNION/END_*` 段标记行）→ 逐个 `import_native` 到新建文件夹 `F02_Struct_Verify`（复用 `make_gvl.folder_entry`），17/17 成功无弹窗。**A/B 验证**：ST POU `prg_StructVerifyUse` 挂 MainTask，正样本引用副本成员（`stClock.xBlink_1Hz_StructVerify` 等 + UNION 成员 `w字_StructVerify`）→ 预编译 0 错误、编译仅模板原有 1 条；负样本 `stClock.ZZZ_NotExist_Member` → 编译分类 **4 条真实错误**。结论：DUT 副本全局可见、验收链路有效。详见 `references/native-structure.md §29`。新增脚本：`task_export_f02.py`、`task_import_f02.py`、`task_f02_ab_test.py`、`task_f02_cleanup.py`、`task_list_folders.py`、`probe_windows.py`、`examples/make_f02_copy.py`。
+- **子文件夹复制补做：SF01_Alarm_StructVerify**（2026-11-26 二轮）。在 `F02_Struct_Verify` 下建子文件夹并导入 14 个报警结构体副本（含 `ARRAY[0..49] OF BOOL` 数组成员、7 个空结构体）14/14 无弹窗。新发现：子文件夹的 `parent_container_guid` / `parent_guid` 都用**父 Folder 的 `MetaObject.Guid`**（SV 节点 guid，非导出根 guid）；IDE 内 ElementTree 是老 xmllib 解析 native 报 `illegal character`，**GUID 解析必须放主机侧**。A/B 正（含 `ARRAY OF 副本结构体`）0 错误 / 负 4 条真实检出。新增脚本：`task_export_sf01.py`、`task_import_sf01.py`、`task_sf01_ab_test.py`、`task_sf01_cleanup.py`。
+- **`run_overwrite_import.py` 修复实测生效**：修掉「只扫被禁用窗口」的 bug 后，覆盖导入 Task Configuration 仅 3.31s 自动完成（修复前卡 435s 需人工点击）。
 
 ### 修正（重要，2026-11-26）
 
