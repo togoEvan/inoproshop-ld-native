@@ -291,6 +291,20 @@ Copy-Item .\assets\*        $SK\assets\ -Recurse -Force
 > Copy-Item .\SKILL.md $SK\ -Force
 > ```
 
+**推荐直接用脚本同步**（自动「先删后写」+ 清理目标侧多余旧文件）：
+
+```powershell
+python scripts\sync_skill_dir.py
+```
+
+它按 `git ls-files` 取清单，只同步 `SKILL.md` + `README/CHANGELOG/AGENTS/LICENSE` +
+`references/ scripts/ assets/ docs/`，然后遍历目标目录删掉不在清单里的文件。
+2026-11-26 首次运行清掉 **280 个历史残留**（旧版本留下的一次性脚本），
+同步后 252 个文件与仓库逐字节一致。
+
+⚠ **必须清理多余文件**：只做「覆盖写入」会把旧脚本永久留在 Skill 目录里，
+下次 AI 读到的是新旧混杂的版本，比不更新更危险。
+
 ### 7.1 打包分发件（.skill）
 
 ```powershell
