@@ -1619,3 +1619,47 @@ SF02_气缸、SF99_其他、半自动、SF03_真空、SF01_轴控、SF04_产量�
 把 FB 体内的 `Gv_xxx` 改写到 `Gv_xxx_GVLVerify`（实测 FB_Cylinder 副本 16 处、全树 851 处改写）。
 `VAR_IN_OUT io_stHMICylinder : Struct1_HMI_Cylinder_F04V` 这类**类型引用**走「内部名 → 副本类型」
 改写，而 `H_astAlarmRecord_GVLVerify` 这类**变量引用**走 GVL 映射，两条链并行不冲突。
+
+## 31 FC 全量翻译验证（2026-11-26 实测，F05_FC / 10 个对象）
+
+`F05_FC` 结构比 F04 多一种形态：**7 个 ST FC + 3 个 DUT，其中 5 个 FC 直接挂在
+`F05_FC` 根下**（不是子文件夹），2 个子文件夹（`SF01_AlarmRecord` 3 个对象、
+`SF02_AlarmWindow` 2 个对象）。整树导出 → `make_f05_translate.py` 加 `_F05V` →
+`F05_FC_Verify`，10/10 无弹窗。
+
+### 31.1 ⚠ 根下直接 POU 与「子文件夹」在导出时长得一样
+
+导出脚本用 `kids()` 判断，根下直接 FC 也会生成一个空目录 + `<名>_folder.native`，
+**看起来像子文件夹，其实是 POU**。判别唯一可靠依据是 native 里的
+`Single Name="TypeGuid"` = `6f9dac99-8de1-4efc-8465-68ac443b7d08`（FB/FC 类）；
+真 Folder 是 `738bea1e-…`。⚠ 之前记录的 `6f9dac99-f3a6-45e5-…` 是错的，以此为准。
+
+### 31.2 ⚠ 枚举字面量的提取正则要吃行尾注释
+
+`Enum_AlarmLevel` 的声明是 `\t提示\t\t:= 1,//仅在触摸屏显示用`——字面量后面跟
+`//` 注释。原正则 `^\s*(\w+)\s*:=\s*-?\d+\s*,?\s*$` 匹配不到（F05 实测 0 命中，
+会导致 277 重名问题重演）。必须放宽为 `...\s*,?\s*(//.*)?$`。
+另注意最后一个字面量可能**无逗号**（`严重故障\t:= 4//...`），`(//.*)?` 同时覆盖。
+
+### 31.3 枚举字面量的中文词不能盲目全局替换
+
+`Enum_AlarmLevel` 的字面量是 `None / 提示 / 警告 / 故障 / 严重故障`——`提示`、`警告`、
+`故障` 是极常见中文词，纯文本全局替换会改坏注释和字符串。**安全前提**：先扫描
+这些字面量在每个对象里的全部出现位置，确认只在枚举声明行出现，再加后缀。
+F05 实测仅出现在 `Enum_AlarmLevel` 与 `Struct_AlarmRecord` 的声明行，替换安全。
+
+### 31.4 根下 POU 的导入清单必须在主机侧预生成
+
+IDE 内 `xml.etree` 是老 xmllib，解析含中文/特殊字符的 native 直接抛
+`illegal character in content`（§29 已记录）。所以「根下哪些是 POU」的判定
+**不能放 IDE 脚本里**：主机侧预生成 `ipc/f05_root_pous.txt` 清单，
+IDE 脚本只读清单逐个 `import_native`。
+
+### 31.5 A/B 验证
+
+- 正样本：`prg_F05VerifyUse` 调用 `FC_AlarmRecord_F05V`（`io_astAlarmRecord` 传
+  `ARRAY[0..99] OF Struct_AlarmRecord_F05V`，测副本 Struct 引用链）+ `FC_CRC16_F05V`
+  （内部调 `FC_XOR8_F05V`/`FC_XOR16_F05V`，测 FC 互相调用链）→
+  **预编译 0 / 编译 0，合计 0 错误**（比 F04 更干净，连 E3_SystemTime 基线都没有）。
+- 负样本：多传一个不存在的引脚 → 编译 **2 条真实错误**
+  （`函数 'FC_AlarmRecord_F05V' 需要'2'个输入` + `没有定义标识符'ZZZ_NotExist_Pin'`）。

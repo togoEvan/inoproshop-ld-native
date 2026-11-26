@@ -91,6 +91,9 @@ InoProShop 的梯形图存在一个 native XML 结构里。这个仓库提供：
 | 28 | **含 `PERSISTENT RETAIN` / `RETAIN PERSISTENT` 段的 GVL 无法字节级往返**。IDE 会自动补绝对地址并规范化字面量（`:=TRUE` → `AT %MB131099 : BOOL := TRUE`）。普通 `VAR_GLOBAL` 与 `CONSTANT` 段不被改写。这类 GVL 只能逐字段比对。 |
 | 29 | **GVL = `Object > Interface > TextDocument > TextLines`**（无 `NetworkList`、无 `Implementation`）。一个 GVL 内可有多段 `VAR_GLOBAL`；`EmbeddedTypeGuids` 是 `Array[a9ed5b7e]` 单元素（Folder 的是 `<Null/>`）。 |
 | 30 | **Folder 的四条 GUID 关系**：`Properties.ParentObjects` 的 Key = 导出根 SV Guid、Value = 父容器 guid；`ParentSVNodeGuid` = 该 Value；`MetaObject.ParentGuid` = **祖父** guid（直属 Application 的 Folder → 全零）；被导出的 Folder 自身 `IsRoot=True`。详见 `references/native-structure.md`。 |
+| 31 | **枚举字面量是全局符号，不是类型内作用域**。复制 DUT 副本时若沿用原枚举值（`A1_上料移栽R轴:=1,`），会与原件全局符号**重名**（实测 277 条「符号'xxx'存在重名」），且所有裸引用变「未知类型」。**必须给枚举值也加后缀**。提取正则要吃行尾注释：`^\s*(ident)\s*:=\s*-?\d+\s*,?\s*(//.*)?$`（最后一个值可能无逗号）。字面量是中文常见词（提示/警告/故障）时先扫描确认只在声明行出现再替换。 |
+| 32 | **POU TypeGuid 正确取值**：FB/FC = `6f9dac99-8de1-4efc-8465-68ac443b7d08`、DUT = `2db5746d-d284-4425-9f7f-2663a34b0ebc`、Folder = `738bea1e-…`、GVL = `ffbfa93a-…`。⚠ 旧记录里的 `6f9dac99-f3a6-45e5-…` 是错的。**根下直接 POU 导出时也会生成「空目录 + `<名>_folder.native`」，看起来像子文件夹**，判别只能靠 TypeGuid。 |
+| 33 | **`Implementation` Type GUID**：ST = `{3b83b776-fb25-43b8-99f2-3c507c9143fc}`、LD = `{25e509de-33d4-4447-93f8-c9e4ea381c8b}`（DUT 无此节点）。⚠ 旧记录的 `3b83b776-a464-…` / `25e509de-a6c5-…` 是错的，以实测为准。 |
 
 ### 三条元教训
 
