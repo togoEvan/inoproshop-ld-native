@@ -1575,3 +1575,47 @@ TextLines[0] : TYPE Struct_Clock_StructVerify :     ← 必须一起改
 实测：14 个报警结构体（含 `ARRAY[0..49] OF BOOL` 数组成员、7 个空结构体）副本
 导入 14/14 无弹窗；正样本含 `ARRAY[0..2] OF 副本结构体` 及其成员访问 0 错误；
 负样本 `stTips.ZZZ_NotExist` → 编译分类 4 条真实检出（同顶层轮）。
+
+## 30 FB/FC 全量翻译验证（2026-11-26 实测，F04_FB / 58 个对象）
+
+`F04_FB` 全部 58 个对象（9 个子文件夹：SF06_通讯、SF05_设备状态机、SF98_34-1-擦拭机、
+SF02_气缸、SF99_其他、半自动、SF03_真空、SF01_轴控、SF04_产量统计）整树导出 →
+`scripts/examples/make_f04_translate.py` 单遍正则加 `_F04V` 后缀 →
+`F04_FB_Verify` 按子文件夹结构逐个 `import_native`，58/58 无弹窗。
+
+### 30.1 对象构成与实现语言
+
+- 30 个 ST FB/FC、8 个 LD FB、20 个 DUT（Struct/Enum），实现语言从
+  `Single Name="Implementation" Type` 判定（`{3b83b776-fb25-43b8-99f2-3c507c9143fc}`=ST、
+  `{25e509de-33d4-4447-93f8-c9e4ea381c8b}`=LD；**注意此二 GUID 与常见记录不同，
+  以此为准**）。DUT 无 `Implementation` 节点。
+- 58 个对象里 14 个有内部引用（FB 引用同文件夹 Struct/Enum 类型、FB 互相引用），
+  全部成功改写；跨引用最密的是 `FB_RGYLamp_F04V → FB_Alarm_Buzzer/FB_InitializingAndAutoing_Buzzer`、
+  多个标定 FB → `FC_AxisAbsGo`、`FB_Cylinder_F04V → Struct0_Cylinder_F04V/Struct1/Struct2`。
+
+### 30.2 ⚠ 枚举字面量进全局命名空间（277 条重名的根因）
+
+- IEC 枚举的字面量值（`A1_上料移栽R轴:=1,`）**不是**作用域限定在类型内的符号，
+  而是**全局符号**。副本枚举若沿用原件字面量，会与原件/全局符号**重名**：
+  实测 277 条「符号'xxx'存在重名」+ 所有裸引用（如 `VAR i_axisIndex : INT; i_axisIndex:=A1_上料移栽R轴`）
+  全变「未知类型: 'xxx'」。**修法：枚举值也要加 `_F04V` 后缀**（从 DUT 声明里
+  用 `^\s*\w+:=数字,` 行提取 `name:=` 前的名字加入改写表）。改后预编译 101 errors=0。
+- 改写表优先级：内部对象名 ∪ GVL 变量名 ∪ 枚举字面量；单遍 `(?<![A-Za-z0-9_])(name)(?![A-Za-z0-9_])`
+  交替合并（长名先排防前缀误伤）。中文不属于 `[A-Za-z0-9_]`，中文名边界天然成立。
+
+### 30.3 A/B 验证（验收链路完整）
+
+- 正样本：ST POU `prg_F04VerifyUse` 实例化 `FB_Cylinder_F04V`（`VAR_IN_OUT` 三个 io 引脚全接真实副本
+  Struct，`io_stHMICylinder` 已自动改引 `Struct1_HMI_Cylinder_F04V`）+ `FB_RGYLamp_F04V()` →
+  build 后预编译 0 错误、编译仅模板基线 1 条（E3_SystemTime，非 F04 错）。
+- 负样本：`fbCyl.ZZZ_NotExist_Pin := TRUE;` → 编译分类 **4 条真实错误**
+  （`'ZZZ_NotExist_Pin' 不是'FB_CYLINDER_F04V'的成员` ×2 + 无效赋值目标 + 类型转换）。
+- ⚠ 空槽会让整个编译中止（total 从 105 掉到 37），导致负样本假阴性——验收前必须先复位 TaskConfig。
+
+### 30.4 GVL 引用改写到 `_GVLVerify`
+
+用户要求新 FB 引脚/逻辑引用之前验证过的 `F01_Variable_GVLVerify` 副本变量。
+`make_f04_translate.py` 读取 `F01_Variable_GVLVerify` 8 个 GVL 的 687 个变量名，
+把 FB 体内的 `Gv_xxx` 改写到 `Gv_xxx_GVLVerify`（实测 FB_Cylinder 副本 16 处、全树 851 处改写）。
+`VAR_IN_OUT io_stHMICylinder : Struct1_HMI_Cylinder_F04V` 这类**类型引用**走「内部名 → 副本类型」
+改写，而 `H_astAlarmRecord_GVLVerify` 这类**变量引用**走 GVL 映射，两条链并行不冲突。
