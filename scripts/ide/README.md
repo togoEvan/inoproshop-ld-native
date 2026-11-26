@@ -80,7 +80,7 @@ daemon 再 `exec` 这里的脚本。
 | `tasks/task_rt_funcret.py` | 往返验证 prg_FuncRetTest：导出导入后的 POU，比对 Function 框结构是否保持 |
 | `tasks/task_show_state.py` | 显示 MainTask 调用列表 + prg_NoTaskTest 是否存在 |
 | `tasks/task_silent_import.py` | 静默导入 native：改名让位 → import_native → 同 tick 读消息 → 失败回滚 → 删旧 → 保存 |
-| `tasks/task_snap.py` | 消息池快照（before/after 各一拍）→ 主机侧 delta_snap.py 差分，baseline 截断的正解（lead 方案）；含 meta.which 自证 + err_total/err_addrs 对象级兜底；severity 读不到直接 raise（不产坏快照） |
+| `tasks/task_snap.py` | 消息池快照（before/after 各一拍）→ 主机侧 delta_snap.py 差分。主判据是 **err_pool**（`get_message_objects(cat, Severity.Error)` 按完整池过滤，不受 100 条截断）；另含 meta.which 自证、err_total/err_addrs 对象级兜底；severity 读不到直接 raise（不产坏快照） |
 | `tasks/task_tree_dump.py` | 列出 Application 下的全部对象（含 Folder/GVL），并展开 F01_Variable |
 | `tasks/task_unhook_task.py` | 彻底把 prg_GvlVerifyUse 从 MainTask 调用列表摘掉（remove 传名字无效，改试索引/其它方式） |
 

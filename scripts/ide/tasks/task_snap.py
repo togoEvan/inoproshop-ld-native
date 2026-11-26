@@ -12,6 +12,10 @@
 
 采集原则：宁缺毋滥。severity 读不到就 raise（快照失败），不产出坏快照——
 坏快照会被下游当成真结果，把「我不知道」伪装成「没问题」。
+
+关键通道：get_message_objects(cat, Severity.Error) 是【按完整池过滤】，不是从
+被截断的 100 条里筛。实测 97f48d64 all=104 / Warning=101 + Text=3 = 104 可证。
+所以 Error 池独立且不受 100 条上限影响 —— 这是 baseline 高截断工程的唯一可靠判据。
 """
 import io
 import json
@@ -56,6 +60,58 @@ def norm(text):
     return t
 
 
+def _severity_filter():
+    """取 get_message_objects(cat, Severity) 重载与 Error 枚举值。取不到返回 None。
+
+    IronPython 下不能 import _3S，只能反射拿重载；Invoke 参数必须是 Array[object]。
+    """
+    try:
+        import System
+        from System import Array, Object
+        target = None
+        sev_type = None
+        for m in system.GetType().GetMethods():
+            if unicode(m.Name) != u"get_message_objects":
+                continue
+            ps = m.GetParameters()
+            if len(ps) == 2 and u"Severity" in unicode(ps[1].ParameterType):
+                target = m
+                sev_type = ps[1].ParameterType
+        if target is None:
+            return None
+        err_v = System.Enum.Parse(sev_type, u"Error")
+        return (target, Array, Object, err_v)
+    except Exception, e:
+        L(u"WARN severity 过滤通道不可用：%s" % e)
+        return None
+
+
+def err_pool(cat_guid, filt):
+    """按 severity=Error 过滤取池。返回 {"total","truncated","items","addrs"} 或 None。
+
+    None = 通道不可用（老版本 IDE / 反射失败），delta 侧回退到文本差分。
+    """
+    if filt is None:
+        return None
+    target, Array, Object, err_v = filt
+    try:
+        objs = list(target.Invoke(system, Array[Object]([cat_guid, err_v])))
+    except Exception, e:
+        L(u"WARN 分类 %s 的 Error 池取不到：%s" % (cat_guid, e))
+        return None
+    items = []
+    addrs = set()
+    for m in objs:
+        raw = prop(m, u"text")
+        items.append(norm(raw))
+        for a in _ADDR.findall(unicode(raw or u"")):
+            addrs.add(a.upper())
+    return {"total": len(objs),
+            "truncated": len(objs) >= TRUNC_AT,
+            "items": items,
+            "addrs": sorted(addrs)}
+
+
 try:
     # 哪个拍子：默认 after；before 由 args 指定（{"which": "before"}）
     which = u"after"
@@ -68,11 +124,13 @@ try:
         finally:
             _af.close()
 
+    filt = _severity_filter()
     system.process_messageloop()
     snap = {}
     n_msg = 0
     n_sev_ok = 0
     n_txt_miss = 0
+    n_pool_ok = 0
     for c in list(system.get_message_categories()):
         guid = unicode(c)
         objs = list(system.get_message_objects(c))
@@ -99,20 +157,27 @@ try:
                 n_err += 1
                 for a in _ADDR.findall(unicode(raw or u"")):
                     err_addrs.add(a.upper())
+        pool = err_pool(c, filt)
+        if pool is not None:
+            n_pool_ok += 1
         snap[guid] = {"total": len(objs),
                       "truncated": len(objs) >= TRUNC_AT,
                       "items": items,
                       # 对象级兜底：归一化会把「地址重复」这类错误全撞成一条，
                       # 靠 err_total + 地址集合才能看出「换了一批地址照样全错」。
                       "err_total": n_err,
-                      "err_addrs": sorted(err_addrs)}
+                      "err_addrs": sorted(err_addrs),
+                      # 主判据通道：独立 Error 池，不受 100 条截断影响
+                      "err_pool": pool}
     if n_txt_miss:
         L(u"WARN text 读不到 %d/%d 条（归一化后为空串，不影响 severity 判定）"
           % (n_txt_miss, n_msg))
     # meta 自证：delta 侧校验 before/after 拍子，两次拍成同一个立刻 UNKNOWN
     meta = {"which": which, "ts": time.strftime(u"%H:%M:%S"),
             "argv0": unicode(sys.argv[0]),
-            "n_msg": n_msg, "n_sev_ok": n_sev_ok, "n_txt_miss": n_txt_miss}
+            "schema": 2,
+            "n_msg": n_msg, "n_sev_ok": n_sev_ok, "n_txt_miss": n_txt_miss,
+            "n_pool_ok": n_pool_ok}
     out = os.path.join(IPC, u"snap_%s.json" % which)
     # 必须显式 close（不能裸 io.open().write()）——IDE 进程持有句柄不释放，
     # 主机侧 delta_snap.py 读会 PermissionError（实测）。
@@ -121,12 +186,15 @@ try:
         _of.write(unicode(json.dumps({"meta": meta, "cats": snap}, ensure_ascii=False)))
     finally:
         _of.close()
-    L(u"=== snap %s : %d 分类 / %d 消息 / severity %d OK -> %s ==="
-      % (which, len(snap), n_msg, n_sev_ok, out))
+    L(u"=== snap %s : %d 分类 / %d 消息 / severity %d OK / err_pool %d 分类 -> %s ==="
+      % (which, len(snap), n_msg, n_sev_ok, n_pool_ok, out))
     for g in sorted(snap.keys()):
         d = snap[g]
-        L(u"  %s total=%d err=%d addr=%d%s" % (
-            g, d["total"], d["err_total"], len(d["err_addrs"]),
+        p = d.get("err_pool")
+        pstr = (u"pool=%d%s" % (p["total"], u"[T]" if p["truncated"] else u"")) \
+            if p is not None else u"pool=N/A"
+        L(u"  %s total=%d err=%d addr=%d %s%s" % (
+            g, d["total"], d["err_total"], len(d["err_addrs"]), pstr,
             u" [TRUNCATED]" if d["truncated"] else u""))
 except Exception, e:
     L(u"FATAL %s\n%s" % (e, traceback.format_exc()))

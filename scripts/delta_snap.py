@@ -8,17 +8,22 @@
 
 结论（四态）：
   PASS       : delta error == 0 且无不可信分类
-  FAIL       : delta 里出现可见的新增 error（确定的工程事实）
+  FAIL       : delta 里出现新增 error（确定的工程事实）
   UNKNOWN    : 截断 / 拍子不对 / severity 未知 / 存量 error 或地址集合变化，交人工
   TOOL_ERROR : 快照缺失或损坏，工具链故障——不是工程结论
+
+主判据：err_pool（独立 Error 池，不受 100 条截断影响）。
+  get_message_objects(cat, Severity.Error) 按完整池过滤，实测可证：
+  97f48d64 all=104 = Warning 101 + Text 3。所以 Error 池条数是真值。
+  快照无 err_pool（旧版）时回退文本差分，此时截断即 UNKNOWN。
 
 退出码：0=PASS，1=FAIL，2=UNKNOWN，3=TOOL_ERROR
   工具崩了必须与「工程有错」分码，否则主机侧会把链路故障误报成质量事故。
 
-固定局限：多重集减法按归一化文本计数，回答的是「错误数净增了吗」；
-若一消一增两条同文本 error 抵消，delta=0 也判 PASS。因此对已知会撞的
-「地址重复」错误额外做对象级兜底（err_total / err_addrs 集合差分）。
-仍不回答「这次导入引入错误了吗」——那需比对具体对象 GUID/路径。
+固定局限：文本差分按归一化文本计数，回答的是「错误数净增了吗」；
+若一消一增两条同文本 error 抵消，delta=0。err_pool 通道给条数真值，
+地址集合给定位，两者互补。仍不回答「这次导入引入错误了吗」——
+那需比对具体对象 GUID/路径。
 
 输出：ipc/delta.log（UTF-8，中文细节全在这）；stdout 只打 ASCII 摘要
 （GBK 控制台会把中文打成乱码，判定请读 delta.log 或退出码）。
@@ -120,14 +125,45 @@ def main():
           % bad_sev)
 
     delta_err = 0
+    pool_used = 0
     for guid in sorted(after.keys()):
         a = after[guid]
         b = before.get(guid) or dict(EMPTY)
 
+        # ---- 主判据：独立 Error 池（不受 100 条截断影响）----
+        # get_message_objects(cat, Severity.Error) 按完整池过滤，实测可证：
+        # 97f48d64 all=104 = Warning 101 + Text 3。所以 Error 池的条数是真值，
+        # 与 warning 池是否截断无关 —— 这条通道能让高 baseline 工程正常判 PASS。
+        pa, pb = a.get("err_pool"), b.get("err_pool")
+        if pa is not None and pb is not None:
+            pool_used += 1
+            pe = pa["total"] - pb["total"]
+            if pe > 0:
+                W(u"%s : Error 池 %d -> %d（独立通道，不受截断影响）= %+d"
+                  % (guid, pb["total"], pa["total"], pe))
+                delta_err += pe
+            elif pa["total"] != pb["total"]:
+                W(u"%s : Error 池 %d -> %d（减少，不算新增）"
+                  % (guid, pb["total"], pa["total"]))
+            # 池自身也被截断：文本/地址不可全信
+            if pa.get("truncated"):
+                W(u"%s : Error 池自身已截断(total=%d)，地址集合不完整 -> 存疑"
+                  % (guid, pa["total"]))
+                unknown = True
+            # 地址集合变化（同类错误换地址，条数可能不变）
+            aa, ab = set(pa.get("addrs") or []), set(pb.get("addrs") or [])
+            if aa != ab and not pa.get("truncated"):
+                W(u"%s : Error 池地址集合变化 +%d/-%d（%s）"
+                  % (guid, len(aa - ab), len(ab - aa),
+                     u",".join(sorted(aa - ab)[:5])))
+                unknown = True
+            # 池通道可用时，该分类的文本差分结论不再需要——避免被截断误伤
+            continue
+
         if b.get("truncated"):
-            # before 已截断：文本不可信，只能比 total 差。
-            # total 无增只是「没多出来」，不代表新增里没 error（可能一消一增），
-            # 所以截断本身就该降 UNKNOWN，不能因为 dn==0 就判干净。
+            # 无 Error 池通道（旧快照/老 IDE）：只能退回文本差分。
+            # before 已截断 = 文本不可信，total 无增不代表没藏 error（可能一消一增），
+            # 所以截断本身就该降 UNKNOWN。
             dn = a["total"] - b["total"]
             W(u"%s : before 已截断(total=%d)，只比 total 差 = %+d -> 文本不可信"
               % (guid, b["total"], dn))
@@ -172,13 +208,14 @@ def main():
                   % (guid, ea))
                 unknown = True
 
-    # 判定优先级：可见新增 error > 0 是确定的 FAIL（截断/降级不影响这个事实）；
+    # 判定优先级：新增 error > 0 是确定的 FAIL（截断/降级不影响这个事实）；
     # 否则有不可信因素才 UNKNOWN；都干净才 PASS。
+    chan = u"errpool" if pool_used else u"text"
     if delta_err > 0:
-        return finish(u"FAIL", EXIT_FAIL, u"new_err=%d" % delta_err)
+        return finish(u"FAIL", EXIT_FAIL, u"new_err=%d chan=%s" % (delta_err, chan))
     if unknown:
-        return finish(u"UNKNOWN", EXIT_UNKNOWN, u"new_err=0 need_manual")
-    return finish(u"PASS", EXIT_PASS, u"new_err=0")
+        return finish(u"UNKNOWN", EXIT_UNKNOWN, u"new_err=0 chan=%s need_manual" % chan)
+    return finish(u"PASS", EXIT_PASS, u"new_err=0 chan=%s" % chan)
 
 
 if __name__ == "__main__":

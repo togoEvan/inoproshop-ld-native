@@ -7,6 +7,33 @@
 
 ## [Unreleased]
 
+### 突破（2026-11-26，主判据改独立 Error 池 —— 截断问题从根上消失）
+
+lead 指出「消息池是时间正序、新增永远排在末尾，而末尾正是截断位置」，建议改用
+收尾汇总行（`编译完成 -- X 错误, Y 警告`）的标量差分。顺着这条线探 IDE API，
+**发现了比汇总行更强的通道**：
+
+- **`system.get_message_objects(cat, Severity.Error)` 按【完整池】过滤**，不是从
+  被截断的 100 条里筛。实证：`97f48d64` all=104，Warning 筛出 101 + Text 筛出 3
+  = 104 —— 说明过滤发生在截断之前。因此 **Error 池的条数是真值，与 warning 池
+  是否截断无关**。
+- 探针（`scripts/ide/studies/task_exp_probe_sev.py` 一系）确认：Severity 是
+  Flags 枚举 `FatalError=1/Error=2/Warning=4/Information=8/Text=16`；IronPython
+  下不能 `import _3S`，只能反射拿 2 参数重载 + `Array[object]` 传参。
+- 分类身份：`217bc73e`=预编译、`97f48d64`=编译、`194b48a9`=脚本消息、
+  `2af7707f`=导出/导入、`de128929`=Cam。
+
+落地：
+- **`task_snap.py`** 每分类增采 `err_pool`（`{total,truncated,items,addrs}`），
+  meta 加 `schema:2` / `n_pool_ok`；通道不可用时 `err_pool=null`，delta 自动回退。
+- **`delta_snap.py`** 主判据改 err_pool 标量差分：池增 → FAIL；池自身截断无增 →
+  UNKNOWN；地址集合变化 → UNKNOWN；无 err_pool（旧快照/老 IDE）→ 回退文本通道。
+  摘要加 `chan=errpool|text` 标明走了哪条通道。
+
+**效果**：真实模板工程（baseline 101/104 常驻截断）从「永远 UNKNOWN」变为
+**PASS（chan=errpool）**，同时 9 个构造场景（含 0→1 判 FAIL、3→3 地址全换判
+UNKNOWN、旧快照回退）全部正确。
+
 ### 修复（2026-11-26，delta 四态退出码 + severity 静默降级 + 地址互撞兜底 —— 回应 lead 15:18 四个实验）
 
 lead 在主机侧拿 delta_snap.py 真实跑了四个构造实验，挖出两个数据级假通过，本轮全修：
