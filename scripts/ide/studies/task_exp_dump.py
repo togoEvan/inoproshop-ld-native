@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+# @ipy2
 """只 dump 消息分类（不执行任何命令）。
 
 参数 ipc/exp_args.json: {"note": "..."}

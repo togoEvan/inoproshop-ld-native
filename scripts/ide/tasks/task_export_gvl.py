@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+# @ipy2
 """按「文件夹/对象」路径导出单个对象（支持子文件夹），用于观察单对象导出的 SV 结构。
 
 参数 ipc/export_gvl_args.json: {"path": ["F01_Variable_GVLVerify", "GVL_VerifyConst"], "out": "xxx.native"}

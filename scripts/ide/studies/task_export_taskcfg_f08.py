@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+# @ipy2
 """把 prg_F08VerifyUse 从指定任务里彻底摘掉（绕开 pous.remove 无效的问题）。
 
 背景（2026-11-26 实测）：

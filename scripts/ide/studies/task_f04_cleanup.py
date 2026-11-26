@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+# @ipy2
 """F04 收尾：摘测试 POU 任务槽 + 删除 prg_F04VerifyUse。输出 ipc/f04_cleanup.log
 """
 import io

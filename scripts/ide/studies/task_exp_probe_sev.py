@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+# @ipy2
 """探测消息接口的严重级别能力：能不能区分 Error / Warning。
 
 输出 ipc/exp/probe_sev.log

@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+# @ipy2
 """只 dump 消息，不 build（保留导入触发的快照）。输出 ipc/dump_only.log"""
 import io
 import os

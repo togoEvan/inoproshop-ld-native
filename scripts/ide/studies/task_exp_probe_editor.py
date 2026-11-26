@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+# @ipy2
 """探测：当前 IDE 打开了哪些编辑器/文档，以及「检查程序」的作用域。
 
 输出 ipc/exp/probe_editor.log

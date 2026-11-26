@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+# @ipy2
 """F10 第一步：导出 4 个 POU 的 native + 建 F10_POU_EthercatTask_Verify 顶层文件夹。
 
 分两步（与 task_import_f07.py 同模式）：

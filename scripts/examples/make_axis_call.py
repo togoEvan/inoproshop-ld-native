@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+# @py3
 """轴控生成器：复现 InoPack 模板的轴控写法（LD 调用 + FB/action 骨架）。
 
 覆盖的新结构（实测导出见 references/native-structure.md「轴控指令」节）：

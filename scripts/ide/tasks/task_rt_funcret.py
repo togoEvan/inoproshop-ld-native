@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+# @ipy2
 """往返验证 prg_FuncRetTest：导出导入后的 POU，比对 Function 框结构是否保持。"""
 import io
 import os

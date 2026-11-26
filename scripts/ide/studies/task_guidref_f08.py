@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+# @ipy2
 """查 F08 轴组引用的 4 个 POU Guid + 2 个 AxisGuid 在工程里对应哪个对象。
 
 A1: ReadInputs 13345d93 / WriteOutputs 7a840816 / Init 746be94b / gvl fb146491

@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+# @ipy2
 """F10 第三步：把 ipc/f10_out 下的 4 个翻译副本导入 F10_POU_EthercatTask_Verify 顶层文件夹。
 
 前置：task_export_f10.py 已建顶层文件夹 + f10_top_guid.txt 已写入。

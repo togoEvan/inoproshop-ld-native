@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+# @ipy2
 """验收：只读两个分类的消息并统计 Error / Warning，单次快照，绝不阻塞 IDE。
 
 - 不编译、不清消息、不 sleep、不轮询（IDE 脚本跑主线程，sleep 冻死界面）

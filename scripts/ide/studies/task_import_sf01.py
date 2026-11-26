@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+# @ipy2
 """在 F02_Struct_Verify 下建 SF01_Alarm_StructVerify 子文件夹，导入 14 个报警结构体副本。
 
 关键：子文件夹的 parent_container_guid = 父文件夹 F02_Struct_Verify 的 SV 节点 guid

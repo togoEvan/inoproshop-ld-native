@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+# @ipy2
 """只执行一个 IDE 命令，不读消息（避免读消息时把结果混进来）。
 
 参数 ipc/exp_args.json: {"guid": "...", "note": "..."}

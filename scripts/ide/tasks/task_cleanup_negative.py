@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+# @ipy2
 """删除负样本对象（GVL_BadTest），保留 F99_GVLVerify 验证文件夹。"""
 import io
 import os

@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+# @ipy2
 """再试几种摘除空槽项的办法。"""
 import io, os, sys, traceback
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(sys.argv[0]))))

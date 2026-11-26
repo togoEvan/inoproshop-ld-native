@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+# @ipy2
 """A/B 验证子文件夹副本：ST POU prg_Sf01VerifyUse 挂 MainTask。
 
 pos : stTips : Struct_HMI_CommonAlarmTips_StructVerify;

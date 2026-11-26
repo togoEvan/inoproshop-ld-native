@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+# @ipy2
 """执行指定的 IDE 命令（按 GUID 字符串，遍历 commands 找到匹配项后 execute）。
 
 参数 ipc/cmd_args.json: {"guid": "...", "label": "编译"}

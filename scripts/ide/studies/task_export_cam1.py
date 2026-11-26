@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+# @ipy2
 """从 IDE 导出 Cam1_F07V 回读，验证曲线数据（Points/Segments）确实生效。
 
 输出：ipc/f07_out/Cam1_F07V_readback.native

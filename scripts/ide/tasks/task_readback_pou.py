@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+# @ipy2
 """读回 prg_GvlVerifyUse 的声明/实现原文，确认 replace 是否真的写进工程。"""
 import io
 import os

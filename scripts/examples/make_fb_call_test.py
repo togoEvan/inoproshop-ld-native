@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+# @py3
 """按 act04_Interface / act90_PackMLManager 的实测结构，生成「功能块(FB)调用」测试 POU。
 
 覆盖三类调用（CallType 三个取值）：

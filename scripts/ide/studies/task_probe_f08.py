@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+# @ipy2
 """探测 F08_AxisGroup 下轴组对象的能力：属性、方法、能否导出 native。
 
 轴组（AxesGroup）是 CODESYS 的运动控制对象，与 CAM 类似属于「结构化对象」，

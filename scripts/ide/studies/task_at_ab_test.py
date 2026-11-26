@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+# @ipy2
 """A/B 对照：验证副本 GVL（保留 AT 绝对地址）里的变量是否真的全局可见。
 
 参数 ipc/at_ab_args.json:

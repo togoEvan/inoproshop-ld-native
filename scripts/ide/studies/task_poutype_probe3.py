@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+# @ipy2
 """反射查找 PouType 枚举类型，拿到枚举值后 create_pou。"""
 import io
 import os

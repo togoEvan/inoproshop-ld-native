@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+# @ipy2
 """按名字删除 Application 下的对象（清理验证用负样本 POU）。
 
 参数：ipc/import_args.json 里的 "names" 列表。

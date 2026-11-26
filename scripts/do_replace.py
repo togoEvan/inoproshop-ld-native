@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+# @py3
 """静默替换工程内的 native 对象（绝不弹确认框）。
 
 原理：InoProShop 的 import_native(path) 只有 1 个路径参数时，遇到同名对象会弹

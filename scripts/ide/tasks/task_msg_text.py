@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+# @ipy2
 """用 get_messages(cat) 直接 dump 每个分类的全部消息文本（返回的是字符串）。
 
 输出 ipc/msg_text.log

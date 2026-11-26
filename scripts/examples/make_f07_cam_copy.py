@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+# @py3
 """CAM（电子凸轮）对象复制器。
 
 CAM 对象特点（TypeGuid fea841a8-cb28-421c-8d22-c7226c528b66）：

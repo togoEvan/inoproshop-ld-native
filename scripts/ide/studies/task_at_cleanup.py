@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+# @ipy2
 """收尾：删除 prg_AtVerifyUse + 把 MainTask 调用列表恢复成只剩 M000_MAIN。
 
 输出 ipc/at_cleanup.log

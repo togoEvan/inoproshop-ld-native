@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+# @ipy2
 """批量导出工程里所有可导出的 POU（含 FB/PRG/Function），用于结构学习。
 
 与 export_live.py 的区别：本脚本不依赖 ipc/export_targets.txt，

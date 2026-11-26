@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+# @py3
 """修 45 个 C0046 + 去掉每支路多余的第二个 TRUE。
 
 根因1：声明区只声明了起保停 3 个变量，状态机 8 个变量（iState/xAlarm/xAutoMode/

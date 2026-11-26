@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+# @ipy2
 """只调用 app.build()，不读消息。
 
 输出 ipc/exp/<note>.build.log

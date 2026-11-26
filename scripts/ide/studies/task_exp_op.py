@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+# @ipy2
 """只删除 / 只导入一个对象，不做别的（避免异步命令与读消息互相干扰）。
 
 参数 ipc/exp_args.json: {"op": "delete"|"import", "name": "...", "src": "..."}

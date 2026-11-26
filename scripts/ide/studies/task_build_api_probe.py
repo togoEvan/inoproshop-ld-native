@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+# @ipy2
 """探测 app 的构建类方法（rebuild / clean / generate_code 等），并看它们是否真的重编译。"""
 import io
 import os

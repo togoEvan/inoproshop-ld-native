@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+# @ipy2
 """探测 SoftMotion General Axis Pool：能否新建虚拟轴、轴对象长什么样。
 
 背景（2026-11-26 实测）：

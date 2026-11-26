@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+# @py3
 """IronPython 2.7 脚本语法校验（本地 Python 3 运行）
 
 为什么需要它：
@@ -55,6 +56,27 @@ def downgrade(src):
     return src
 
 
+# @py3 / # @ipy2 显式标记（2026-11-26 lead 提议 + 实现）
+# 为什么需要标记：靠目录分流（scripts/ = py3，scripts/ide/ = IP2）迟早被跨目录
+# 文件打破 —— delta_snap.py 就是活例子：它是 py3 脚本，却写过 IP2 的
+# `except Exception, e:`，被降级修好后「通过」了门禁，运行时才炸。
+# 无标记 = 沿用目录默认（按 IP2 检查），只提示不判红：一次性给 130+ 文件
+# 判红没人会补标记，门禁直接废；未标记应是渐进迁移的可视化提示。
+MARK_PY3 = "# @py3"
+MARK_IPY2 = "# @ipy2"
+
+
+def detect_mode(raw):
+    """读文件头 3 行里的语义标记。返回 "py3" / "ipy2" / None（未标记）。"""
+    for line in raw.splitlines()[:3]:
+        s = line.strip()
+        if s.startswith(MARK_PY3):
+            return "py3"
+        if s.startswith(MARK_IPY2):
+            return "ipy2"
+    return None
+
+
 def check_file(path):
     """返回 (ok, [问题])"""
     problems = []
@@ -66,15 +88,27 @@ def check_file(path):
     if raw.startswith(u"\ufeff"):
         problems.append("文件带 UTF-8 BOM（IronPython 可接受，但与其他文件不一致）")
 
-    try:
-        src = downgrade(raw)
-        tree = ast.parse(src, filename=path)
-    except SyntaxError as e:
-        return False, ["语法错误：line %s: %s（原文：%r）"
-                       % (getattr(e, "lineno", "?"), e.msg,
-                          (getattr(e, "text", "") or "").strip())]
-    except Exception as e:
-        return False, ["降级失败：%s" % e]
+    mode = detect_mode(raw)
+    if mode == "py3":
+        # py3 不降级：降级会把误写的 `except X, e:` 修成合法写法，门禁反而失效
+        try:
+            tree = ast.parse(raw, filename=path)
+        except SyntaxError as e:
+            return False, ["语法错误(py3 不降级)：line %s: %s（原文：%r）"
+                           % (getattr(e, "lineno", "?"), e.msg,
+                              (getattr(e, "text", "") or "").strip())]
+        except Exception as e:
+            return False, ["解析失败：%s" % e]
+    else:
+        try:
+            src = downgrade(raw)
+            tree = ast.parse(src, filename=path)
+        except SyntaxError as e:
+            return False, ["语法错误：line %s: %s（原文：%r）"
+                           % (getattr(e, "lineno", "?"), e.msg,
+                              (getattr(e, "text", "") or "").strip())]
+        except Exception as e:
+            return False, ["降级失败：%s" % e]
 
     # 结构体检：重复定义检查必须**按作用域分组**
     # ⚠ 2026-11-26 修正：旧实现用 ast.walk 扁平遍历、不区分作用域，把
@@ -113,15 +147,26 @@ def main(argv):
         print("usage: check_ipy_syntax.py <file.py> [...]")
         return 1
     bad = 0
+    n_unmarked = 0
     for p in argv[1:]:
         ok, probs = check_file(p)
         if ok:
-            print("[ OK ] %s" % p)
+            try:
+                _m = detect_mode(io.open(p, "r", encoding="utf-8").read())
+            except Exception:
+                _m = None
+            if _m is None:
+                n_unmarked += 1
+            print("[ OK ] %s  <%s>" % (p, _m or "未标记=按IP2"))
         else:
             bad += 1
             print("[FAIL] %s" % p)
             for x in probs:
                 print("       - %s" % x)
+    if n_unmarked:
+        # 只提示不判红：渐进迁移可视化
+        print("\n提示：%d 个文件未加 @py3/@ipy2 标记（按 IP2 检查，不计入失败）"
+              % n_unmarked)
     return 0 if bad == 0 else 1
 
 

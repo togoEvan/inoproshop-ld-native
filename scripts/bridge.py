@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+# @py3
 """与 IDE 内守护进程通信的客户端（文件队列 IPC）。
 
 机制（详细论证见 references/mcp-bridge.md）：

@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+# @ipy2
 """收尾：删除 prg_StructVerifyUse（任务列表已通过覆盖导入复位，不再动 pous）。
 
 输出 ipc/f02_cleanup.log

@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+# @ipy2
 """扫描整个 Application 里所有 AT 绝对地址（含 POU/GVL），算已用区间和空闲区间。
 
 输出 ipc/at_scan.log

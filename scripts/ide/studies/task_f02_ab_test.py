@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+# @ipy2
 """A/B 验证副本 Struct：建 ST POU prg_StructVerifyUse 挂进 MainTask，两种实现切换。
 
 模式（exp_args.json 不用，直接参数化文件 f02_ab_mode.txt：pos / neg）：

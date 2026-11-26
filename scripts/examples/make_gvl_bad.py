@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+# @py3
 """负样本：一个声明有语法错误的 GVL，用来证明「导入后读预编译」真的能抓到 GVL 错误。
 
 用法：python make_gvl_bad.py <输出>

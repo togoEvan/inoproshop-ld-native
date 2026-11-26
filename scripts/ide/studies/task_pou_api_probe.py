@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+# @ipy2
 """探测：如何在脚本里创建一个 POU（用于写一段引用 GVL 变量的代码做交叉验证）。"""
 import io
 import os

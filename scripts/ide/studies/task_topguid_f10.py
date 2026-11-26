@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+# @ipy2
 """F10 补充步骤：读取 F10_POU_EthercatTask_Verify 顶层文件夹 guid，
 写入 ipc/f10_top_guid.txt，并导出该文件夹 native 备查。
 

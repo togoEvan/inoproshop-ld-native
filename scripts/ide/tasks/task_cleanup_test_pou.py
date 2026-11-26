@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+# @ipy2
 """删除临时验证 POU（prg_GvlVerifyUse），保留 F99_GVLVerify 文件夹。"""
 import io
 import os

@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+# @py3
 """把 F01_Variable 的 8 个 GVL「原样复制 + 变量名加后缀」，生成可导入的 native。
 
 设计要点

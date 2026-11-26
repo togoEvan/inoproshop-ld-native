@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+# @ipy2
 """A/B 验证 F04 副本 FB：ST POU prg_F04VerifyUse 挂 MainTask 实例化副本 FB。
 
 pos : fbCyl : FB_Cylinder_F04V(...);（引脚接 GVLVerify 变量）+ fbRGY : FB_RGYLamp_F04V(...)

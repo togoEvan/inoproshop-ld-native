@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+# @ipy2
 """把 Cam1_F07V.native 导入已存在的 F07_CAM_Verify 文件夹，并回读校验。
 
 前置：F07_CAM_Verify 已存在（F07 轮已建）。

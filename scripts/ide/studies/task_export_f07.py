@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+# @ipy2
 """整树导出 F07_CAM：每个子文件夹单独 native + 每个对象单独 native + 整包备份。
 
 输出：

@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+# @ipy2
 """构建一次（不 clear_messages），让编译分类出现；然后读双分类。
 
 ⚠ 不在 IDE 里 sleep/轮询（会冻死界面）。只做一次 build + 一次读快照。

@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+# @py3
 """从模板导出的 native 里提取「action Entry」的原始 XML 块，作为生成器模板。
 
 action Entry 的特征：EntryList 下 IsRoot=False、TypeGuid=8ac092e5（Action）。

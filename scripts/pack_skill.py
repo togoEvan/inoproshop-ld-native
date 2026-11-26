@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+# @py3
 """打包 .skill 分发件。
 
 只打 SKILL.md / references/ / scripts/ / assets/，且文件清单严格取自

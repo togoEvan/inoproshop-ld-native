@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+# @ipy2
 """探测 create_pou 需要的 PouType 枚举怎么拿。"""
 import io
 import os

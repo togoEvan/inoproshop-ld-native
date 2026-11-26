@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+# @ipy2
 import io, os, sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(sys.argv[0]))))
 import _base

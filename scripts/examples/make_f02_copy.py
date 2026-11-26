@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+# @py3
 """把 F02_Struct 的 17 个顶层 Struct DUT「原样复制 + 加后缀」，生成可导入的 native。
 
 思路与 make_f01_copy.py 一致，但对象类型是 DUT（TypeGuid 2db5746d）：

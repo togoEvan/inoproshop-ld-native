@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+# @ipy2
 """F08 轴组 A/B 验证。
 
 轴组在 ST 里通过 PAXES_GROUP_REF 引用（实测 M010_插补控制 的写法）：

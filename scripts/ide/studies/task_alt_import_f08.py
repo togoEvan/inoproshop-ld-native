@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+# @ipy2
 """把 f08_out_alt 的副本同名覆盖导入 F08_AxisGroup_Verify（对照实验）。
 
 输出 ipc/f08_alt_import.log

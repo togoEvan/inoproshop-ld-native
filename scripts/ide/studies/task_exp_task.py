@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+# @ipy2
 """把 POU 挂进 / 摘出 MainTask 的调用列表。
 
 参数 ipc/exp_args.json: {"op": "add"|"remove", "task": "MainTask", "pou": "..."}

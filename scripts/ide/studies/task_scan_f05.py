@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+# @ipy2
 """扫描 F05_FC：列出全部子文件夹 + FB，标注实现语言（ST/LD）与对象大小。
 输出 ipc/f05_scan.log
 """

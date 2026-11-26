@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+# @py3
 """盘点 F04_FB 的 58 个对象：类型/实现语言/内部引用。
 
 输出 ipc/f05_analysis.json：

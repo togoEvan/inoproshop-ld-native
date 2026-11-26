@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+# @ipy2
 """列出 F05_FC_Verify 与 F04_FB_Verify 下的完整结构（含子对象类型与数量）。"""
 import io
 import os

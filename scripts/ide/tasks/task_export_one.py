@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+# @ipy2
 """导出 prg_ReproStudy 到指定路径（供往返比对）。"""
 import io
 import os

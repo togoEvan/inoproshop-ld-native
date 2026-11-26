@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+# @py3
 """从 TaskConfig native 里删掉指定任务下的指定 POU 块。
 
 背景（2026-11-26 实测）：

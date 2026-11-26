@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+# @ipy2
 """F07 CAM A/B 验证。
 
 CAM 对象在 ST 里通过「类型化引用」使用：`MC_CamIn` 的 CamTable 引脚类型是

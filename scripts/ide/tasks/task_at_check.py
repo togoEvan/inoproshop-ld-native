@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+# @ipy2
 """核对 F01_Variable_GVLVerify 下 8 个副本 GVL 是否保留了 AT 地址，
 并与 F01_Variable 原件做地址重叠统计。
 

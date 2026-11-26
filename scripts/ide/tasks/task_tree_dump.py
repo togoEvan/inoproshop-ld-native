@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+# @ipy2
 """列出 Application 下的全部对象（含 Folder/GVL），并展开 F01_Variable。"""
 import io
 import os

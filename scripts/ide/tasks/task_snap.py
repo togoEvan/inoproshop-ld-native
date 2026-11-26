@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+# @ipy2
 """双快照多重集差分验收：before/import/after 三拍，delta 判定。
 
 解决 baseline 截断问题：模板工程自带 101 条 warning，POU 名 grep 不可靠。
@@ -57,10 +58,16 @@ _ADDR = re.compile(u"%[IQM][BWDX]\\d+(?:\\.\\d+)?", re.IGNORECASE)
 # 502 error 全返，Warning 维度才被截到 100）。所以条数阈值会把 502 条误判为截断。
 #
 # 两种提示必须区分（都实测到过）：
-#   「多于N个【警告】发生」→ 只有 warning 被截，error 池仍完整可信
-#   「多于N个【消息】发生」→ 所有消息都可能被截，error 池也可能缺条
-_TRUNC_WARN = re.compile(u"多于\\s*\\d+\\s*个警告发生")
-_TRUNC_ALL = re.compile(u"多于\\s*\\d+\\s*个(?:消息|错误)发生")
+#   「多于N个【警告】发生：跳过更多的警告信息」→ 只有 warning 被截，error 池仍完整
+#   「多于N个【错误】：跳过更多的错误信息」    → error 池缺条，必须 UNKNOWN
+#   「多于N个【消息】发生：跳过更多的消息信息」→ 所有消息都可能被截，必须 UNKNOWN
+#
+# ⚠ 措辞不统一，别锚定「发生」（lead 2026-11-26 实测踩坑）：
+#   警告/消息级带「发生」，错误级【不带】——原文是「多于500个错误：跳过更多的错误信息」。
+#   旧正则强制要求「发生」，导致 >500 错误的工程完全看不见截断 -> 误判 PASS。
+#   故只锚「多于N个{主体}」，不锚后缀。
+_TRUNC_WARN = re.compile(u"多于\\s*\\d+\\s*个警告")
+_TRUNC_ALL = re.compile(u"多于\\s*\\d+\\s*个(?:消息|错误)")
 
 
 def norm(text):

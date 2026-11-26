@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+# @ipy2
 """导出当前工程里的 prg_StartStop（用户手改后版本），供学习其结构。"""
 import io, os, sys, traceback
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(sys.argv[0]))))

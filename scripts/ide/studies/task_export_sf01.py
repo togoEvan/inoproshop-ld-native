@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+# @ipy2
 """补导出：SF01_Alarm 子文件夹的 14 个报警结构体 + F02_Struct_Verify 文件夹的 SV GUID。
 
 输出：

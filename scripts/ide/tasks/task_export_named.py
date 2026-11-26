@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+# @ipy2
 """通用：导出 Application 下指定名字的对象（含子对象）为 native，供往返比对。
 
 用法：python bridge.py eval_file {"path":".../task_export_named.py"}

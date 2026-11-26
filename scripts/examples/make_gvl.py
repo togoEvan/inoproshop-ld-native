@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+# @py3
 """GVL（全局变量列表）+ Folder 的 native 生成器 —— 从零构造，不依赖 LD 骨架。
 
 ⚠ 本仓库第一份 GVL 生成器。此前 `assets/natives/` 无任何 GVL 样本，

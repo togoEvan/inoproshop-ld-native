@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+# @ipy2
 """只跑 app.build()，不读消息 —— 与 task_check.py 配对使用。
 
 app.build() 会先清空预编译分类再异步重建（build 后立刻读是 0 条，约 10s

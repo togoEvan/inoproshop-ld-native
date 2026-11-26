@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+# @ipy2
 """彻底摘掉 MainTask 里的空槽项：试 Item(i) 后 remove(obj)，并检查最终列表。"""
 import io
 import os

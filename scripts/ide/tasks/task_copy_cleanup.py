@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+# @ipy2
 """收尾：删除验证 POU 并把 MainTask 调用列表恢复成只剩 M000_MAIN。
 
 ScriptPouObjectList.remove(name) 会留下 Name="" 的空槽项（编译报「期望标识符」），

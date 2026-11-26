@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+# @ipy2
 """递归列出 Application 下全部对象：名称 / 子对象数 / 是否疑似 Folder（空壳）。"""
 import io
 import os

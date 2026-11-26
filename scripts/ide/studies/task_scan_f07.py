@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+# @ipy2
 """扫描 F07_CAM：列出全部子项（含直接 POU），标注实现语言（ST/LD）与对象大小。
 输出 ipc/f07_scan.log
 """

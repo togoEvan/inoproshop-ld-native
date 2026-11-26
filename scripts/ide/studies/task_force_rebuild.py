@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+# @ipy2
 """强制重编译：app.clean() + app.rebuild()，然后全量 dump 消息。
 ⚠ 不 clear_messages 之前的分类？这里必须 clear 才能区分「本次重编译」的结果，
    但已知 clear 后预编译分类不会再重算 —— 本轮目的是验证「坏类型会不会被报」，

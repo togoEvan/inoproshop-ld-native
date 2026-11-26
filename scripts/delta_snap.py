@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+# @py3
 """双快照差分（主机侧）：after - before 多重集减法，只判新增的 error。
 
 与 ide/tasks/task_snap.py 配对（先 before 快照，导入后 after 快照）。

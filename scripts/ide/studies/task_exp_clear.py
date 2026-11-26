@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+# @ipy2
 """决定性实验：清空消息后只做一件事，再看预编译分类里有没有 ZZZ。
 
 参数 ipc/exp_args.json: {"op": "build"|"check"|"nothing", "note": "..."}

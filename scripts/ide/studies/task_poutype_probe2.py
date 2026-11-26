@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+# @ipy2
 """探测 PouType 枚举的可用值（只接受 0？）+ 尝试 create_pou(name, 0)。"""
 import io
 import os

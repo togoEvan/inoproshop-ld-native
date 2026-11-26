@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+# @py3
 """bridge.py 协议回归测试（本地 Python 3 运行，不碰真实 IDE）
 
 为什么要这个测试：

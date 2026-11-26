@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+# @ipy2
 """复核：MainTask 调用列表是否真的摘掉了验证 POU；再 build 一次看最终错误数。"""
 import io
 import os

@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+# @py3
 """F10 主机侧引用分析：提取 4 个 POU 的全部标识符，比对 GVL 映射表找缺口。
 
 输出 ipc/f10_analysis.json + 控制台报告：

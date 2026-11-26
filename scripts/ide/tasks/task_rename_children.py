@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+# @ipy2
 """把某个文件夹下的子对象（GVL）批量改名，统一加后缀。
 
 参数 ipc/rename_children_args.json:

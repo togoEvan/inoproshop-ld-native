@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+# @ipy2
 """枚举 system.commands（GetEnumerator 返回 ScriptCommand 对象），反射取 guid/name/description。
 
 输出 ipc/cmd_list.log

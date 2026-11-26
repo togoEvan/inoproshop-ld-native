@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+# @py3
 """按 act03_PackMLCmd 的写法，生成一个独立测试 POU 的 native 文件。
 
 覆盖的写法要点（全部来自 act03_PackMLCmd 实测结构）：

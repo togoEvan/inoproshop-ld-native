@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+# @ipy2
 """扫描 F10 文件夹：递归列出全部子项，标注类型与实现语言。
 
 F10 预期是 F10_POU_EthercatTask（EtherCAT 任务相关的 POU 集合）。

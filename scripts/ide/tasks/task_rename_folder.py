@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+# @ipy2
 """把 F99_GVLVerify 重命名为 F01_Variable_GVLVerify（在软件工程里直接改名）。
 
 rename 只改名字，guid 不变，其它 POU 对其中 GVL 变量的引用不受影响。

@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+# @ipy2
 """收尾（SF01 轮）：删除 prg_Sf01VerifyUse + 摘任务槽 + 保存。
 
 与 task_f02_cleanup.py 同构。输出 ipc/f02b_cleanup.log

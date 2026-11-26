@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+# @ipy2
 """删除 F05_FC_Verify 下误建的空文件夹（无子对象、无代码的纯容器）。
 
 判定：kids==0 且 textual_declaration 与 textual_implementation 都取不到。

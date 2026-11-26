@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+# @ipy2
 """覆盖式导入：不改名让位，直接 import_native，遇到同名覆盖弹框由主机侧点「全部」。
 适用对象：不允许改名的系统对象（如 Task Configuration）。
 

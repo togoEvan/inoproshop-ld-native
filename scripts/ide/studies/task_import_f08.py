@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+# @ipy2
 """建 F08_AxisGroup_Verify 顶层文件夹并导入轴组副本。
 
 分两步（顶层 Folder 的 SV guid 必须在主机侧解析）：

@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+# @py3
 """学习型生成器：复现 InoPack 模板里 references 尚未记载的三种 LD 写法。
 
 覆盖的新结构（全部来自本机实测导出，见 references/native-structure.md）：

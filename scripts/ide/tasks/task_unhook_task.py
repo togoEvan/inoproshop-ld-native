@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+# @ipy2
 """彻底把 prg_GvlVerifyUse 从 MainTask 调用列表摘掉（remove 传名字无效，改试索引/其它方式）。"""
 import io
 import os

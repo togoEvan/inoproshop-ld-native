@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+# @ipy2
 """探测 F10 下 4 个 POU 的真实格式：ST / LD / CFC，以及声明与实现的开头。
 
 task_scan_f10.py 把它们都判成 POU(?)，说明实现文本里既没有 "NetworkList"

@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+# @py3
 """AxesGroup（运动轴组）对象复制器。
 
 AxesGroup 特点（TypeGuid ad3ae438-9dc8-4473-b82c-f59e508baec4）：

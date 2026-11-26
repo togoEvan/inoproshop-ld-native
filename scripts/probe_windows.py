@@ -1,3 +1,4 @@
+# @py3
 import ctypes
 import ctypes.wintypes as wt
 

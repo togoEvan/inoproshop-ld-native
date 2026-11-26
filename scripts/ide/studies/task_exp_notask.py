@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+# @ipy2
 """实验：未挂任务的 POU 到底被哪些操作检查？
 
 阶段由 ipc/exp_args.json 的 "stage" 决定：

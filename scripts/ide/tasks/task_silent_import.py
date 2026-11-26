@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+# @ipy2
 # 静默导入 native（绝不弹确认框）：改名让位 -> 导入 -> 校验 -> 删旧 -> 保存
 # 参数从 ipc/import_args.json 读取: {"path": "...", "parent": "prg_EM01_Logic", "expect": ["kw1","kw2"]}
 import io, os, sys, time, traceback

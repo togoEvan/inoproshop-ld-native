@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+# @ipy2
 """探测 Task Configuration 的调用列表 API（用于把验证 POU 挂进任务，强制参与编译）。"""
 import io
 import os

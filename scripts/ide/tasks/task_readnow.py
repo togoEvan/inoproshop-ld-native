@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+# @ipy2
 """不清空，直接读当前 5 个分类的所有消息。"""
 import io, os, sys, traceback
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(sys.argv[0]))))

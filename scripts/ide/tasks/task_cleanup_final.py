@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+# @ipy2
 """收尾：把验证 POU 从 MainTask 调用列表摘掉并删除，只保留 F99_GVLVerify 文件夹。"""
 import io
 import os

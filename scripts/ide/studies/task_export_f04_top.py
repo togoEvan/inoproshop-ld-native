@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+# @ipy2
 """导出 F04_FB_Verify 顶层文件夹 native（主机侧解析其 SV guid 后再供子文件夹用）。"""
 import io
 import os

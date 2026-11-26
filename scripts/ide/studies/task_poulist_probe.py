@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+# @ipy2
 """探测 ScriptPouObjectList 的增删 API（把 POU 挂进任务调用列表）。"""
 import io
 import os

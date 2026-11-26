@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+# @ipy2
 """导出 F01_Variable_GVLVerify 的 GVL 变量名 → GVLVerify 变量名映射 + F04 副本将引用的引脚类型。
 
 输出 ipc/f04_gvl_map.json：

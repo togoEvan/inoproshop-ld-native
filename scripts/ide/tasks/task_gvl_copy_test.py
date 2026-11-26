@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+# @ipy2
 """验证副本 GVL 的「带后缀全局变量」是否真的可用（挂 MainTask 才参与编译）。
 
 正样本引用 PLC_Constant_GVLVerify / HMI_Alarm_GVLVerify 里的变量；

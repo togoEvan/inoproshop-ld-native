@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+# @ipy2
 """删除 F07_CAM_Verify 下的指定子对象（默认 Cam1_F07V），为重新导入让位。
 
 输出：ipc/cam1_delete.log

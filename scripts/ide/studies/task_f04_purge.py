@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+# @ipy2
 """删除 F04_FB_Verify 整个顶层文件夹（含全部子对象）+ 删除 prg_F04VerifyUse。
 输出 ipc/f04_purge.log
 """

@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+# @ipy2
 """列出 Application 下所有 F0x 开头的 Folder / GVL 及成员，用于确认 F02 内容。
 
 输出 ipc/exp/list_f02.log

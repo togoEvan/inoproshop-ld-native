@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+# @py3
 """把 F01_Variable 文件夹「重新写一遍」：读原始导出 -> 用 make_gvl 生成器重建
 -> 逐字段比对 -> 输出可导入的 native。
 

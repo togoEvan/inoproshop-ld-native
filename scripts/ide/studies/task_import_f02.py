@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+# @ipy2
 """在 Application 下新建 F02_Struct_Verify 文件夹（复用 make_gvl 的 folder_entry），
 然后逐个导入 17 个 Struct 副本 native（import_native 到该文件夹，此时无同名冲突不弹窗）。
 

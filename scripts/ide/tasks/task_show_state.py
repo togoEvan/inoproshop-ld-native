@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+# @ipy2
 """显示 MainTask 调用列表 + prg_NoTaskTest 是否存在。"""
 import io, os, sys, traceback
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(sys.argv[0]))))

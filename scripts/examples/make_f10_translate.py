@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+# @py3
 """F10_POU_EthercatTask 翻译管线：4 个 ST PROGRAM「改名 + 跨引用改写 + GVL 引用改写」。
 
 改名规则（与 F04 同）：

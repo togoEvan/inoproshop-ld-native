@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+# @ipy2
 """GVL 全局变量验证（正确版）：建 POU + 挂进 MainTask 调用列表 + build + dump。
 
 ⚠ 关键教训：**没挂到任务调用列表的 POU 不参与编译**，build 恒 0 错误，

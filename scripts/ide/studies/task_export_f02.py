@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+# @ipy2
 """导出 F02_Struct：整文件夹 native + 逐个成员 native；展开子文件夹；dump Struct 声明文本。
 
 用法：bridge.py eval_file {"path": ".../task_export_f02.py"}
