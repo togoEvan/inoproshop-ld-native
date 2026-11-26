@@ -76,14 +76,25 @@ def check_file(path):
     except Exception as e:
         return False, ["降级失败：%s" % e]
 
-    # 结构体检
-    defs = {}
+    # 结构体检：重复定义检查必须**按作用域分组**
+    # ⚠ 2026-11-26 修正：旧实现用 ast.walk 扁平遍历、不区分作用域，把
+    #   「def mk_folder() 里的局部 _ug」与「模块级 try 里的 _ug」误报成重复定义
+    #   （studies/task_import_f0{4,5}.py 报的两个 FAIL 就是这种假阳性 —— 实测
+    #   Python 3 直接 compile 通过，两者根本不在同一作用域，不存在冲突）。
+    #   现在按「每个函数/类各一个命名空间 + 模块级一个」分别检查。
+    def _check_scope(body, scope_name):
+        seen = {}
+        for node in body:
+            if isinstance(node, (ast.FunctionDef, ast.ClassDef)):
+                if node.name in seen:
+                    problems.append("重复定义 %s（作用域 %s，首次 line %d，再次 line %d）"
+                                    % (node.name, scope_name, seen[node.name], node.lineno))
+                seen[node.name] = node.lineno
+
+    _check_scope(tree.body, "<module>")
     for node in ast.walk(tree):
         if isinstance(node, (ast.FunctionDef, ast.ClassDef)):
-            if node.name in defs:
-                problems.append("重复定义 %s（首次 line %d，再次 line %d）"
-                                % (node.name, defs[node.name], node.lineno))
-            defs[node.name] = node.lineno
+            _check_scope(node.body, node.name)
 
     # 顶层裸语句检查：IDE 脚本顶层不应该有 input()/raw_input()
     for node in tree.body:
