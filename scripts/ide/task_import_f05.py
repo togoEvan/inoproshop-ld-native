@@ -123,15 +123,19 @@ try:
         sdp = os.path.join(SRC, sfn)
         if not os.path.isdir(sdp):
             continue
-        L(u"[SF] %s" % sfn)
+        # ⚠ 只对真正含 .native 的目录建子文件夹。
+        # 根下直接 POU 在导出阶段会生成同名空目录，误建会产生空文件夹。
+        natives = [x for x in sorted(os.listdir(sdp))
+                   if x.endswith(u".native") and not x.startswith(u"_")]
+        if not natives:
+            L(u"[SKIP] empty dir (no .native): %s" % sfn)
+            continue
+        L(u"[SF] %s (%d objects)" % (sfn, len(natives)))
         sub = mk_folder(top, sfn + u"_F05V" if not sfn.endswith(u"_F05V") else sfn, top_guid)
         if sub is None:
             L(u"  FATAL: subfolder %s create failed" % sfn)
             continue
-        # 取 sub 的 sv guid（子对象导入不需要——import_native 到 sub 即可）
-        for f in sorted(os.listdir(sdp)):
-            if not f.endswith(u".native") or f.startswith(u"_"):
-                continue
+        for f in natives:
             p = os.path.join(sdp, f)
             total += 1
             try:

@@ -160,6 +160,10 @@ def main():
         sdp = os.path.join(SRC, sfn)
         if not os.path.isdir(sdp):
             continue
+        # 只处理真正含 .native 的目录（根下直接 POU 会生成空目录，跳过）
+        if not any(x.endswith(u".native") for x in os.listdir(sdp)):
+            print(u"skip empty dir: %s" % sfn)
+            continue
         odir = os.path.join(OUT, sfn)
         if not os.path.isdir(odir):
             os.makedirs(odir)

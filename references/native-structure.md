@@ -1663,3 +1663,23 @@ IDE 脚本只读清单逐个 `import_native`。
   **预编译 0 / 编译 0，合计 0 错误**（比 F04 更干净，连 E3_SystemTime 基线都没有）。
 - 负样本：多传一个不存在的引脚 → 编译 **2 条真实错误**
   （`函数 'FC_AlarmRecord_F05V' 需要'2'个输入` + `没有定义标识符'ZZZ_NotExist_Pin'`）。
+
+### 31.6 ⚠ 根下直接 POU 会被误建为空文件夹（实际踩到）
+
+§31.1 记录了「根下直接 POU 导出时也生成空目录」，但**导出/翻译/导入三个脚本
+如果都只按目录遍历，就会真的在工程里建出空文件夹**。F05 实测多建了 **5 个**：
+`ConcatPro_F05V`、`FC_CRC16_F05V`、`FC_XOR8_F05V`、`FC_XOR16_F05V`、
+`FC_整串字符串按分隔符截取_F05V`。
+
+链路：导出生成 `ipc/f05/<名>/`（空目录）→ 翻译在 `ipc/f05_out/<名>/` 又建一份
+→ 导入遍历目录时对每个目录调 `mk_folder` → 工程里多 5 个空文件夹。
+
+**三重防护（已在脚本中落地）**：
+1. `make_f05_translate.py`：目录内无 `.native` 直接 `skip`；
+2. `task_import_f05.py`：`natives` 列表为空则 `[SKIP]`，不调 `mk_folder`；
+3. 事后清理 `task_f05_rm_empty.py`：判定 `kids==0` 且 `textual_declaration` /
+   `textual_implementation` 都取不到 → 纯容器 → `remove()`。
+
+**判别空 Folder 的可靠方法**：`len(kids(o)) == 0` 且两个 textual 属性都抛异常或
+返回 `None`。真正的 POU 即使 `kids==0` 也一定能取到 `textual_declaration`。
+空文件夹不影响编译（实测删前删后都是 0 错误），但会污染工程结构。

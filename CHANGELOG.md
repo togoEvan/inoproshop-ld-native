@@ -16,6 +16,10 @@
 
 - **FC 全量翻译验证：F05_FC_Verify**（2026-11-26 四轮）。`F05_FC` 全部 10 个对象（7 ST FC + 3 DUT；其中 **5 个 FC 直接挂在根下**，2 个子文件夹 SF01_AlarmRecord/3、SF02_AlarmWindow/2）整树导出 → `scripts/examples/make_f05_translate.py` 加 `_F05V` 后缀 → `F05_FC_Verify`，10/10 无弹窗。**三个新发现**：① 根下直接 POU 导出时也会生成「空目录 + `<名>_folder.native`」，看起来像子文件夹，判别只能靠 TypeGuid（`6f9dac99-8de1-4efc-8465-68ac443b7d08`，旧记录的 `f3a6-45e5-…` 是错的）；② 枚举字面量提取正则必须吃行尾 `//` 注释（`\s*,?\s*(//.*)?$`），否则 F05 的 `Enum_AlarmLevel` 0 命中、277 重名问题重演；③ 枚举字面量是中文常见词（提示/警告/故障）时不能盲目全局替换，须先扫描确认只在声明行出现。A/B：`FC_AlarmRecord_F05V`（ARRAY OF 副本 Struct）+`FC_CRC16_F05V`（内部调 FC_XOR8/16_F05V）正样本 **0 错误**；负样本 2 条真实检出。详见 `references/native-structure.md §31`。新增脚本：`task_scan_f05.py`、`task_export_f05.py`、`task_export_f05_top.py`、`task_import_f05.py`、`task_f05_ab_test.py`、`task_f05_purge.py`、`task_f05_cleanup.py`、`examples/analyze_f05.py`、`examples/make_f05_translate.py`。
 
+### 修正（2026-11-26，F05 空文件夹）
+
+- **根下直接 POU 被误建为空文件夹（F05 实测 5 个）**：导出时根下 POU 也会生成同名空目录，翻译脚本复制该目录、导入脚本对每个目录 `mk_folder`，导致 `F05_FC_Verify` 下多出 `ConcatPro_F05V`、`FC_CRC16_F05V`、`FC_XOR8_F05V`、`FC_XOR16_F05V`、`FC_整串字符串按分隔符截取_F05V` 共 5 个空文件夹（正确结构应为 7 项：2 文件夹 + 5 FC）。**三重防护已落地**：① `make_f05_translate.py` 目录内无 `.native` 则 skip；② `task_import_f05.py` 空 natives 列表则 `[SKIP]` 不建文件夹；③ `task_f05_rm_empty.py` 按「`kids==0` 且两个 textual 属性都取不到」判定并 `remove()`。清理后结构 7 项正确、编译仍 0 错误。详见 `references/native-structure.md §31.6`。
+
 ### 修正（重要，2026-11-26）
 
 - **`run_overwrite_import.py` 扫不到覆盖确认弹框（卡死 435s）**：覆盖确认模态框挂在**未被禁用**的框架窗口（标题 `InoProShop(V1.10.0.3)`）下，被禁用的是主工程窗口；旧逻辑「跳过 enabled 窗口、只扫被禁用窗口」导致弹框永远扫不到，`import_native` 卡 435s 直到人工点击。修法：不看 enabled，直接遍历每个顶层窗口的子控件找「全部(&A)」按钮；实测 `PostMessageW(BM_CLICK)` 点「全部」+「确定」即可解除。另外 bash heredoc 写 JSON 会吃反斜杠（`\\` 变 `//`），路径参数要用 `python -c` 或文件写入。
