@@ -435,7 +435,7 @@ grep -c 'Name="Name" Type="string">actAbs<'  → 1（Entry 名没动）
 - **根因**：消息分类是**惰性创建**的。新打开的工程、或从未执行过构建的工程，
   运行时只暴露 2 个分类（预编译 `217bc73e` + 导出/导入 `2af7707f`）。
   编译分类要等第一次 `app.build()` 之后才出现。
-- **正确做法**：先用 `scripts/ide/task_build_check.py` 跑一次 `build()`（**不 clear_messages**），
+- **正确做法**：先用 `scripts/ide/tasks/task_build_check.py` 跑一次 `build()`（**不 clear_messages**），
   再读双分类。实测构建后分类数从 2 变 3，编译分类出现。
 - **⚠ 不要**因为分类不存在就 `return 0` 当通过——那正是本仓库反复强调的「假通过」。
 

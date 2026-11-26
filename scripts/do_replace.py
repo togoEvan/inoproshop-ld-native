@@ -23,7 +23,7 @@ BASE = bridge.BASE
 IPC = bridge.IPC
 ARGS = os.path.join(IPC, "import_args.json")
 LOG = os.path.join(IPC, "silent_import.log")
-TASK = os.path.join(BASE, "ide", "task_silent_import.py")
+TASK = os.path.join(BASE, "ide", "tasks", "task_silent_import.py")
 
 
 def main():

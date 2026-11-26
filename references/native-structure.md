@@ -1458,7 +1458,7 @@ Object (Type = {ffbfa93a-…})
    编译报 **13 条「地址重复」**：`"Hr_xBuzzerShield_GVLVerify"地址重复(重复地址范围为：%MB131076~%MB131076)`。
 2. 副本要带地址，必须**整体平移到空闲区间**。实测 `MB +311228 / MW +2000` 后
    50 个地址与原件重叠 **0**，A/B 对照正样本 0 错误、负样本 2 条。
-   已用区间与空闲起点可用 `scripts/ide/task_at_scan.py` 扫出来。
+   已用区间与空闲起点可用 `scripts/ide/tasks/task_at_scan.py` 扫出来。
 3. 正则要吃 **`AT%MW1000` 这种无空格写法**：`(\s+AT\s*%\S+)?`，`\s*` 不是 `\s+`。
    第一版写 `\s+` 导致 `PLC_Common` 有 6 行没被识别。
 

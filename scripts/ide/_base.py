@@ -14,11 +14,13 @@
 #    2. <BASE>/base_path.txt 第一行
 #       手工兜底：把工作目录写进这个文件，脚本就认它
 #    3. 从本脚本自身路径反推
-#       <BASE>/ide/xxx.py  ->  <BASE>
+#       <BASE>/ide/xxx.py          ->  <BASE>
+#       <BASE>/ide/tasks/xxx.py    ->  <BASE>（上溯两级）
+#       <BASE>/ide/studies/xxx.py  ->  <BASE>（上溯两级）
 #       实测 sys.argv[0] 就是脚本绝对路径，这是最可靠的方式
 #    4. 最后退回 D:\plc_mcp
 #
-#  自检：在 IDE 里执行 scripts/ide/task_check.py，看 ipc/check.log 第一行
+#  自检：在 IDE 里执行 scripts/ide/tasks/task_check.py，看 ipc/check.log 第一行
 #        会打印实际解析到的 BASE 与来源，便于排查部署问题。
 # =====================================================================
 import os
@@ -82,10 +84,17 @@ def resolve_base():
     #    而环境变量传中文路径经子进程会按 GBK 解码损坏（实测：小艺Work工作空间
     #    变成 灏忚壓Work宸ヤ綔绌洪棿）。daemon 恒从 <BASE>/ide/plc_daemon.py 跑，
     #    所以推导结果总是正确。
-    if sd and os.path.basename(sd).lower() == u"ide":
-        SOURCE = u"derive:%s" % sd
-        return os.path.dirname(sd)
     if sd:
+        _b = os.path.basename(sd).lower()
+        # <BASE>/ide/tasks/xxx.py 或 <BASE>/ide/studies/xxx.py -> 再上溯一级
+        if _b in (u"tasks", u"studies"):
+            _par = os.path.dirname(sd)
+            if os.path.basename(_par).lower() == u"ide":
+                SOURCE = u"derive:%s" % sd
+                return os.path.dirname(_par)
+        if _b == u"ide":
+            SOURCE = u"derive:%s" % sd
+            return os.path.dirname(sd)
         SOURCE = u"derive-fallback:%s" % sd
         return sd
 

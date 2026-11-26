@@ -3,7 +3,7 @@ chcp 65001 >nul
 setlocal
 rem bridge.cmd —— 命令行调用入口，自动挑一个真能跑的 Python 3
 rem 用法:  bridge.cmd ping
-rem        bridge.cmd eval_file D:\plc_mcp\ide\task_check.py
+rem        bridge.cmd eval_file D:\plc_mcp\ide\tasks\task_check.py
 rem 可用 PLC_PYTHON 指定解释器（Windows 应用商店的 python.exe 是 0 字节存根，不能用）
 
 if defined PLC_PYTHON (

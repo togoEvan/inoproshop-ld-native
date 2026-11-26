@@ -61,15 +61,18 @@ BASE = D:\plc_mcp (source: derive:D:\plc_mcp\ide)
 │   ├── check.log             # 预编译检查结果
 │   ├── silent_import.log     # 导入过程日志
 │   └── <唯一名>.native       # 导出快照
-├── ide/                      # IDE 内 IronPython 脚本
+├── ide/                      # IDE 内 IronPython 2.7 脚本（分三层）
 │   ├── _base.py              # 路径自解析（IDE 内环境变量无效，靠它定位）
 │   ├── boot_daemon.py        # 守护注入入口（人工点菜单执行本文件）
 │   ├── reload_daemon.py      # 热重载守护（改完 plc_daemon.py 后用它换新）
 │   ├── plc_daemon.py         # 守护进程（loop + 独立心跳线程）
-│   ├── task_check.py         # 预编译检查（验收必用）
-│   ├── task_silent_import.py # 静默导入核心
-│   ├── task_readnow.py       # 读全部消息
-│   └── task_export_fixed.py  # 导出指定 POU
+│   ├── scan_all_native.py    # 全工程批量导出（结构学习语料，只读）
+│   ├── tasks/                # ★ 38 个可复用操作（验收链路用这些）
+│   │   ├── task_check.py     #   验收检查（单次快照，不阻塞 IDE）
+│   │   ├── task_build.py     #   只 build 不读消息（与 task_check 配对，间隔 ≥10s）
+│   │   ├── task_silent_import.py  #   静默导入核心
+│   │   └── …                 #   其余见 scripts/ide/README.md
+│   └── studies/              # ✗ 75 个一次性考古脚本（勿在验收链路引用）
 ├── check_ipy_syntax.py       # IronPython 2 语法自检（改动 ide/*.py 后必跑）
 ├── test_bridge_protocol.py   # IPC 协议回归（假守护，不碰真实 IDE）
 ├── base_path.txt             # 可选：手工指定 BASE（第 2 优先级）
@@ -112,7 +115,7 @@ BASE = D:\plc_mcp (source: derive:D:\plc_mcp\ide)
 ```python
 # 经桥在 IDE 内执行检查脚本（内部跑 app.build()，再读两个分类）
 import bridge
-bridge.call("eval_file", path=r"<BASE>/ide/task_check.py", timeout=120)
+bridge.call("eval_file", path=r"<BASE>/ide/tasks/task_check.py", timeout=120)
 ```
 
 然后读 `<BASE>/ipc/check.log`，必须有：

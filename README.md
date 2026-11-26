@@ -3,7 +3,7 @@
 > 汇川 InoProShop（CODESYS V3.5 SP11 系）梯形图（LD）**native XML 直接生成 + 静默导入**工具包。
 > 给 AI Agent 用：读完本文件 + `AGENTS.md` 就能直接上手写梯形图，不需要人肉点鼠标。
 
-[English summary](#english-summary) · [快速开始](#快速开始5-分钟) · [规范](docs/usage.md) · [迭代流程](docs/iteration.md)
+[English summary](#english-summary) · [快速开始](#快速开始5-分钟) · [规范](docs/usage.md) · [迭代流程](docs/iteration.md) · [文件地图](FILEMAP.md)
 
 ---
 
@@ -182,7 +182,7 @@ python scripts\do_replace.py work\xxx.native Application prg_StartStop
 
 ```python
 # 触发预编译 + 构建，读两个分类的错误（经桥在 IDE 内执行）
-python -c "import sys; sys.path.insert(0, r'<BASE>'); import bridge; bridge.call('eval_file', path=r'<BASE>\ide\task_check.py')"
+python -c "import sys; sys.path.insert(0, r'<BASE>'); import bridge; bridge.call('eval_file', path=r'<BASE>\ide\tasks\task_check.py')"
 # 然后看 ipc/check.log 的「=== 验收结论 : 通过 (预编译+编译合计 0 错误) ===」
 ```
 
@@ -255,15 +255,19 @@ inoproshop-ld-native/
 │   ├── ide_trigger.ps1           # UIA 触发注入（⚠ 对 InoProShop 无效，菜单自绘）
 │   ├── start_daemon.cmd          # ⚠ 已失效，改用 IDE 菜单 + ide/boot_daemon.py
 │   ├── bridge.cmd                # 命令行入口（自动挑可用的 Python 3）
-│   ├── ide/                      # IDE 内 IronPython 2.7 脚本
+│   ├── ide/                      # IDE 内 IronPython 2.7 脚本（分层索引见 ide/README.md）
 │   │   ├── _base.py              # 路径自解析（IDE 内环境变量无效，靠它定位）
 │   │   ├── boot_daemon.py        # 守护注入入口（人工点菜单执行本文件）
 │   │   ├── reload_daemon.py      # 热重载守护（改完 plc_daemon.py 后用它换新）
-│   │   ├── plc_daemon.py         # 守护进程（命令分发）
-│   │   ├── task_check.py         # 验收检查（必用，三分类单次快照）
-│   │   ├── task_silent_import.py # 静默导入核心
-│   │   ├── task_readnow.py       # 读当前全部消息（排查异步）
-│   │   └── task_export_fixed.py  # 导出指定 POU（学结构用）
+│   │   ├── plc_daemon.py         # 守护进程（命令分发 + 独立心跳线程）
+│   │   ├── scan_all_native.py    # 全工程批量导出（结构学习语料，只读）
+│   │   ├── tasks/                # ★ 38 个可复用操作：验收 / 导入 / 导出 / 建对象 / 任务槽 / GVL
+│   │   │   ├── task_check.py     #   验收（必用，单次快照，不 sleep 不轮询）
+│   │   │   ├── task_build.py     #   只 build 不读消息（build 会清空预编译分类，必须与上一条配对）
+│   │   │   ├── task_silent_import.py  #   静默导入核心（改名让位 + 失败回滚）
+│   │   │   └── …                 #   其余 35 个见 scripts/ide/README.md
+│   │   └── studies/              # ✗ 75 个一次性考古脚本（探 API / 探结构 / A-B / F0x 普查）
+│   │       └── …                 #   冻结存档，新功能不要写这里，验收链路不许引用
 │   └── examples/                 # 生成脚本范例（可改环境变量复用）
 │       ├── make_full8.py         # 裸 MOVE 支路批量包装成完整支路
 │       ├── make_fix45.py         # 补声明 + 删多余 TRUE

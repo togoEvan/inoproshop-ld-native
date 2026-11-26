@@ -7,6 +7,38 @@
 
 ## [Unreleased]
 
+### 整理（2026-11-26，scripts/ide 分层：可复用与一次性拆开 + 仓库文件地图）
+
+**动机**：`scripts/ide/` 平铺了 113 个脚本，能复用的（`task_check.py` / `task_silent_import.py`）和一次性考古的
+（`task_exp_*`、`task_*_probe`、各 `F0x` 普查）混在一层，新人无法判断「哪个能抄、哪个是废稿」。
+每加一个研究脚本，这一层的噪声就更大一分。
+
+**改法**（纯目录与路径调整，**不改任何脚本行为**）：
+
+| 位置 | 数量 | 内容 |
+|------|------|------|
+| `scripts/ide/`（core） | 5 | `_base.py` / `plc_daemon.py` / `boot_daemon.py` / `reload_daemon.py` / `scan_all_native.py` |
+| `scripts/ide/tasks/` | 38 | 验收 / 导入 / 导出 / 建对象 / 任务槽 / GVL —— **验收链路只用这些** |
+| `scripts/ide/studies/` | 75 | 一次性考古（含新增的 5 个 F10 脚本），问题答完即冻结 |
+
+- **`_base.resolve_base()` 支持三层**：新增 `tasks` / `studies` 分支，`<BASE>/ide/{tasks,studies}/x.py` 上溯两级得到 `<BASE>`。
+  这是移动后不崩的关键——daemon 恒从 `<BASE>/ide/plc_daemon.py` 跑，但 tasks 里的脚本要自己算对 BASE。
+- **113 个脚本的 `sys.path` 行改为上溯两级**：`os.path.dirname(os.path.dirname(os.path.abspath(sys.argv[0])))`，逐文件命中 113/113。
+- **主机侧硬编码路径同步**：`scripts/do_replace.py:26`（`task_silent_import.py`）、
+  `scripts/run_overwrite_import.py:22`（`task_import_overwrite.py`）、`scripts/bridge.cmd` 注释示例。
+- **文档路径引用同步 13 处**：README.md / AGENTS.md / SKILL.md / docs/usage.md / references/ 三篇 / bridge.cmd。
+  文档里多数是裸文件名（`task_check.py`），完整路径只有 13 处，**裸名不受影响**。
+- **新增 `scripts/ide/README.md`**：118 个脚本按 core / tasks / studies 分类索引，每条一句话；明确 studies 不进验收链路。
+- **新增根 `FILEMAP.md`**：232 个文件的地图——先看哪 4 个、分布、按任务找文件、写入链路 8 步、一次性产物边界。
+
+**兼容性**：外部若直接调 `<BASE>/ide/task_check.py` 这类旧路径会失效，改成 `<BASE>/ide/tasks/task_check.py`。
+裸名引用（文档里大多数）不受影响。
+
+**验证**：`scripts/check_ipy_syntax.py` 跑全部 118 个 IDE 脚本 → 116 通过；
+2 个未通过是 studies 里 `task_import_f04.py` / `task_import_f05.py` 的历史遗留（同一 if/else 互斥分支内各定义一次 `_ug`，
+IronPython 允许、不影响运行），**属考古脚本，按冻结原则未改**。
+
+
 ### 新增（2026-11-26，F10_POU_EthercatTask 复制验证）
 
 - **F10_EtherCAT 任务层 POU 复制验证：`F10_POU_EthercatTask_Verify / E0~E3 四个副本（_F10V）`**。`F10_POU_EthercatTask` 含 4 个**纯 ST 的 PROGRAM**（无 LD、无 DUT、无子文件夹），带调用链 `E0_EtherCAT_MainC → E1_M8000与EtherCAT通讯检测 / E2_轴控调用 / E3_SystemTime`。完整复用 F04 翻译管线（`make_f10_translate.py`：单遍交替正则改写 `MetaObject.Name` + 全部 `Text` 节点，36 个真全局变量改写到 `F01_Variable_GVLVerify` 副本，4 个对象名的相互调用一并改写），共 **909 处改写**（E0=5 / E1=69 / E2=756 / E3=79）。**验收**：预编译 101/0、编译 104/0，合计 **0 错误**（202 条 warning 与 F08 轮数量一致，模板自带非新增）。**判定要点（无新坑，全部沿用既有结论）**：设备对象（`Servo*`/`Axis*`/`EtherCAT_C`/`GL20*`）、共享全局（`Gc_ui4PMEAxisNum`/`Gc_uiPAxisNum`/`Hr_astAxisData`/`g_xVirtual`，F04 轮已确认原件无副本）、A 开头轴枚举值（DUT 属原件、未复制枚举定义，无需加后缀，与 F04 的差别所在）、FB 引脚名、局部变量、注释中文——一律不改写。改写完整性用「裸 `M8000`/`M8002` 计数为 0」核验（子串计数 `M8000_GVLVerify` 会误报残留，必须用词边界正则）。新增脚本：`task_scan_f10.py`、`task_probe_f10.py`、`task_export_f10.py`、`task_topguid_f10.py`、`task_import_f10.py`、`examples/analyze_f10.py`、`examples/make_f10_translate.py`。

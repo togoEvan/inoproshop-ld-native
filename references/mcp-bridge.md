@@ -86,7 +86,7 @@ do_replace.py <native文件> <父对象名> "关键字过滤"
 
 ```python
 import bridge
-r = bridge.call("eval_file", timeout=180, path=r"D:\plc_mcp\ide\task_check.py")
+r = bridge.call("eval_file", timeout=180, path=r"D:\plc_mcp\ide\tasks\task_check.py")
 print(r)          # {"ok": true, "done": true}
 ```
 

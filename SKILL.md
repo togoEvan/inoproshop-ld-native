@@ -203,10 +203,10 @@ description: 汇川 InoProShop（CODESYS V3.5 SP11 系）LD 梯形图 native XML
 | ide_trigger.ps1 | UIA 触发 daemon 注入（⚠ **对 InoProShop 无效**，菜单自绘不暴露 UIA；保留仅供其它 CODESYS 系 IDE 参考） |
 | ide/_base.py | 路径自解析（IDE 内环境变量无效，靠它从脚本路径反推 BASE） |
 | ide/plc_daemon.py | IDE 内守护（IronPython 2.7）。**两个线程**：`loop()` 轮询命令 + `heartbeat_loop()` 每 0.5s 写 `heartbeat`（独立线程，命令慢不会让心跳停——这是「守护活着但命令慢」与「守护已死」能区分开的原因）。每条命令带 `run_id` 原样回带、执行前后比对 `cancel.gen`。⚠ **循环与命令执行层必须兜 `BaseException`**：IronPython 里 `SystemExit`/`KeyboardInterrupt`/`SystemError` 都**不继承 `Exception`**，只写 `except Exception` 会让一个 `raise SystemExit` 穿透并杀死整个轮询线程（实测现象：注入后 0.7s 心跳停摆、bridge 全超时，日志里却只有一行无关信息） |
-| ide/task_check.py | 验收检查（**验收必用**，单次快照、零 sleep、零循环——IDE 脚本跑主线程，sleep/轮询会冻死界面，计时全部放主机侧；同时读预编译 `217bc73e` + 编译 `97f48d64` + 格式检查三分类，匹配不到分类必须 `raise` 防假通过） |
-| ide/task_silent_import.py | 静默导入核心（由 do_replace.py 调用） |
-| ide/task_readnow.py | 不清空直接读全部消息（排查异步） |
-| ide/task_export_fixed.py | 导出指定 POU（学结构用） |
+| ide/tasks/task_check.py | 验收检查（**验收必用**，单次快照、零 sleep、零循环——IDE 脚本跑主线程，sleep/轮询会冻死界面，计时全部放主机侧；同时读预编译 `217bc73e` + 编译 `97f48d64` + 格式检查三分类，匹配不到分类必须 `raise` 防假通过） |
+| ide/tasks/task_silent_import.py | 静默导入核心（由 do_replace.py 调用） |
+| ide/tasks/task_readnow.py | 不清空直接读全部消息（排查异步） |
+| ide/tasks/task_export_fixed.py | 导出指定 POU（学结构用） |
 | ide/scan_all_native.py | **批量导出全工程**（IDE 内 eval_file 执行）：递归遍历 `active_application` 全部后代，凡能 `export_native` 的都导出为 `<IPC>/scan_<序号>_<名字>.native`，空壳自动删。用途：①学习时批量扫描未知 BoxType；②回归对比（新生成结构与模板原生 POU 同场跑 check_slots）。实测一次导出 126 个对象 |
 | examples/make_*.py | 生成脚本范例。`make_full8.py` / `make_fix45.py` 读 `PLC_SRC_NATIVE` / `PLC_DST_NATIVE` 环境变量；`make_packml_cmd_test.py` / `make_fb_call_test.py` 用相对路径（前者含 `contact/coil/and_box/branch/netitem/network` 全套节点构造函数；后者含 `fb_box/pin/connector_input/output_target` FB 调用构造函数）；`make_ld_learn.py` 是**当前最完整的可复用基座**（`contact/value_pin/connector_slot/coil/fb_box/ton_box/execute_box/network/textlines_block/xml_text/build_pou` 全套，带 `__main__` 守卫可被 import）；`make_axis_call.py` 演示轴控 FB 调用 + `CallType=Action`；`make_func_return_test.py` 演示 **Function 调用框接返回值**（OutputItems 按索引对应 OutputParam.Names，[1]=返回值；含「REF 形参接全局实例成员」避坑）；`extract_action_entry.py` 从模板 native 里切出 action Entry 原始 XML 作模板 |
 

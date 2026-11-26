@@ -19,7 +19,7 @@ BRIDGE = os.path.join(HERE, "bridge.py")
 IPC = os.path.join(HERE, "ipc")
 LOG = os.path.join(IPC, "import_overwrite.log")
 
-TASK = os.path.join(HERE, "ide", "task_import_overwrite.py")
+TASK = os.path.join(HERE, "ide", "tasks", "task_import_overwrite.py")
 
 user32 = ctypes.windll.user32
 EnumWindows = user32.EnumWindows
