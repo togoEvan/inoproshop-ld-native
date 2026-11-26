@@ -2,35 +2,15 @@
 # =====================================================================
 #  在 InoProShop IDE 内启动守护进程（IronPython 2.7，IDE 内运行）
 #
-#  ═══ 什么时候用它 ═══
-#  `ide_trigger.ps1` 靠 UIA 点「工具 → 脚本 → 执行脚本文件...」来注入
-#  daemon。但 InoProShop 的菜单是**自绘**的：UIA 枚举整个窗口树，
-#  MenuBar 数量 = 0、MenuItem 数量 = 0（2026-11-25 实测），
-#  Win32 GetMenu 也返回 0。所以自动注入根本不可能成功，
-#  表现为 bridge 报「Tools not found」然后 exit=7。
+#  唯一守护注入入口：IDE 菜单自绘（UIA/GetMenu 都读不到，无法自动点），
+#  必须人工执行：工具 → 脚本 → 执行脚本文件... → 选本文件。
 #
-#  结论：**注入 daemon 必须人工点一次菜单**，本脚本就是被点的那一个。
-#  在 IDE 里执行：
-#      工具 → 脚本 → 执行脚本文件... → 选本文件
-#
-#  ═══ 为什么不直接选 plc_daemon.py ═══
-#  plc_daemon.py 顶层代码用 `projects` / `online` / `system` 三个
-#  IDE 注入的全局对象，这在「IDE 直接执行脚本文件」时是有的；
-#  但如果你是从别处（例如旧 daemon 的 eval_file）间接加载，
-#  这三个名字就不在命名空间里，会 NameError。
-#  本脚本两种情形都能用：它显式把三个全局对象塞进 exec 命名空间。
-#
-#  ═══ 为什么必须改写 sys.argv[0] ═══
-#  _base.resolve_base() 的最高优先级是「从 sys.argv[0] 反推
-#  <BASE>/ide/xxx.py → <BASE>」。IDE 执行脚本时 sys.argv[0] 是
-#  你选中的那个文件路径。所以本脚本把 sys.argv[0] 强制改成
-#  本脚本同目录下的 plc_daemon.py，BASE 就恒等于本脚本所在 scripts/，
-#  与 bridge.py 的推导结果完全一致 —— 不管 IDE 之前执行过什么旧路径。
-#
-#  ═══ 为什么要把命名空间挂到 sys 上 ═══
-#  exec 的命名空间一旦被回收，_logf 被关闭、线程对象被 GC，
-#  守护就静默死掉（症状：daemon.log 0 字节、没有 heartbeat）。
-#  所以挂到 sys._plc_mcp_keep 上，随 IDE 进程一起活。
+#  要点：
+#  - 不直接跑 plc_daemon.py：它依赖 projects/online/system 三个 IDE 注入
+#    全局，间接加载时不在命名空间；本脚本显式塞进 exec 命名空间，两种情形通用
+#  - 改写 sys.argv[0] 为同目录 plc_daemon.py，保证 BASE 推导与 bridge.py 一致
+#  - 命名空间挂 sys._plc_mcp_keep：防 exec 命名空间被回收后守护静默死掉
+#    （症状：daemon.log 0 字节、无 heartbeat）
 # =====================================================================
 import os
 import sys

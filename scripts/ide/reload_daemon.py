@@ -2,23 +2,14 @@
 # =====================================================================
 #  热重载守护（IronPython 2.7，经 eval_file 通道在 IDE 内执行）
 #
-#  ═══ 为什么需要它 ═══
-#  改了 plc_daemon.py 之后，IDE 里跑的还是**旧代码**（脚本已经 exec 完，
-#  改文件不会影响已在内存里的函数）。要让新代码生效有两条路：
-#    ① 人工点菜单「工具 → 脚本 → 执行脚本文件…」重新注入（菜单自绘，UIA 点不到）
-#    ② 让**正在跑的旧守护**帮你干这件事 —— 本脚本走这条路
+#  改了 plc_daemon.py 后让内存里的旧守护换新，无需人工点菜单重新注入。
 #
-#  ═══ 为什么不能直接 exec 新的 plc_daemon ═══
-#  新守护的 _acquire_instance() 看到「心跳还很新鲜」就会判定
-#  「已有实例存活」并 raise SystemExit 退出。所以必须先把旧守护停掉：
-#     写 stop.flag → 旧循环下一轮 break → 删掉 heartbeat / ready.flag
-#  但 stop.flag 是在**本脚本所在的那条命令执行期间**写的，旧循环要等
-#  本命令返回后才会看到它。因此不能在主线程里等 —— 会自己等自己，死锁。
-#  做法：起一个后台线程，它等 ready.flag 消失后再 exec boot_daemon.py。
-#
-#  ═══ 用 eval_file 执行时的命名空间 ═══
-#  plc_daemon.a_eval_file 给的 globals 里已有 projects / online / system，
-#  本脚本原样转交给 boot_daemon 的 exec 命名空间即可。
+#  要点：
+#  - 先写 stop.flag 停旧守护（新守护看到新鲜心跳会判「已有实例」而退出）
+#  - stop.flag 在本命令执行期间写入，旧循环要到本命令返回后才看到 ——
+#    主线程等它 = 自己等自己（死锁），所以必须由**后台线程**等
+#    ready.flag 消失后再 exec boot_daemon.py
+#  - eval_file 的 globals 已带 projects/online/system，原样转交即可
 # =====================================================================
 import os
 import sys

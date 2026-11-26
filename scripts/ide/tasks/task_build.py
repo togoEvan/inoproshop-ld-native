@@ -1,20 +1,9 @@
 # -*- coding: utf-8 -*-
 """只跑 app.build()，不读消息 —— 与 task_check.py 配对使用。
 
-为什么必须拆成两个脚本（2026-11-26 实测）：
-
-  `app.build()` **会先清空预编译分类，再异步重建**。
-  实测：build 返回后立刻读预编译是 **0 条**，约 10s 后才回到 101 条。
-  所以「build + 立刻读」必然得到「预编译 0 错误」——**假通过**。
-  clear_messages 同理，清掉之后不会自行恢复（空闲 20s 仍是 0 条）。
-
-正确姿势（等待放主机侧，IDE 脚本里绝不 sleep）：
-
-    python bridge.py eval_file '{"path":".../task_build.py"}'
-    sleep 12
-    python bridge.py eval_file '{"path":".../task_check.py"}'
-    cat ipc/check.log
-
+app.build() 会先清空预编译分类再异步重建（build 后立刻读是 0 条，约 10s
+后恢复），所以「build + 立刻读」是假通过；等待必须放主机侧：
+    task_build.py → 主机侧 sleep 12 → task_check.py → 看 ipc/check.log
 输出 ipc/build.log
 """
 import io

@@ -1,24 +1,13 @@
 # -*- coding: utf-8 -*-
 """LD 逻辑层验收：把 native 的图形拓扑还原成布尔表达式并规范化比对。
 
-═══════════════════════════════════════════════════════════════════════
-为什么要这一层（学自 Wayan123/multi-plc-agent 的 multiplc/iec_ld.py）
-═══════════════════════════════════════════════════════════════════════
-现有验收有三层，但都有盲区：
-  ① 双分类 0 错误  → 只能证明「编译器不报错」，证明不了「画的是我想要的逻辑」
-  ② 往返 diff       → 只能证明「IDE 没改写我的结构」，源文件本身错时照样 PASS
-  ③ check_slots     → 只能证明「槽位数对得上」
+第四层验收（双分类/往返 diff/check_slots 都证明不了「画的是想要的逻辑」）：
+图形还原成布尔表达式后与期望比对，XML 文本/Id/节点顺序变了只要逻辑等价即通过。
+（思路学自 Wayan123/multi-plc-agent：The verification compares logic, not XML）
 
-**逻辑层**补的是第四层：把图形还原成布尔表达式，再和期望表达式比对。
-这样即使 XML 文本、Id 编号、节点顺序全变了，只要**逻辑等价**就算通过。
-multi-plc-agent 的原话：`The verification compares logic, not XML`。
-
-本机实测（2026-11-25，user_fixed.native / prg_LdLearnTest.native）：
-  · 串联条件 = AND 框 {acfc6f68}，CallType=And，InputItems 为子条件
-  · 并联分支 = 分支组 {827b9ec2}，Trees 为各支路（≥2 条，否则 IDE 崩）
-  · 触点     = {9de7f100}，Operand.Operand=变量名，**Flags=1 即常闭（取反）**
-  · 线圈     = {c9b2f165} 且 IsCoil=True，Operand=目标变量
-  · 网络     = NetworkItems/{9873c309}，RValue=条件树，OutputItems=输出
+节点结构（实测）：
+  串联条件 = AND 框 {acfc6f68}；并联分支 = 分支组 {827b9ec2}（Trees ≥2，否则 IDE 崩）
+  触点 = {9de7f100}，Flags=1 即常闭；线圈 = {c9b2f165} 且 IsCoil=True
 
 用法：
     python ld_logic.py <a.native>                    # 打印每个网络的逻辑签名

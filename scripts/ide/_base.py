@@ -2,26 +2,15 @@
 # =====================================================================
 #  路径自解析（IronPython 2.7，IDE 内运行）
 #
-#  为什么需要这个文件：
-#    IDE 内的脚本跑在 InoProShop 进程里，继承的是「IDE 启动那一刻」的环境变量，
-#    跟你在 PowerShell 里临时 set 的 PLC_MCP_BASE 毫无关系。
-#    实测：在 IDE 内读 os.environ.get("PLC_MCP_BASE") 永远是 None。
-#    所以不能依赖环境变量，必须让脚本自己算出自己在哪。
+#  IDE 内读不到 shell 的环境变量（继承的是 IDE 启动时的环境），必须自己算。
+#  解析优先级：
+#    1. 从本脚本路径反推（最可靠：argv[0] 走 UTF-16 命令行，中文无损）
+#       ide/xxx.py -> <BASE>；ide/{tasks,studies}/xxx.py -> 上溯两级
+#    2. <BASE>/base_path.txt 第一行（手工兜底）
+#    3. 环境变量 PLC_MCP_BASE（仅 launch_ide_daemon.py 启动时有效）
+#    4. 兜底 D:\plc_mcp
 #
-#  解析优先级（高 → 低）：
-#    1. 环境变量 PLC_MCP_BASE
-#       仅当 IDE 是通过 launch_ide_daemon.py 启动时才有效（子进程继承环境）
-#    2. <BASE>/base_path.txt 第一行
-#       手工兜底：把工作目录写进这个文件，脚本就认它
-#    3. 从本脚本自身路径反推
-#       <BASE>/ide/xxx.py          ->  <BASE>
-#       <BASE>/ide/tasks/xxx.py    ->  <BASE>（上溯两级）
-#       <BASE>/ide/studies/xxx.py  ->  <BASE>（上溯两级）
-#       实测 sys.argv[0] 就是脚本绝对路径，这是最可靠的方式
-#    4. 最后退回 D:\plc_mcp
-#
-#  自检：在 IDE 里执行 scripts/ide/tasks/task_check.py，看 ipc/check.log 第一行
-#        会打印实际解析到的 BASE 与来源，便于排查部署问题。
+#  自检：IDE 里执行 ide/tasks/task_check.py，看 ipc/check.log 第一行的 BASE/SOURCE。
 # =====================================================================
 import os
 import sys
@@ -52,7 +41,7 @@ def _script_dir():
 
 
 def _read_config(base_dir):
-    """读 <BASE>/base_path.txt 第一行"""
+    """读 base_path.txt 第一行（跳过 # 注释行）"""
     if not base_dir:
         return u""
     cfg = os.path.join(base_dir, CONFIG_NAME)
@@ -79,14 +68,9 @@ def resolve_base():
 
     sd = _script_dir()
 
-    # 1) 从脚本自身路径反推：<BASE>/ide/xxx.py -> <BASE>
-    #    最可靠。sys.argv[0] 走 Windows 原生 UTF-16 命令行，中文路径绝对无损；
-    #    而环境变量传中文路径经子进程会按 GBK 解码损坏（实测：小艺Work工作空间
-    #    变成 灏忚壓Work宸ヤ綔绌洪棿）。daemon 恒从 <BASE>/ide/plc_daemon.py 跑，
-    #    所以推导结果总是正确。
+    # 1) 路径反推（环境变量经子进程会按 GBK 解码损坏，argv[0] 不会）
     if sd:
         _b = os.path.basename(sd).lower()
-        # <BASE>/ide/tasks/xxx.py 或 <BASE>/ide/studies/xxx.py -> 再上溯一级
         if _b in (u"tasks", u"studies"):
             _par = os.path.dirname(sd)
             if os.path.basename(_par).lower() == u"ide":
@@ -98,7 +82,7 @@ def resolve_base():
         SOURCE = u"derive-fallback:%s" % sd
         return sd
 
-    # 2) 配置文件（先看 <BASE>/base_path.txt，再看 <BASE>/ide/base_path.txt）
+    # 2) 配置文件 base_path.txt
     parent = os.path.dirname(sd) if sd else u""
     for cand in (parent, sd):
         v = _read_config(cand)
@@ -106,26 +90,22 @@ def resolve_base():
             SOURCE = u"config:%s" % os.path.join(cand, CONFIG_NAME)
             return v
 
-    # 3) 环境变量（仅当路径真实存在才采用；损坏的 GBK 乱码路径 isdir 必为 False）
-    #    注意：只有 IDE 由 launch_ide_daemon.py 启动时才传得到，手动开 IDE 取不到。
+    # 3) 环境变量（仅当路径真实存在才采用，防 GBK 乱码路径）
     env = _clean(os.environ.get("PLC_MCP_BASE") or u"")
     if env and os.path.isdir(env):
         SOURCE = u"env:PLC_MCP_BASE"
         return env
 
-    # 4) 最后兜底
+    # 4) 兜底
     SOURCE = u"fallback"
     return FALLBACK
 
 
 def resolve_ipc(base=None):
-    """IPC 目录：优先 <BASE>/ipc；仅当它不存在时才退回环境变量 PLC_MCP_IPC。
+    """IPC 目录：优先 <BASE>/ipc（存在即用）；否则退环境变量 PLC_MCP_IPC。
 
-    不能反过来：IDE 进程会继承「启动它的那个环境」里的 PLC_MCP_IPC。
-    实测（2026-11-25）：IDE 从旧工作区启动时带着
-    PLC_MCP_IPC=D:\\小艺Work工作空间\\20261123160323\\plc_mcp\\ipc，
-    若环境变量优先，守护会把 ready.flag / 心跳写到旧目录，
-    新版部署永远等不到就绪信号。
+    必须目录优先：IDE 进程继承启动时的 PLC_MCP_IPC（可能是旧工作区），
+    环境变量优先会把 ready.flag/心跳写去旧目录。
     """
     if base is None:
         base = resolve_base()

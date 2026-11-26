@@ -1,41 +1,14 @@
 # -*- coding: utf-8 -*-
 """验收：只读两个分类的消息并统计 Error / Warning，单次快照，绝不阻塞 IDE。
 
-═══════════════════════════════════════════════════════════════════════
-设计要点（2026-11-25 定论 + 2026-11-26 两次修订）
-═══════════════════════════════════════════════════════════════════════
+- 不编译、不清消息、不 sleep、不轮询（IDE 脚本跑主线程，sleep 冻死界面）
+- severity 是 .NET 枚举：getattr 读不到，必须反射
+  `m.GetType().GetProperty('severity').GetValue(m, None)`
+- 两个分类作用域不同，缺一不可：预编译 217bc73e 覆盖 Application 全部 POU；
+  编译 97f48d64 只含挂进任务调用列表的 POU
+- 读不到分类/消息必须抛错，绝不返回空列表当 0 错误（假通过）
 
-【要点 1】本脚本**不编译、不清消息、不 sleep、不轮询**
-  ① IDE 脚本跑在 InoProShop 主线程，sleep / process_messageloop 循环会冻死界面
-     （用户两次反馈「你在等待的时候软件卡死了」）。
-  ② **`app.build()` 会清空预编译分类**，然后异步重建——实测 build 返回后立刻读
-     预编译是 **0 条**，约 10s 后才回到 101 条。所以「build 后立刻读」必然假通过。
-     → 构建与读取必须**分成两个脚本**，中间由主机侧 Python 等待 ≥10s。
-  ③ `clear_messages` 同理，清掉之后不会自行恢复（空闲 20s 仍是 0 条）。
-
-【要点 2】severity 必须用反射读，且按枚举名判断（2026-11-26 实测）
-  `ScriptMessage` 的属性：`text` / `severity` / `object` / `number` / `prefix` ...
-  `severity` 是枚举 `_3S.CoDeSys.Core.Messages.Severity`，实测取值有
-  `Text`（普通信息）/ `Error` / `Warning`。
-  ⚠ **`getattr(m, 'severity')` 读不到值**（返回空/未知），必须走
-  `m.GetType().GetProperty('severity').GetValue(m, None)`。
-  旧版用 getattr + 字符串匹配 'err'，导致真实 1 条 Error 被统计成 0 —— **假通过**。
-
-【要点 3】两个分类作用域不同，缺一不可
-  预编译 217bc73e = build 阶段覆盖 Application 下**全部 POU**（含未挂任务的）
-  编译   97f48d64 = 只含**挂进任务调用列表**的 POU
-
-【要点 4】读不到分类 / 取不到消息必须抛错，绝不能静默返回空列表当 0 错误
-
-═══════════════════════════════════════════════════════════════════════
-正确用法（主机侧串起来）
-═══════════════════════════════════════════════════════════════════════
-  A. 导入后验收：
-     do_replace.py 导入 → 主机侧 sleep 3 → task_check.py 读快照
-  B. 强制重新构建后验收：
-     task_build.py（只 app.build()）→ 主机侧 sleep 12 → task_check.py 读快照
-  C. 若 check.log 里预编译 total=0 而编译 total>0，说明刚好撞上异步窗口，
-     主机侧再 sleep 10s 重跑一次 task_check.py 即可。
+用法（等待放主机侧）：task_build.py → 主机侧 sleep 12 → 本脚本 → 看 ipc/check.log
 """
 import io
 import os
