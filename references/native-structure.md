@@ -575,10 +575,19 @@ Single {827b9ec2}            ← 注意：Input 有 Name 属性，不能漏写
 InputFlags = [ (Flags=16, Fixed=True), (Flags=0, Fixed=False), (Flags=0, Fixed=False) ]
 ```
 
-**⚠ 修正旧结论**：`Flags=16` 曾被误判为「S/R 线圈专用标记」。实测推翻——
-NETITEM 级 `Flags=0` 的 S/R 线圈有 306 处（置位 179 + 复位 127），
-`Flags=16` 只有 7 处。`16` 在这里的真实含义是**「该引脚是电源流引脚」的位标志**，
-`Fixed=True` 也是随之而来的。**与 S/R 线圈无关，不要关联。**
+**⚠ 修正旧结论（2026-11-27 二次修正）**：
+
+- 第一次修正推翻了「`Flags=16` = S/R 线圈专用」：NETITEM 级 `Flags=0` 的 S/R 线圈有
+  306 处（置位 179 + 复位 127），`Flags=16` 只有 7 处。**与 S/R 线圈无关。**
+- 但当时把 16 解释成「该引脚是电源流引脚」**也是错的**。决定性证据来自用户手工操作：
+  同一个 POU 里普通 MOVE 的 `InputFlags` 是 `<Null/>`，用户在 EN 上点了一下「边沿检测」
+  之后同一个 MOVE 变成 `InputFlags=[(Flags=16, Fixed=True), (Flags=0, Fixed=False)]`
+  ——**唯一变量就是边沿**。
+- 正确含义：**`InputFlags[i].Flags = 16` = 第 i 个输入引脚启用了边沿检测**（梯形图里画成
+  引脚上的 `↑`）。`Fixed=True` 是随之而来的（该引脚不再可固定为常通）。
+
+**因此：框的边沿不是靠触点实现的，而是靠框自己的 `InputFlags`。**
+完整规则、XML 形态、生成函数与验证链见 [`edge-detection.md`](edge-detection.md)。
 
 ### ④ 比较框（EQ/NE/GT/LT/GE/LE）：3 槽，但 InputParam 只有 1 个名字
 
@@ -712,8 +721,12 @@ ExportFile
 
 ## 18 触点取反位掩码与网络级字段（2026-11-25 全工程实测补充）
 
-- **触点 `Operand.Flags.Flags` 值域仅 0/1**（1295 处 =0 正开、62 处 =1 常闭取反）——
-  本机 IDE 的 LD 不用其它位（无 P/N 边沿形态；边沿检测要用 R_TRIG/F_TRIG FB）
+- **触点 `Operand.Flags.Flags` 值域 = 0 / 1 / 16**（1295 处 =0 正开、62 处 =1 常闭取反、
+  29 处 =16 电源流引脚）——**没有边沿语义**。旧版这里写的「值域仅 0/1」与「边沿检测要用
+  R_TRIG/F_TRIG FB」**两句都不成立**：触点 Flags 还有 16；边沿是框内建能力（见上文 §③ 与
+  [`edge-detection.md`](edge-detection.md)），不需要 R_TRIG/F_TRIG，也不要用触点去模拟。
+  把触点 Flags 改成 2 时 IDE **不报错、原样保留**，但图形上没有边沿、行为上也不产生边沿
+  ——这是最隐蔽的一类写错（详见该文「误区二」）。
 - **网络级 `Connectors` / `ILLines` 恒空**（429 个网络全空）——LD 生成时写空 List2 即可，
   不要往里塞东西（这两者是 FBD/IL 视图的残留字段）
 - **值引脚常量类型**：`IsContact=False` 的引脚 `Type` 可为 BOOL/UINT/INT/TIME/

@@ -3,7 +3,7 @@
 > 汇川 InoProShop（CODESYS V3.5 SP11 系）梯形图（LD）**native XML 直接生成 + 静默导入**工具包。
 > 给 AI Agent 用：读完本文件 + `AGENTS.md` 就能直接上手写梯形图，不需要人肉点鼠标。
 
-[English summary](#english-summary) · [快速开始](#快速开始5-分钟) · [规范](docs/usage.md) · [迭代流程](docs/iteration.md) · [文件地图](FILEMAP.md)
+[English summary](#english-summary) · [快速开始](#快速开始5-分钟) · [规范](docs/usage.md) · [迭代流程](docs/iteration.md) · [文件地图](FILEMAP.md) · [边沿检测](references/edge-detection.md) · [假通过目录](references/false-pass-catalog.md)
 
 ---
 
@@ -251,6 +251,8 @@ inoproshop-ld-native/
 ├── references/
 │   ├── native-structure.md       # 节点 GUID、层级、槽位、声明区、合法挂载位置
 │   ├── precompile-errors.md      # 错误 → 根因 → 修复（8 类，含 2b 单条件 AND）
+│   ├── edge-detection.md         # 边沿检测：框的 InputFlags[0]=16（不是触点、不是 R_TRIG）
+│   ├── false-pass-catalog.md     # 0 错误的八种假象（验收器只防它建模的那一维）
 │   └── mcp-bridge.md             # 桥的协议、命令、消息分类
 ├── scripts/
 │   ├── check_slots.py            # 结构自检：槽位数 vs 参数数 + Operand 三态断言（含 MOVE 原生形态豁免）

@@ -7,6 +7,36 @@
 
 ## [Unreleased]
 
+### 修复（2026-11-27，边沿检测：修正两处错误旧结论）
+
+- **修正 `references/native-structure.md` §③ `InputFlags` 对 `Flags=16` 的解释**。
+  旧文写「16 = 该引脚是电源流引脚的位标志」——错。决定性证据：同一 POU 内普通 MOVE 的
+  `InputFlags` 为 `<Null/>`，用户在其 EN 引脚点「边沿检测」后变成
+  `[(Flags=16, Fixed=True), (Flags=0, Fixed=False)]`，唯一变量是边沿。
+  **正解：`InputFlags[i].Flags = 16` = 第 i 个输入引脚启用边沿检测。**
+
+- **修正 `references/native-structure.md` §18 触点 Flags 值域**。
+  旧文写「值域仅 0/1，无 P/N 边沿形态，边沿检测要用 R_TRIG/F_TRIG FB」——两句都不成立。
+  实测触点 Flags = 0（正开）/ 1（常闭取反）/ 16（电源流引脚），**没有边沿语义**；
+  边沿是框内建能力，不需要 R_TRIG/F_TRIG。把触点 Flags 改成 2 时 IDE 不报错、导入导出都
+  原样保留，但图形与行为上都不是边沿——最隐蔽的写错方式。
+
+- 教训（写进两处正文）：**「导入成功 + 编译 0 错误 + 导出往返保真」不能证明结构语义正确。**
+  自己造样本再导出自己验证，是循环论证；真值只能来自「用户手工做的样本」或「行为仿真」。
+
+### 新增（2026-11-27，两篇知识库正文）
+
+- **`references/edge-detection.md`** —— 边沿检测专题：三种做法对比（手搓比较网络 /
+  触点 Flags=2 无效 / `InputFlags[0]=16` 正解）、MOVE 与 ADD 的 XML 原样、三条硬规则、
+  生成器函数 `input_flags(n_pins, edge=False)`、五步证据链、负样本正确做法、四条坑、
+  三项未验证边界。
+
+- **`references/false-pass-catalog.md`** —— 「0 错误的八种假象」速查表：
+  ① 没挂进任务 ② 脏容器 ③ 错误数被截断（error 500 / warning 100 / message 100，
+  池子时间正序、截断吃最新）④ 分类按需注册 ⑤ severity 静默降级成 `?`
+  ⑥ 验收器恒 PASS ⑦ 负样本改错地方 ⑧ `clear_messages` 进程级互清。
+  每条含现象 / 根因 / 识别信号 / 修法，末尾三条元规则。
+
 ### 修改（2026-11-27，A/B 验证口径调整）
 
 - **A/B 验证改为「正向必做，负向默认不做」**（用户决定）。
