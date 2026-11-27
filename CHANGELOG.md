@@ -7,6 +7,56 @@
 
 ## [Unreleased]
 
+### 新增（2026-11-27，F21_POU_Station1_工站1_搬运移栽 复制验证）
+
+- **F21 工站1 POU 复制验证：`F21_POU_Station1_工站1_搬运移栽_Verify / 7 个副本（_F21V）`**。
+  7 个 PROGRAM：`STN1_00_Main / STN1_01_Initialize / STN1_02_Auto / STN1_03_Manual /
+  STN1_04_Alarm / STN1_05_Parameter / STN1_06_ProductStateSetting`。
+  翻译管线 `make_f21_translate.py`，共 **2649 处改写**，`AT` 地址 **0 处**。
+  验收：预编译 101 Warning / 0 Error，编译 104（3 Text + 101 Warning）/ 0 Error；
+  正向 A/B（`STN1_00_Main_F21V()` 挂 MainTask）0 错误通过。
+
+- **重大发现 —— F21 是 ST+LD 混合，LD 标识符不在 `Text` 节点里**。
+  前 11 组与 F20 全是纯 ST，翻译只处理 `Text` + `Operand` 即可；F21 的
+  `STN1_02_Auto`（20 个 network）与 `STN1_03_Manual`（2 个 network）是梯形图，
+  标识符实际存放在 **4 类载体**：
+  1. `Single Name="Text"` —— ST 代码；
+  2. `Operand Type="string"` —— LD 触点/线圈操作数；
+  3. `BoxType` —— LD 功能框类型名（AND/MOVE/EQ/FC_CylinderExe…）；
+  4. `Instance > Operand Type="string"` —— FB 实例操作数。
+  只改 `Text` 会漏掉 1953 处（STN1_02_Auto 的 2155 处里只有 114 处在 Text）。
+  `SymbolComment` / `Address` 在 LD native 里全为空，不能靠它们定位。
+
+- **LD POU 的 `Path` 数组是「每个 network 一个」**。
+  `STN1_02_Auto` 有 **87 个 `<Array Name="Path">`**（`STN1_03_Manual` 2 个），
+  每个数组元素 4 = POU 自身名（必须跟着改），元素 5 = network 名（不能改）。
+  纯 ST 的 POU 没有任何 `Path` 数组。按「每个文件一个 Path」的旧写法会漏改 86 个。
+
+- **19.9 MB 不是二进制**：`STN1_02_Auto` 导出 19948018 B，`STN1_03_Manual` 2070663 B，
+  全部是结构化 XML —— 6065 个触点 + 2307 个功能框，每个触点/框都带完整的
+  `Flags`/`Param` 子树。无 base64、无内嵌二进制。翻译耗时与体积线性相关。
+
+- **新坑 —— `io.open(...).write()` 在 IronPython 里不落盘**。
+  `task_topguid_f21.py` 写 guid 时用一行 `io.open(p,"w").write(...)`，
+  文件被创建但 **0 字节**（对象未 flush/close 即被 GC，或延迟写丢失）。
+  必须显式 `f = io.open(...); f.write(...); f.close()`。
+
+- **新坑 —— STEP1 提前 `_lf.close()` 导致「write to closed file」**。
+  `task_export_f21.py` 两步流程在 STEP1 分支里 close 了日志句柄，
+  末尾统一 `L()` 又写一次 → 抛 `ValueError: I/O operation on closed file`。
+  两步流程里日志只在最后关一次。
+
+- **收尾：Task Configuration 的 POU 槽清理（铁律 25/38 第四次实测）**。
+  cleanup 分支 `pl.remove("prg_F21VerifyUse")` 打印成功，回读仍是
+  `['M000_MAIN', 'prg_F21VerifyUse']`，编译分类留下 2 条「没有定义标识符」。
+  同样走「导出 Task Configuration native → 主机侧删 `<Single Type="{f194d1ef-…}">` 块 →
+  同名覆盖导入（3.96s）」才摘掉，回读确认 `MainTask = [M000_MAIN]`，
+  编译分类从 106 回到 104 / 0 Error。
+
+- 新增脚本：`ide/studies/task_scan_f21.py`、`task_export_f21.py`、`task_topguid_f21.py`、
+  `task_import_f21.py`、`task_f21_ab_test.py`、`task_export_taskcfg_f21.py`、
+  `examples/analyze_f21.py`、`examples/make_f21_translate.py`。
+
 ### 新增（2026-11-27，F20_POU_Station0_总控 复制验证）
 
 - **F20 总控层 POU 复制验证：`F20_POU_Station0_总控_Verify / 7 个副本（_F20V）`**。
