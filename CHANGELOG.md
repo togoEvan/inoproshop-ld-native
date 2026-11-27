@@ -7,6 +7,61 @@
 
 ## [Unreleased]
 
+### 新增（2026-11-27，F20_POU_Station0_总控 复制验证）
+
+- **F20 总控层 POU 复制验证：`F20_POU_Station0_总控_Verify / 7 个副本（_F20V）`**。
+  `F20_POU_Station0_总控` 含 **7 个纯 ST 的 PROGRAM**（无 LD、无 DUT、无子文件夹）：
+  `STN0_00_Main / STN0_01_Initialize / STN0_02_Auto / STN0_03_Manual / STN0_04_Alarm /
+  STN0_05_Parameter / STN0_06_ProductStateSetting`。
+  `STN0_00_Main` 调用其余 6 个，是站控主循环入口。
+  翻译管线 `make_f20_translate.py`，共 **635 处改写**，`AT` 地址 **0 处**（本组无 `AT %`）。
+  验收：预编译 101 Warning / 0 Error，编译 104（3 Text + 101 Warning）/ 0 Error。
+
+- **新坑 —— 局部变量提取：声明行是分散的独立 Text 节点**。
+  `analyze_f20.py` 初版按「含 VAR/PROGRAM 关键字的 Text 节点」筛选声明区，
+  7 个 POU 全部得到 `locals=0` —— 因为 native 里**每个变量行各自是一个 `Single Name="Text"` 节点**
+  （如 `\ti\t\t\t\t:INT;`），整块 `VAR…END_VAR` 从不落在同一个节点里。
+  修法：从 `PROGRAM/FUNCTION_BLOCK/FUNCTION <name>` 那一行开始**把所有后续节点 join 起来**
+  再解析 `VAR…END_VAR`，同时剥掉行注释。修完 locals 为 6~16/个。
+  影响：局部变量识别为空会让**局部名被误当成全局名改写**，是最危险的一类静默错误。
+
+- **新坑 —— `app.build()` 是增量编译，重跑会留下陈旧消息（假通过）**。
+  同一工程连跑三次 build，每次都读到「预编译 0 / 编译 104」，看起来是干净的 0 错误，
+  实际是**上一轮留下的 104 条消息**：无改动时预编译语义检查不重跑，预编译分类保持空。
+  修法：`task_build_clean.py` 先 `system.clear_messages(cat)` 清**两个分类**（必须传分类参数，
+  无参重载不可用）再 `app.build()`，主机侧等 ≥10s 后读。
+  修完预编译恢复 101 条，证明这一轮真的重跑过。
+  **验收前必须清分类，否则「0 错误」可能只是没重算。**
+
+- **新坑 —— `sys.exit(0)` 在 daemon 里会弹出「Uncaught exception」模态框**。
+  `task_export_f20.py` 的两步流程用 `sys.exit(0)` 结束 STEP1，
+  该 `SystemExit` 穿透 `handle_on_main` 的 `except Exception`（IronPython 里 `SystemExit`
+  不继承 `Exception`），IDE 弹出标题为 `Uncaught exception, please check the error log for details.`
+  的模态框，内容 `SystemExit`。虽然轮询线程靠 `except BaseException` 活下来了，
+  但模态框会一直挡着 IDE。**IDE 脚本不要用 `sys.exit()` 收尾，直接 `print` 结束即可。**
+
+- **弹框自动化（补强）**：本轮遇到两类此前没覆盖的弹框，均用
+  `PostMessage(WM_COMMAND, IDOK/IDNO)` 关掉，不动鼠标、不抢焦点：
+  - `Uncaught exception` → `WM_COMMAND IDOK(1)` 无效，需 `WM_CLOSE`；
+  - `导出的文件已经存在：…，是否希望替换？` → **是(Y)=IDYES(6) / 否(N)=IDNO(7)**。
+    误点「是」会覆盖主机侧刚改好的 native，**必须先确认目标文件 mtime/内容再选**。
+
+- **收尾：Task Configuration 的 POU 槽清理（铁律 25/38 第三次实测）**。
+  `task_f20_ab_test.py` 的 cleanup 分支调用 `pl.remove("prg_F20VerifyUse")` 并打印了成功，
+  但回读 `MainTask.pous` 仍是 `['M000_MAIN', 'prg_F20VerifyUse']`，编译分类留下 2 条
+  「没有定义标识符 'prg_F20VerifyUse'」。仍走「导出 Task Configuration native →
+  主机侧删 `<Single>` 块 → 同名覆盖导入（3.45s）」才真正摘掉，回读确认 `MainTask = [M000_MAIN]`。
+
+- **A/B 双向验证**：负向（`ZZZ_NoSuchPou_F20V()`）→ 编译分类 **2 条**错误
+  （`没有定义标识符` + `需要程序名、函数或功能块实例替代`）；正向（`STN0_00_Main_F20V()`）→ 0 错误。
+  再次证明「预编译 0 错误」不足以验收，副本必须真挂进任务跑一次编译。
+
+- 新增脚本：`ide/studies/task_scan_f20.py`、`task_export_f20.py`、`task_topguid_f20.py`、
+  `task_import_f20.py`、`task_f20_ab_test.py`、`task_export_taskcfg_f20.py`、
+  `examples/analyze_f20.py`、`examples/make_f20_translate.py`、
+  `ide/tasks/task_build_clean.py`、`task_msgdump_now.py`、`task_taskcfg_read.py`、
+  `task_clear_io_cat.py`。
+
 ### 新增（2026-11-26，F11_POU_MainTask 复制验证）
 
 - **F11_MainTask 任务层 POU 复制验证：`F11_POU_MainTask_Verify / 15 个副本（_F11V）`**。
