@@ -7,6 +7,28 @@
 
 ## [Unreleased]
 
+### 新增（2026-11-27 v4，LD 语料普查：把整个模板变成可统计的语料 + 五件工具）
+
+- **references/corpus/inopack-template-survey.md** —— 模板普查结论：713 个导出文件 / 320.2 MB /
+  去重 470 个对象（**LD 61、ST 192、无实现 217**）/ 58 个原生 LD POU / **2171 个网络 / 7495 个框 / 127 种网络形状**。
+  含 24 种 BoxType×CallType 全表（AND 4401、MOVE 2347、EQ 1315、FC_AxisAbsGo 950、FC_CylinderExe 378、TON 107 ...），
+  槽数规律表、InputFlags 表，以及 A00 的步序母语法。
+- **references/corpus/ld-network-shapes.md** —— Top 25 网络形状表（781 个空网络、163 例 branch+EQ+FC_AxisAbsGo+MOVE ...）
+  + 58 个 POU 的画像（网络数 / 形状种类 / 平均框数）。写新工序时先查这张表照抄拓扑，不要发明形状。
+- **references/corpus/toolchain.md** —— 语料工具链的用法：六个环境变量（LD_BASE / LD_RAW / LD_PROJ / LD_INDEX /
+  LD_SHAPES / LD_EXPORT_LOG）、四步流程、实测产出与五条坑（导出目录别放工程里、export_native 偶发卡死、
+  IronPython 必须显式 close 否则句柄滞留）。
+- **scripts/corpus/**（主机 Python 3）：index_native.py（对象索引）、scan_forms.py（框型统计）、
+  parse_net.py（网络形状）、ld_dump.py（单网络结构树）。**scripts/ide/tasks/export_all.py**（IDE 内 IP2）
+  递归导出整个 active_application，每个对象一个 .native。
+- **assets/natives/prg_TonTest.native**（16,743 B / 2 网络 / 21 Id 全唯一）与 **prg_CoilTest.native**（15,382 B / 2 网络 / 20 Id）：
+  两个最小样本**用修好的 NETITEM 载体重新生成**（旧版把线圈挂在 AND 框上，属错误载体，未入库）。
+  隐藏实例实测（逐个独立副本）：导入 ok → 挂 MainTask → build → 97f48d64 = 0 错误, 101 警告（101 条为模板既有的枚举转换警告）；
+  导出往返：prg_TonTest 2 网络 / NETITEM 1 / 线圈 1 / TON 1 / 21 Id 全唯一，prg_CoilTest NETITEM 2 / 线圈 4（S/R/普通守恒）。
+- **scripts/examples/gen_tontest.py / gen_coiltest.py**：上面两个样本的生成器。
+- **references/false-pass-catalog.md** 扩成「九种假象」：新增第 9 条「线圈挂错父节点，界面只画空方块」
+  （编译通过、静态检查全过，唯一发现方式是人眼看图形）。
+
 ### 修正（2026-11-27 v3，线圈载体：必须挂 NETITEM）
 
 - **线圈必须挂在 NETITEM 的 OutputItems 上**，不能挂 AND 框（G_BOX acfc6f68）的 OutputItems。

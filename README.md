@@ -3,7 +3,7 @@
 > 汇川 InoProShop（CODESYS V3.5 SP11 系）梯形图（LD）**native XML 直接生成 + 静默导入**工具包。
 > 给 AI Agent 用：读完本文件 + `AGENTS.md` 就能直接上手写梯形图，不需要人肉点鼠标。
 
-[English summary](#english-summary) · [快速开始](#快速开始5-分钟) · [规范](docs/usage.md) · [迭代流程](docs/iteration.md) · [文件地图](FILEMAP.md) · [边沿检测](references/edge-detection.md) · [假通过目录](references/false-pass-catalog.md) · [模式卡·步序](references/mode-cards/step-sequence.md) · [模式卡·流程](references/mode-cards/process-flow.md)
+[English summary](#english-summary) · [快速开始](#快速开始5-分钟) · [规范](docs/usage.md) · [迭代流程](docs/iteration.md) · [文件地图](FILEMAP.md) · [边沿检测](references/edge-detection.md) · [假通过目录](references/false-pass-catalog.md) · [模式卡·步序](references/mode-cards/step-sequence.md) · [模式卡·流程](references/mode-cards/process-flow.md) · [语料普查](references/corpus/inopack-template-survey.md) · [网络形状](references/corpus/ld-network-shapes.md) · [语料工具链](references/corpus/toolchain.md)
 
 ---
 
@@ -13,7 +13,7 @@ InoProShop 的梯形图存在一个 native XML 结构里。这个仓库提供：
 
 1. **已验证的结构知识**（`references/`）：节点 GUID、槽位规则、预编译错误对照表。所有结论都经过实测，不是猜的。
 2. **可运行的桥接脚本**（`scripts/`）：通过文件 IPC 向**已经打开的** InoProShop 进程注入 IronPython 脚本，实现导入 / 导出 / 预编译检查。
-3. **克隆模板**（`assets/natives/`）：13 份已验证的 native 样本，生成新结构时从这里克隆，不要凭空构造。
+3. **克隆模板**（`assets/natives/`）：18 份已验证的 native 样本，生成新结构时从这里克隆，不要凭空构造。
    写**树形/分支组**结构时，必须从 `assets/natives/user_fixed.native` 克隆（见下方「已验证的合法模式」）。
 
 **能做什么**
@@ -36,7 +36,7 @@ InoProShop 的梯形图存在一个 native XML 结构里。这个仓库提供：
 | 组 | 主题 | 条目 |
 |---|---|---|
 | A | 验收与消息 | 1、13、17、18、23、24 |
-| B | 结构合法性 | 2、3、4、5、9、10、11、14、15、16、21、22 |
+| B | 结构合法性 | 2、3、4、5、9、10、11、14、15、16、21、22、41 |
 | C | 挂载与实例 | 6、7、8、12、19、20 |
 | D | 任务配置与 GVL | 25、26、27、28、29、30 |
 | E | 枚举/凸轮/轴组 | 31、32、33、34、35、36、37、38 |
@@ -73,6 +73,7 @@ InoProShop 的梯形图存在一个 native XML 结构里。这个仓库提供：
 | 16 | **往 XML 文本节点塞自由文本必须转义 `<` `>` `&`**。注释里写 `<Null/>` 会被解析成**真实子节点**，导致节点数不等、`rt_diff` 整段错位报几十处。统一走 `xml_text()`，且必须定义在 `textlines_block()` **之前**。**排查提示**：diff 报「节点数不同 + 整段错位」时先看父节点是不是 `Comment`/`Text`/`Title`/`Label`——是就 100% 是转义问题。 |
 | 21 | **FB 类框（TON / FB_xxx）的 `Instance.Type` 必须填 BoxType 名、`Instance.Operand` 必须填实例名**。写空 `Instance.Type` → `import_native` 抛 **「已标识项中有一项的格式无效。」**，且是**模态弹窗**：主线程阻塞 → 守护心跳停 → `bridge.py` 全部超时（看起来像「API 挂了」）。判断：枚举该 PID 可见窗口，主窗口 `IsWindowEnabled=False` + 另有窗口挂 `确定`；解除：`SendMessage(hButton, BM_CLICK=0x00F5, 0, 0)`。⚠ `ET.parse()` 验不出这类语义错误。 |
 | 22 | **`check_slots.py` 不能按「输入槽数 == `InputParam` 名数」校验比较框 / MOVE / 算术框**。比较框 `InputParam` 只有 `['EN']` 但 `InputItems` **恒 3 槽**；MOVE 恒 2 槽；ADD 恒 3 槽。旧规则会把模板原生 POU 全部误报，已加 `_input_exempt()`。**元教训**：校验脚本的规则本身也要拿真实工程回归。 |
+| 41 | **线圈只能挂 NETITEM（9873c309-1f09-4ebf-9078-42d8057ef11b）或触点 PIN 的 OutputItems，不能挂功能框**。挂到 AND 框的 OutputItems 上时：导入接受、预编译 0、编译 0、导出原样保留，唯独 IDE 里该梯级末尾只画一个**空方块**（无名字无括号）——四条验收链全部放行，用户连说三次「还是没有更新」。A00 全工程分布：NETITEM→线圈 **15** 处、触点 PIN→线圈 **5** 处、BOX→线圈 **0** 处。→ 生成器用 netitem() / coil_tree() / coil_net() 包一层（条件有多个时先 and_box 合成 RValue）；验收链必须补「图形（人眼）」一项。 |
 
 ### C. 挂载与实例
 
@@ -252,7 +253,9 @@ inoproshop-ld-native/
 │   ├── native-structure.md       # 节点 GUID、层级、槽位、声明区、合法挂载位置
 │   ├── precompile-errors.md      # 错误 → 根因 → 修复（8 类，含 2b 单条件 AND）
 │   ├── edge-detection.md         # 边沿检测：框的 InputFlags[0]=16（不是触点、不是 R_TRIG）
-│   ├── false-pass-catalog.md     # 0 错误的八种假象（验收器只防它建模的那一维）
+│   ├── false-pass-catalog.md     # 0 错误的九种假象（验收器只防它建模的那一维）
+│   ├── mode-cards/               # 模式卡：step-sequence.md（步序）、process-flow.md（完整流程）
+│   └── corpus/                   # 语料普查：模板全量导出 → 对象索引 / 网络形状 / 工具链
 │   └── mcp-bridge.md             # 桥的协议、命令、消息分类
 ├── scripts/
 │   ├── check_slots.py            # 结构自检：槽位数 vs 参数数 + Operand 三态断言（含 MOVE 原生形态豁免）
@@ -285,7 +288,8 @@ inoproshop-ld-native/
 │       ├── make_fix45.py         # 补声明 + 删多余 TRUE
 │       ├── make_packml_cmd_test.py  # 从零生成完整 POU（7 网络 PackML 命令层）
 │       └── make_fb_call_test.py     # FB 调用（Function/Program/FunctionBlock 三类）
-├── assets/natives/               # 已验证克隆模板（5 份，含 fb_call_test.native）
+├── assets/natives/               # 已验证克隆模板 18 份（含 negative/ 负样本与 prg_TonTest / prg_CoilTest 最小样本）
+├── scripts/corpus/                # 语料工具链：index_native / scan_forms / parse_net / ld_dump（主机 py3）
 ├── sync.ps1                      # 一键：校验 CHANGELOG → commit → push
 └── sync.cmd                      # PowerShell 执行策略绕过包装器
 ```

@@ -1,4 +1,4 @@
-# 「0 错误」的八种假象 —— 假通过目录
+# 「0 错误」的九种假象 —— 假通过目录
 
 > 这份文件只记**一种错误**：验收给出 PASS，但实际没验证到东西。
 > 每条包含：现象 / 根因 / 怎么认出来 / 怎么修。
@@ -18,6 +18,7 @@
 | 6 | 验收器恒 PASS | 解析器跟不上真实结构 / 只建模了部分维度 | 换一个尺寸的输入，签名一模一样 |
 | 7 | 负样本自己变成正样本 | 改错了地方（把声明也改了，或改进了注释） | 故意写错却 0 错误 |
 | 8 | 基线被别人清空 | `system.clear_messages` 是**进程级**的 | 错误数突然从 N 回到 0 |
+| 9 | 线圈挂错父节点，界面只画空方块 | 线圈只认 NETITEM（或触点 PIN）的 OutputItems | 图形末尾是空方块，编译仍 0 错误 |
 
 ---
 
@@ -137,7 +138,41 @@
 
 ---
 
-## 元规则（比上面八条更重要）
+## 9. 图形载体不对：编译通过、界面只画空方块
+
+**现象**：build 报「编译完成 -- 0 错误」，但用户在 IDE 里看到某条梯级末尾是一个**空方块**（没有线圈名、没有 () 符号）。用户连说三次「还是没有更新」，前两次都以为是缓存问题。
+
+**根因**：线圈容器的**父节点**错了。线圈（c9b2f165，IsCoil=True）挂在 G_BOX（acfc6f68）的 OutputItems 上时，IDE 只把它当成一个无法渲染的占位 —— 导入接受、编译通过、导出原样保留，**三处都不报错**，只是画不出来。
+
+**A00 实测分布**（raw/040_A00_上料移栽.native，OutputItems 父 → 子）：
+
+| 父节点类型 | 子节点 | 次数 |
+|---|---|---|
+| 9873c309 NETITEM | → c9b2f165 线圈 | **15** |
+| 9de7f100 触点 PIN | → c9b2f165 线圈 | **5** |
+| acfc6f68 BOX | → 线圈 | **0** |
+
+也就是说：线圈只能挂 **NETITEM** 或**触点 PIN** 的 OutputItems，**不能挂框**。
+
+**正确的 NETITEM 结构**（A00 实测，约 5016 字符）：
+
+```
+Single Type="{9873c309-1f09-4ebf-9078-42d8057ef11b}"     <- NETITEM
+  Flags(Extensible=False, Fixed=False, Flags=0)
+  Single Name="RValue" Type="{条件项自己的 guid}"        <- 条件项（触点/框）
+  OutputItems (Type {f40d3e09-c02c-4522-a88c-dac23558cfc4})
+    List2
+      线圈容器 (c9b2f165: Boolean=True, LValue=True, Flags=2|0, IsCoil=True)
+  Id
+```
+
+**修**：生成器里把「条件 + 线圈」包一层 netitem()（scripts/examples/ldgen.py 的 netitem / coil_net / coil_tree）；条件有多个时先 and_box 合成一个条件项，再交给 netitem 作 RValue。
+
+**怎么认出来**：这一条**静态检查和编译都抓不到**，唯一可靠的发现方式是**人眼看 IDE 图形**（或导出后按父节点类型统计：IsCoil=True 的容器祖先里必须出现 9873c309 或 9de7f100）。验收链里要加一行「图形（人眼）」。
+
+---
+
+## 元规则（比上面九条更重要）
 
 1. **验收器只防它建模的那个维度**。补验收器 ≠ 补任何维度；补的是「这一维的负样本 + 判据」。
 2. **凡是读取器，都有容量与可用性边界**。分类可能不存在、条数可能被截断、字段可能取不到；「读到 0 错误」必须同时证明「读取器完整可用」。
@@ -150,3 +185,4 @@
 - 消息池机制：`references/native-structure.md`、`references/mcp-bridge.md`
 - 边沿（最典型的「编译器不报但语义全错」）：`references/edge-detection.md`
 - 静态三门闸：`scripts/check_slots.py`、`scripts/check_symbols.py`、`scripts/check_valpin.py`
+- 线圈载体与流程排布：`references/mode-cards/process-flow.md`
