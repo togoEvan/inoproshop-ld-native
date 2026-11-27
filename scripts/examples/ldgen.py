@@ -10,6 +10,7 @@
 
 本文件由 D:\\plc_mcp\\work\\gen_stn_edge.py 抽取（构造层与模板 helper 均照 A00 实测），
 2026-11-27 补 check_skeleton() 与框 EN 边沿（InputFlags[0]=16）支持。
+2026-11-27 补 ton_box()（TON 延时框，结构见 references/mode-cards/process-flow.md）。
 """
 import collections
 import io
@@ -542,6 +543,42 @@ def check_skeleton(s):
         n = seg.count(u'<Single Type="string">')
         if n > 3:
             raise RuntimeError("skeleton: Path segments = %d (need <=3, not under a folder)" % n)
+
+
+def ton_box(inst, in_item, pt_text, q_var=None, et_var=None):
+    """TON 延时框（FunctionBlock）。结构照 A00_上料移栽 实测：
+    无 EN 槽 —— InputItems = [IN, PT] 两槽，InputParam=[IN,PT]/[BOOL,TIME]，
+    OutputParam=[Q,ET]/[BOOL,TIME]，Instance.IsInstance=True / Operand=实例名 / Type=TON。
+    q_var / et_var 给 None 时对应输出槽写 <Null />（A00 原样：Q 与 ET 都不接）。
+    """
+    outs = []
+    outs.append(out_pin(q_var, u"BOOL") if q_var else u'<Null />')
+    outs.append(out_pin(et_var, u"TIME") if et_var else u'<Null />')
+    return (u'<Single Type="%s" Method="IArchivable">\n'
+            u'  <Single Name="ContainsExtensibleInputs" Type="bool">False</Single>\n'
+            u'  <Single Name="EN" Type="bool">False</Single>\n'
+            u'  <Single Name="ENO" Type="bool">False</Single>\n'
+            u'  <Single Name="ProvidesSTSnippet" Type="bool">False</Single>\n'
+            u'  %s\n'
+            u'  <Null Name="InputFlags" />\n'
+            u'  <List2 Name="InputItems">\n%s\n  </List2>\n'
+            u'  <Single Name="CallType" Type="%s">FunctionBlock</Single>\n'
+            u'  %s\n'
+            u'  %s\n'
+            u'  %s\n'
+            u'  %s\n'
+            u'  <Single Name="BoxType" Type="string">TON</Single>\n'
+            u'  <Null Name="STSnippet" />\n'
+            u'  <Single Name="IsBoxType" Type="bool">True</Single>\n'
+            u'  <Single Name="Id" Type="long">%d</Single>\n'
+            u'</Single>' % (G_BOX, flags_block(False),
+                            u"\n".join([in_item, value_pin(pt_text, u"TIME")]),
+                            G_CALLTYPE,
+                            operand_container(inst, u"TON", False, False, 0, True, False, u"Instance"),
+                            _outputs(outs),
+                            param_block(u"InputParam", [u"IN", u"PT"], [u"BOOL", u"TIME"]),
+                            param_block(u"OutputParam", [u"Q", u"ET"], [u"BOOL", u"TIME"]),
+                            nid()))
 
 
 def build_doc(skeleton_text, out_name, decl_lines, nets, out_path):

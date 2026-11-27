@@ -3,7 +3,7 @@
 > 汇川 InoProShop（CODESYS V3.5 SP11 系）梯形图（LD）**native XML 直接生成 + 静默导入**工具包。
 > 给 AI Agent 用：读完本文件 + `AGENTS.md` 就能直接上手写梯形图，不需要人肉点鼠标。
 
-[English summary](#english-summary) · [快速开始](#快速开始5-分钟) · [规范](docs/usage.md) · [迭代流程](docs/iteration.md) · [文件地图](FILEMAP.md) · [边沿检测](references/edge-detection.md) · [假通过目录](references/false-pass-catalog.md) · [模式卡·步序](references/mode-cards/step-sequence.md)
+[English summary](#english-summary) · [快速开始](#快速开始5-分钟) · [规范](docs/usage.md) · [迭代流程](docs/iteration.md) · [文件地图](FILEMAP.md) · [边沿检测](references/edge-detection.md) · [假通过目录](references/false-pass-catalog.md) · [模式卡·步序](references/mode-cards/step-sequence.md) · [模式卡·流程](references/mode-cards/process-flow.md)
 
 ---
 
@@ -13,7 +13,7 @@ InoProShop 的梯形图存在一个 native XML 结构里。这个仓库提供：
 
 1. **已验证的结构知识**（`references/`）：节点 GUID、槽位规则、预编译错误对照表。所有结论都经过实测，不是猜的。
 2. **可运行的桥接脚本**（`scripts/`）：通过文件 IPC 向**已经打开的** InoProShop 进程注入 IronPython 脚本，实现导入 / 导出 / 预编译检查。
-3. **克隆模板**（`assets/natives/`）：12 份已验证的 native 样本，生成新结构时从这里克隆，不要凭空构造。
+3. **克隆模板**（`assets/natives/`）：13 份已验证的 native 样本，生成新结构时从这里克隆，不要凭空构造。
    写**树形/分支组**结构时，必须从 `assets/natives/user_fixed.native` 克隆（见下方「已验证的合法模式」）。
 
 **能做什么**

@@ -22,13 +22,13 @@
 |------|------|------|---------|
 | 根目录 | 10 | 门面 + 铁律 + 变更日志 + 本文件 + 同步脚本 | README/AGENTS/CHANGELOG 要改；LICENSE 不改 |
 | `docs/` | 2 | 面向使用者的长文档（`usage.md` 操作手册、`iteration.md` 迭代史） | 要改 |
-| `references/` | 52 | 知识库正文 6 篇（`native-structure.md` 102KB / `precompile-errors.md` 25KB / `mcp-bridge.md` 18KB / `edge-detection.md` 4KB / `false-pass-catalog.md` 4KB / `mode-cards/step-sequence.md` 4KB）+ `evidence/notask-scope/` 46 个原始日志 | 正文要改；evidence 只加不改 |
+| `references/` | 53 | 知识库正文 7 篇（`native-structure.md` 102KB / `precompile-errors.md` 25KB / `mcp-bridge.md` 18KB / `edge-detection.md` 4KB / `false-pass-catalog.md` 4KB / `mode-cards/step-sequence.md` 4KB / `mode-cards/process-flow.md` 5KB）+ `evidence/notask-scope/` 46 个原始日志 | 正文要改；evidence 只加不改 |
 | `scripts/`（根） | 14 | 主机侧 Python 3 工具 + 三个自检器 + 两个 .cmd + 一个 .ps1 | 要改 |
 | `scripts/ide/`（core） | 5 | IDE 内 IronPython：守护本体 + 路径自解析 | 谨慎改（改完要 reload） |
 | `scripts/ide/tasks/` | 38 | **可复用操作**：验收 / 导入 / 导出 / 建对象 / 任务槽 / GVL | 要改 |
 | `scripts/ide/studies/` | 75 | 一次性考古脚本，回答问题即冻结 | **不改**（要新写就进 tasks/） |
-| `scripts/examples/` | 29 | native 生成器（按工程定制，多数一次性；`ldgen.py` 例外，是可复用库） | 参考用，别当库 |
-| `assets/natives/` | 12 | 已验证的克隆模板（约 1.2MB） | **只读**（结构来源） |
+| `scripts/examples/` | 30 | native 生成器（按工程定制，多数一次性；`ldgen.py` 例外，是可复用库） | 参考用，别当库 |
+| `assets/natives/` | 13 | 已验证的克隆模板（约 2.2MB） | **只读**（结构来源） |
 
 ---
 
@@ -46,6 +46,7 @@
 | 查某个编译错误的含义与修法 | `references/precompile-errors.md` |
 | 想让某个框「只执行一次」/ 加边沿 | `references/edge-detection.md`（框的 `InputFlags[0]=16`，不是触点） |
 | 从零写一段「步进/步序」状态机 | `references/mode-cards/step-sequence.md`（三梯级母语法 + 可跑的 ldgen 示例） |
+| 从零写完整工站流程（延时/超时/报警/复位/中断） | `references/mode-cards/process-flow.md`（37 网络排布 + TON 结构 + 四道验收） |
 | 验收 PASS 但怀疑是假通过 | `references/false-pass-catalog.md`（八种假象逐条对照） |
 | 查某个 API 到底存不存在 / 怎么调 | `references/native-structure.md` + `ide/studies/` 里对应的 probe 脚本 |
 | 装守护 / 重装守护 | `ide/boot_daemon.py`（人工点菜单）；改完 `plc_daemon.py` 用 `ide/reload_daemon.py` |
