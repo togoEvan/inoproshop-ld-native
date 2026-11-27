@@ -7,6 +7,24 @@
 
 ## [Unreleased]
 
+### 新增（2026-11-27，模式卡 01 · 步序网络，已实验验证）
+
+- **`references/mode-cards/step-sequence.md`** —— 第一张「模式卡」：从模板母本 `A00_上料移栽`（85 网络 / 490 框）提炼的步进状态机合规写法。
+  1 个步序号提交网络 + N 个「一步一网络」，每网络固定三梯级（写描述 → 做动作 → 写下一步）；
+  提交网络必须第一个且无条件执行；带副作用的动作框在 **EN 引脚**加边沿（`InputFlags[0]=16`），保证停几个周期都只执行一次。
+  含 6 条实测约束（每条附证据）、可直接跑的 `ldgen` 生成代码、以及 17:49–17:50 的实例验证明细。
+
+- **`assets/natives/prg_SeqDemo.native`** —— 该卡的成品样本（190,602 B / 6 网络 / 215 个 Id 全唯一 /
+  `InputFlags=16` 6 处、触点 `Flags=2` 0 处）：待命 → 取料 → 加工 → 复位 → 计数 → 回待命。
+  导入 + 挂 MainTask + build = **0 错误**（101 条警告为模板固件既有）。
+
+- **`scripts/examples/ldgen.py`** —— 从历史生成器抽取的 LD 生成库：节点构造层（触点/线圈/框/分支/网络）
+  + 模板 helper（`step_net` / `counter_net` / `buf_commit_net`）+ `build_doc`（骨架替换 + 全文 Id 重编 + 结构计数）。
+  新增 `check_skeleton()` 前置自检：骨架必须 Application 直属、单一实现区 —— 拿带 Method 的 FB 导出当骨架，
+  会让导入卡在模态框，且报错文本完全不提原因。
+
+- **`scripts/examples/gen_seq_ld.py`** —— 上述 6 网络样本的完整生成脚本（生成 → 自检 → 打印结构计数）。
+
 ### 修复（2026-11-27，边沿检测：修正两处错误旧结论）
 
 - **修正 `references/native-structure.md` §③ `InputFlags` 对 `Flags=16` 的解释**。
