@@ -1,8 +1,9 @@
 # 模式卡 02 · 完整工站流程（步序 + 延时 + 超时 + 报警 + 复位 + 中断）
 
-> 状态：**已实验验证**（2026-11-27 18:08–18:09，InoProShop V1.10.0.3 隐藏桌面实例；导入 → 挂 MainTask → build = `0 错误, 101 警告`，101 条为模板固件既有警告）
+> 状态：**已实验验证**（2026-11-27，InoProShop V1.10.0.3；隐藏桌面实例与用户工程各编译一次 = `0 错误, 101 警告`，101 条为模板固件既有警告）
+> 修订：**v2（18:25–18:26）按用户两条规范重写** —— ① BOOL 量一律用线圈（S/R），禁用 MOVE；② 每条路末尾必须是线圈或功能框，不许空梯级。v1 的 37 网络版本作废。
 > 母本：`D:/plc_study/study.project`（InoPack 包装模板升级副本），骨架克隆自 `A00_上料移栽`
-> 成品：`assets/natives/prg_FlowDemo.native`（967,460 B / 37 网络 / 1087 个 Id / 43 个声明变量）
+> 成品：`assets/natives/prg_FlowDemo.native`（723,466 B / 35 网络 / 822 个 Id / 34 个声明变量）
 > 生成器：`scripts/examples/gen_flow_ld.py`（依赖同目录 `ldgen.py`）
 
 ## 0. 这张卡解决什么
@@ -14,7 +15,7 @@
 
 | 能做 | 证据 |
 | --- | --- |
-| 步序推进 / 等待信号 / 分支跳转 | 37 网络，`0 错误` |
+| 步序推进 / 等待信号 / 分支跳转 | 35 网络，`0 错误` |
 | 延时（TON，`t#500ms` / `t#3s`） | 6 个 TON 实例，全部被编译器接受 |
 | 每步超时 + 报警码 | 3 个 3s 超时器 → 步 99，`iErrCode` 记步号 |
 | 报警复位 | 步 99 判 `xReset` 上升 → 清报警、清码、回 0 |
@@ -29,20 +30,51 @@
 | 配方 / 变量数组批量 | 语法可用，未做实验对照 |
 | 真机运行行为 | 没有目标 PLC，只到「编译通过 + 结构自检 + 离线仿真」 |
 
-## 2. 结构配方（37 个网络的固定排布）
+## 2. 结构配方（35 个网络的固定排布）
 
 | 段 | 网络 | 内容 | 为什么必须在这个位置 |
 | --- | --- | --- | --- |
 | 提交 | 1 | `aiAutoStep := aiAutoStepBuffer` | 所有网络先读旧步号、只写缓冲，最后统一提交；否则同周期内后面网络会看到新步号 |
 | 辅助位 | 2–5 | `bSafeStart` / `bNeedLoad` / `bNeedClamp` / `bNeedEject` | 把「本步 + 未到位」压成一个触点，主流程网络少一层比较框 |
 | 计时 | 6–11 | 3 个 3s 超时 TON + 3 个保持 TON（500/300/500ms） | 必须在主流程之前：先算出超时标志，主流程才能在同一周期内跳走 |
-| 主流程 | 12–25 | 0 待命 → 10 上料 → 15 保持 → 20 压紧 → 25 保持 → 30 检测 → 40 判定 →（良 50 → 55 → 90）/（不良 60 → 65 → 70 → 75 → 90） | 每个网络固定三梯级：写描述 → 做动作 → 写下一步 |
-| 超时 | 26–28 | 3 个 `BRANCH{超时触点}`：`iErrCode := 步号` / `aiAutoStepBuffer := 99` / 空梯级 | `BRANCH` 至少 2 个梯级，空梯级是合规写法（见模式卡 01） |
-| 报警 | 29 | 步 99：置 `xAlarm`，等 `xReset` 上升 → 清码清报警回 0 | 报警步必须能自锁，否则复位后立刻又落回超时 |
-| 复位 | 30 | `xReset` 常闭 → `xAlarm := FALSE` | 独立网络，避免与步 99 的三梯级抢写同一变量 |
-| 中断 | 31–32 | `xManualMode` / `NOT xSafetyOK` → 7 个输出 FALSE + `aiAutoStep := 0` + buffer := 0 | 必须最后且每周期无条件：本周期前面置的输出要能被撤掉 |
+| 主流程 | 12–26 | 0 待命 → 10 上料 → 15 保持 → 20 压紧 → 25 保持 → 30 检测 → 40 判定 →（良 50 → 55 → 90）/（不良 60 → 65 → 70 → 75 → 90）→ 99 报警 | 每个网络固定三梯级：写描述 → **线圈组**（BOOL 动作用 S/R）→ 写下一步；判定用 `judge_net`（一个比较框分出两条跳步） |
+| 报警 | 主流程内（步 99） | 步 99：置位线圈 `xAlarm`，等 `xReset` 上升 → 回 0 | 报警步必须能自锁，否则复位后立刻又落回超时 |
+| 复位 | 27–28 | 27：`xReset` 常闭 → 复位线圈 `xAlarm`；28：`iErrCode := 0`（MOVE INT） | 独立网络，避免与步 99 抢写同一变量 |
+| 超时 | 29–31 | 3 个 `BRANCH{超时触点}`：`iErrCode := 步号` / `aiAutoStepBuffer := 99` | 两条都是 **MOVE 到 INT 变量**（数据量，合法）；**不许用空梯级凑 BRANCH 的 2 个树**，见 §2.5 |
+| 中断 | 32–35 | 手动/安全断各两个网络：`abort_coils_net`（7 个复位线圈）+ `abort_clear_net`（清步序） | 必须最后且每周期无条件：本周期前面置的输出要能被撤掉 |
 
 顺序铁律三条：**提交在最前、计时在主流程之前、中断在最后**。
+
+## 2.5 BOOL 量一律用线圈，禁用 MOVE（用户规范）
+
+用户原话（2026-11-27）：「1、BOOL量不要用move」「2、有些路最末尾没用线圈和功能块」。
+
+| 目标变量类型 | 正确写法 | 错误写法（v1 犯过的） |
+| --- | --- | --- |
+| BOOL | 线圈：普通 `( )` / 置位 `(S)` / 复位 `(R)` | `MOVE TRUE → xOut` |
+| INT / DINT / WORD | MOVE 框 | 线圈（编译器不认） |
+| WSTRING | MOVE 框 | 同上 |
+| 步序跳转 | MOVE 到 `aiAutoStepBuffer` | 直接写 `aiAutoStep` |
+
+三种线圈的语义与 native 编码：
+
+| 线圈 | 语义 | `Operand.Flags.Flags` |
+| --- | --- | --- |
+| 普通线圈 `( )` | 条件成立为 TRUE，不成立为 FALSE | 0 |
+| 置位线圈 `(S)` | 条件成立置 TRUE，之后保持 | 2 |
+| 复位线圈 `(R)` | 条件成立置 FALSE，之后保持 | 3 |
+
+`ldgen.py`：`coil(var)` / `set_coil(var)` / `reset_coil(var)`，返回可直接放进 AND 框 `OutputItems` 的操作数。
+
+**一个梯级挂多个线圈是合法的**（单独验证过：`prg_CoilTest`，3 个并联线圈 S/R/普通 + 1 个单线圈网络，导入 + 挂 MainTask + build = 0 错误）。
+所以「伸出时同时撤另一路」写成
+`and_box([step_gate(10), connector()], outputs=[set_coil(xLoadExt), reset_coil(xLoadRet)])`
+即可，不必拆成两个网络。
+
+第二条规范的实操含义：`BRANCH` 的每棵树结尾要么落到线圈、要么落到框（MOVE / ADD / TON），**不许只有 `connector + outconn` 的空梯级**。
+v1 用空梯级把 `BRANCH` 凑到 2 棵树，被用户否决；正解是该梯级填上真正要做的事（例如超时的第二条 MOVE），或者干脆不要这个 `BRANCH`。
+
+注意区分：`MOVE` / `ADD` 框 `OutputItems` 里的输出连接器（`outconn`）是框的 ENO 连线，**不算空梯级**；违规的只有「整棵树里除连接器外什么都没有」。
 
 ## 3. TON 的真实结构（本卡最重要的新知识）
 
@@ -87,12 +119,27 @@
     sys.path.insert(0, r"<仓库>/scripts/examples")
     import ldgen as L
     L.SKEL = r"<一个已验证的 PRG native，作骨架>"
-    # 时钟/保持/超时
-    boxes = [L.ton_box(u"fbTLoad", L.eq_box(L.value_pin(L.STEP, u"INT"), L.value_pin(u"10", u"INT")), u"t#3s", u"bLoadTimeout")]
-    # 步 10：写描述 → 上料伸出 → 等到位跳 15
+
     nets = [L.buf_commit_net()]
-    nets.append(L.step_net(10, u"上料伸出", [ ... ], 15, done_contact=L.contact(u"xLoadAtPos")))
-    xml = L.build_doc(L.SKEL, L.DECL_ENV, nets, keep_name=u"prg_FlowDemo")
+    # 计时：每步一个 TON，单独成网络，IN 直接吃比较框（不能放进 BRANCH 门控）
+    nets.append(L.ton_net(u"fbTLoad",
+                          L.eq_box(L.value_pin(L.STEP, u"INT"), L.value_pin(u"10", u"INT")),
+                          u"t#3s", u"取料超时"))
+    # 主流程：写描述 → 线圈组（S/R） → 写下一步
+    nets.append(L.step_net2(10, u"上料伸出",
+                            [L.set_coil(u"xLoadExt"), L.reset_coil(u"xLoadRet")],
+                            15, done_contact=L.contact(u"xLoadAtPos")))
+    # 判定：一个比较框分出两条跳步（末尾都是 MOVE → 合规）
+    nets.append(L.judge_net(40, u"判定",
+                            [(L.contact(u"xScanOK"), 50),
+                             (L.contact(u"xScanOK", neg=True), 60)]))
+    # 超时：两条 MOVE（INT），不写空梯级
+    nets.append(L.timeout_net(L.contact(u"fbTLoad.Q"), 10, u"取料超时报警"))
+    # 中断放最后、每周期无条件
+    nets.append(L.abort_coils_net(L.contact(u"xManualMode"),
+                                  [L.reset_coil(u"xLoadExt"), L.reset_coil(u"xLoadRet")],
+                                  u"手动中断-撤输出"))
+    L.build_doc(L.SKEL, u"prg_FlowDemo", DECL, nets, r"<输出路径>.native")
 
 完整可跑版本见 `scripts/examples/gen_flow_ld.py`（生成 → 自检 → 打印结构计数 → 写文件）。
 
@@ -107,10 +154,12 @@
 
 | 项 | 结果 |
 | --- | --- |
-| 结构 | 37 网络 / 1087 个 Id 全唯一 max=1087 / AND 87 · MOVE 75 · EQ 23 · ADD 2 · TON 6 |
-| 符号 | 43 个声明变量，268 个操作数去掉 79 个常量后全部有定义 → PASS |
-| build | `97f48d64` 共 104 条：开始构建 → 代码典型化 → `编译完成 -- 0 错误, 101 警告` |
-| 负样本 | 改一处操作数 → 报 2 条错误（见坑表最后一行） |
+| 结构 | 35 网络 / 822 个 Id 全唯一 max=822 / AND 58 · MOVE 43 · EQ 21 · ADD 2 · TON 6 · 线圈 45（普通 4 / S 10 / R 31） |
+| MOVE 目标类型 | INT 28 + WSTRING(49) 15，**BOOL 0 个**（符合 §2.5） |
+| 符号 | 34 个声明变量，235 个操作数去掉 74 个常量后全部有定义 → PASS |
+| build（隐藏实例） | `97f48d64` 共 104 条：开始构建 → 代码典型化 → `编译完成 -- 0 错误, 101 警告` |
+| build（用户工程） | 导入 35 网络 → 挂 MainTask → 预编译 0 错误 / 编译 0 错误（各 101 条模板既有警告，已标 TRUNCATED） |
+| 负样本 | v1 改一处操作数 → 报 2 条错误（见坑表最后两行） |
 
 ## 7. 坑表（都有原文）
 
@@ -120,6 +169,8 @@
 | build 只报 3 条 AND，没报 3 个未定义变量 | TON 的 `Q` 输出到未声明变量，**编译器不校验** | `check_symbols.py` 必须单独跑 |
 | 导入抛 `已标识项中有一项的格式无效。` | 负样本只改了 `Operand` 的文本、没换 Guid/名，IDE 在解析阶段就拒绝 | 负样本必须换 `Guid` 与对象名；且这种负样本只能证明「编译器在编新对象」，不能证明语义错误被捕获 |
 | 导入后构建报 `没有定义标识符'prg_FlowDemoNeg'` `需要程序名、函数或功能块实例替代 'prg_FlowDemoNeg'` | 上一条的连带结果：对象没进工程，但任务列表里已经被 `pous.add` 过 | 挂任务前先确认 `found=True` |
+| 同名对象已存在时 `import_native` **卡死 85 秒以上、无返回无报错** | 副本工程里已有同名 `prg_FlowDemo`，IDE 在处理同名导入时进入内部等待 | 导入前先 `o.remove()` 掉同名对象并 `process_messageloop()`；写真实工程用「改名让位」法 |
+| 用户看图后指出「有些路最末尾没用线圈和功能块」 | v1 用 `connector + outconn` 空梯级把 `BRANCH` 凑到 2 棵树 | 每棵树结尾必须是线圈或框（见 §2.5）；超时那条改成第二条 MOVE |
 
 ## 8. 还没验证的
 
@@ -129,4 +180,4 @@
 
 ---
 
-最后更新：2026-11-27 18:20（lead）
+最后更新：2026-11-27 18:40（lead，v2 按用户两条规范重写：BOOL 全用线圈、去空梯级）

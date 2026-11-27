@@ -8,9 +8,7 @@
 骨架要求：任意一个已存在的 Application 直属 POU 的 export_native 结果
 （本库会替换：对象名 1 处、第一个 Guid、TextLines、NetworkList 全部内容）。
 
-本文件由 D:\\plc_mcp\\work\\gen_stn_edge.py 抽取（构造层与模板 helper 均照 A00 实测），
-2026-11-27 补 check_skeleton() 与框 EN 边沿（InputFlags[0]=16）支持。
-2026-11-27 补 ton_box()（TON 延时框，结构见 references/mode-cards/process-flow.md）。
+本文件由 D:\\plc_mcp\\work\\gen_stn_edge.py 抽取，构造层与模板 helper 均照 A00 实测。
 """
 import collections
 import io
@@ -161,9 +159,91 @@ def connector():
             u'</Single>' % (G_CONNECTOR, flags_block(False), nid()))
 
 
-def coil(var, typ=u"BOOL"):
-    """线圈操作数（挂在框的 OutputItems 里，不带 Name 属性）。"""
-    return operand_container(var, typ, True, True, 0, is_coil=True, name=None)
+def coil(var, typ=u"BOOL", mode=0):
+    """线圈操作数（挂在框的 OutputItems 里，不带 Name 属性）。
+
+    mode: 0 = 普通线圈 ( ) / 2 = 置位线圈 (S) / 3 = 复位线圈 (R)。
+    模板语料实测：Set 46 处 Flag=2、Reset 48 处 Flag=3，与普通线圈同构，只差这个位。
+    用户规范（2026-11-27）：BOOL 量一律用线圈，不许用 MOVE。
+    """
+    return operand_container(var, typ, True, True, mode, is_coil=True, name=None)
+
+
+def set_coil(var, typ=u"BOOL"):
+    """置位线圈 (S)。"""
+    return coil(var, typ, 2)
+
+
+def reset_coil(var, typ=u"BOOL"):
+    """复位线圈 (R)。"""
+    return coil(var, typ, 3)
+
+
+def coil_tree(coils):
+    """梯级末端是一组线圈：AND{ 母线连接器, OUTCONN } + OutputItems=线圈们。
+
+    empty_tree() 的「空」正是用户指出要避免的形态（路末尾没有线圈或功能框），
+    这里把线圈挂上去，图形上就是「母线 → 一个/多个线圈」。
+    """
+    return and_box([connector(), outconn()], outputs=list(coils))
+
+
+def step_net2(n, desc, coils, next_n, done_contact=None, unconditional=False,
+              done_edge=False, title=None):
+    """一步一网络（v6：BOOL 输出全部走线圈，不用 MOVE）。
+
+    BRANCH{ Input=门控EQ(n), Trees=[ 描述MOVE, 线圈梯级, 跳步MOVE ] }
+    coils 为空时省掉线圈梯级（剩下描述 MOVE + 跳步 MOVE，末尾仍是功能框）。
+    用户规范：每条路的末尾必须是线圈或功能框，空梯级（母线直通）不许出现。
+    """
+    trees = [desc_tree(desc)]
+    if coils:
+        trees.append(coil_tree(coils))
+    trees.append(jump_tree(next_n, done_contact, unconditional=unconditional,
+                           en_edge=done_edge))
+    if len(trees) < 2:
+        raise RuntimeError("step_net2: BRANCH needs >=2 trees")
+    return network([branch(step_gate(n), trees)], title or desc)
+
+
+def judge_net(n, desc, branches, title=None):
+    """判定步：BRANCH{ 门控EQ(n), [描述MOVE] + 每个分支一条条件跳步 MOVE }。
+
+    branches = [(condition_item, next_n), ...]，末尾都是 MOVE → 合规。
+    """
+    trees = [desc_tree(desc)]
+    for cond, nxt in branches:
+        trees.append(jump_tree(nxt, cond))
+    if len(trees) < 2:
+        raise RuntimeError("judge_net: BRANCH needs >=2 trees")
+    return network([branch(step_gate(n), trees)], title or desc)
+
+
+def timeout_net(q_contact, err_code, title):
+    """超时梯级：BRANCH{ 定时器Q触点, [ iErrCode:=步号 MOVE, aiAutoStepBuffer:=99 MOVE ] }。
+    两条都是 MOVE（INT），末尾是功能框，不需要第三条空梯级。"""
+    return network([branch(q_contact, [
+        and_box([move_box(value_pin(u"%d" % err_code, u"INT"), u"iErrCode", u"INT",
+                          en_edge=True), outconn()]),
+        and_box([move_box(value_pin(u"99", u"INT"), BUF, u"INT", en_edge=True),
+                 outconn()])])], title)
+
+
+def ton_net(inst, in_item, pt_text, title=None):
+    """TON 单独成网络（每周期执行）：IN 直接吃输入元素（触点或 EQ 框）。"""
+    return network([ton_box(inst, in_item, pt_text)], title or (u"TON " + inst))
+
+
+def abort_coils_net(cond_item, coils, title):
+    """中断：条件成立 → 一组复位线圈（末尾是线圈）。"""
+    return network([and_box([cond_item, connector()], outputs=list(coils))], title)
+
+
+def abort_clear_net(cond_item, title):
+    """中断：条件成立 → aiAutoStep:=0 与 aiAutoStepBuffer:=0（末尾是 MOVE 框）。"""
+    return network([and_box([cond_item,
+                             move_box(value_pin(u"0", u"INT"), STEP, u"INT"),
+                             move_box(value_pin(u"0", u"INT"), BUF, u"INT")])], title)
 
 
 def coil_net(cond_items, var, typ=u"BOOL", title=None):

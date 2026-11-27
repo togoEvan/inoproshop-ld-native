@@ -7,6 +7,15 @@
 
 ## [Unreleased]
 
+### 修正（2026-11-27 v2，按用户现场规范重写模式卡 02）
+
+- **BOOL 量一律用线圈，禁用 MOVE**（用户规范）：普通线圈 `( )` / 置位 `(S)` / 复位 `(R)`，  `Operand.Flags.Flags` 分别为 0 / 2 / 3；MOVE 只用于 INT / DINT / WORD / WSTRING 等数据量。  v1 里「`MOVE TRUE -> xOut`」的写法全部作废。顺带修正一个逻辑错：伸出时同时撤另一路  （`set_coil(xLoadExt)` + `reset_coil(xLoadRet)`），v1 只置了一路、另一路没撤。
+- **每条路末尾必须是线圈或功能框**（用户规范）：`BRANCH` 的每棵树不许只留 `connector + outconn` 空梯级；  v1 用空梯级把超时分支凑到 2 棵树的写法作废，改为两条 MOVE（INT 数据量）。
+- **`assets/natives/prg_FlowDemo.native`** 换 v2：723,466 B / **35 网络** / 822 个 Id 全唯一 /  45 个线圈（普通 4 · S 10 · R 31）/ MOVE 目标类型 BOOL **0 个**；  隐藏桌面实例与用户工程各编译一次 = `0 错误, 101 警告`（101 条为模板固件既有）。
+- **`scripts/examples/ldgen.py`** 补线圈与流程 helper：`set_coil` / `reset_coil` / `coil_tree` /  `step_net2` / `judge_net` / `timeout_net` / `ton_net` / `abort_coils_net` / `abort_clear_net`。
+- **`references/mode-cards/process-flow.md`** 新增 §2.5「BOOL 量一律用线圈，禁用 MOVE（用户规范）」；  配方表按 35 网络重排；坑表补两条（同名对象直接 import 卡死 85 s 以上、空梯级被用户否决）。
+- **`scripts/examples/gen_flow_ld.py`** 换 v2（`LDSKEL` / `LDOUT` 环境变量可覆盖，默认在当前目录生成）。
+
 ### 新增（2026-11-27，模式卡 02 · 完整工站流程，已实验验证）
 
 - **`references/mode-cards/process-flow.md`** —— 第二张模式卡：步序 + 延时 + 超时 + 报警 + 复位 + 中断六件套。
