@@ -64,11 +64,11 @@
 | 置位线圈 `(S)` | 条件成立置 TRUE，之后保持 | 2 |
 | 复位线圈 `(R)` | 条件成立置 FALSE，之后保持 | 3 |
 
-`ldgen.py`：`coil(var)` / `set_coil(var)` / `reset_coil(var)`，返回可直接放进 AND 框 `OutputItems` 的操作数。
+`ldgen.py`：`coil(var)` / `set_coil(var)` / `reset_coil(var)` 返回线圈操作数，**必须挂在 `netitem()` 的 `OutputItems` 上**（不能挂 `and_box`，见坑表最后一条）。
 
 **一个梯级挂多个线圈是合法的**（单独验证过：`prg_CoilTest`，3 个并联线圈 S/R/普通 + 1 个单线圈网络，导入 + 挂 MainTask + build = 0 错误）。
 所以「伸出时同时撤另一路」写成
-`and_box([step_gate(10), connector()], outputs=[set_coil(xLoadExt), reset_coil(xLoadRet)])`
+`netitem(step_gate(10), [set_coil(xLoadExt), reset_coil(xLoadRet)])`
 即可，不必拆成两个网络。
 
 第二条规范的实操含义：`BRANCH` 的每棵树结尾要么落到线圈、要么落到框（MOVE / ADD / TON），**不许只有 `connector + outconn` 的空梯级**。
@@ -154,11 +154,12 @@ v1 用空梯级把 `BRANCH` 凑到 2 棵树，被用户否决；正解是该梯�
 
 | 项 | 结果 |
 | --- | --- |
-| 结构 | 35 网络 / 822 个 Id 全唯一 max=822 / AND 58 · MOVE 43 · EQ 21 · ADD 2 · TON 6 · 线圈 45（普通 4 / S 10 / R 31） |
+| 结构 | 35 网络 / 806 个 Id 全唯一 max=806 / AND 48 · MOVE 43 · EQ 21 · ADD 2 · TON 6 · 线圈 45（普通 4 / S 10 / R 31） |
 | MOVE 目标类型 | INT 28 + WSTRING(49) 15，**BOOL 0 个**（符合 §2.5） |
 | 符号 | 34 个声明变量，235 个操作数去掉 74 个常量后全部有定义 → PASS |
 | build（隐藏实例） | `97f48d64` 共 104 条：开始构建 → 代码典型化 → `编译完成 -- 0 错误, 101 警告` |
-| build（用户工程） | 导入 35 网络 → 挂 MainTask → 预编译 0 错误 / 编译 0 错误（各 101 条模板既有警告，已标 TRUNCATED） |
+| build（用户工程） | 导入 35 网络 → 挂 MainTask → `97f48d64 n=104 err=0 warn=101`（101 条模板既有警告） |
+| 图形（人眼） | 用户在 IDE 里确认：程序段 2 三缸安全链 → 线圈 `bSafeStart`；程序段 3 EQ → 线圈 `bNeedLoad`；分支内 `(S) xLoadExt` / `(R) xLoadRet` 两个线圈并列正常（v2 之前是空方块） |
 | 负样本 | v1 改一处操作数 → 报 2 条错误（见坑表最后两行） |
 
 ## 7. 坑表（都有原文）
@@ -171,6 +172,7 @@ v1 用空梯级把 `BRANCH` 凑到 2 棵树，被用户否决；正解是该梯�
 | 导入后构建报 `没有定义标识符'prg_FlowDemoNeg'` `需要程序名、函数或功能块实例替代 'prg_FlowDemoNeg'` | 上一条的连带结果：对象没进工程，但任务列表里已经被 `pous.add` 过 | 挂任务前先确认 `found=True` |
 | 同名对象已存在时 `import_native` **卡死 85 秒以上、无返回无报错** | 副本工程里已有同名 `prg_FlowDemo`，IDE 在处理同名导入时进入内部等待 | 导入前先 `o.remove()` 掉同名对象并 `process_messageloop()`；写真实工程用「改名让位」法 |
 | 用户看图后指出「有些路最末尾没用线圈和功能块」 | v1 用 `connector + outconn` 空梯级把 `BRANCH` 凑到 2 棵树 | 每棵树结尾必须是线圈或框（见 §2.5）；超时那条改成第二条 MOVE |
+| 用户截图指出「程序段 2 末尾还是一个空方块」 | 线圈挂在 `AND` 框（`G_BOX`）的 `OutputItems` 上 —— IDE 只在 NETITEM 或触点 PIN 的 `OutputItems` 里认线圈，挂在框上画成一个空占位（编译照样 0 错误） | 用 `netitem(条件项, [线圈...])` 包一层：A00 实测线圈挂 NETITEM 15 处、挂触点 PIN 5 处、挂 BOX **0** 处 |
 
 ## 8. 还没验证的
 
@@ -180,4 +182,4 @@ v1 用空梯级把 `BRANCH` 凑到 2 棵树，被用户否决；正解是该梯�
 
 ---
 
-最后更新：2026-11-27 18:40（lead，v2 按用户两条规范重写：BOOL 全用线圈、去空梯级）
+最后更新：2026-11-27 18:52（lead，v3 修线圈载体：线圈必须挂 NETITEM.OutputItems，挂 AND 框上 IDE 只画空方块）

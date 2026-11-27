@@ -7,6 +7,22 @@
 
 ## [Unreleased]
 
+### 修正（2026-11-27 v3，线圈载体：必须挂 NETITEM）
+
+- **线圈必须挂在 NETITEM 的 OutputItems 上**，不能挂 AND 框（G_BOX acfc6f68）的 OutputItems。
+  挂在框上时 IDE 只画一个**空占位方块**、编译仍然 0 错误 —— 这是第九类假通过（用户第三次截图指出）。
+  A00 语料实测 OutputItems 的父节点分布：9873c309（NETITEM）→ 线圈 15 例、9de7f100（触点 PIN）5 例、
+  acfc6f68（G_BOX）**0 例**。
+- NETITEM 结构：Single Type="{9873c309-1f09-4ebf-9078-42d8057ef11b}" → Flags →
+  **Single Name="RValue" Type="{条件项自己的 guid}"**（RValue 标签本身替代 item 的外层 Single 标签，
+  内部直接是 Operand / IsContact / Id）→ OutputItems（Type {f40d3e09-...}）→ List2 → 线圈容器 c9b2f165。
+- **scripts/examples/ldgen.py**：新增 netitem(rvalue, outputs) 与 _split_outer(item)；
+  coil_tree / abort_coils_net / coil_net 全部改走 NETITEM，coil_net 新增 mode 参数（0 普通 / 2 S / 3 R）。
+- **assets/natives/prg_FlowDemo.native** 换 v3：704,154 B / 35 网络 / 806 个 Id 全唯一 /
+  AND 48（原 58）· MOVE 43 · EQ 21 · ADD 2 · TON 6 · 线圈 45；用户工程 build 一次 = 0 错误, 101 警告。
+- **references/mode-cards/process-flow.md**：§2.5 改「线圈挂 netitem()，不能挂 and_box」并换示例；
+  §7 坑表新增「空方块」一行；§6 验收表新增「图形（人眼）」行（程序段 2/3 线圈、分支内 (S)/(R) 双线圈已在 IDE 显示正常）。
+
 ### 修正（2026-11-27 v2，按用户现场规范重写模式卡 02）
 
 - **BOOL 量一律用线圈，禁用 MOVE**（用户规范）：普通线圈 `( )` / 置位 `(S)` / 复位 `(R)`，  `Operand.Flags.Flags` 分别为 0 / 2 / 3；MOVE 只用于 INT / DINT / WORD / WSTRING 等数据量。  v1 里「`MOVE TRUE -> xOut`」的写法全部作废。顺带修正一个逻辑错：伸出时同时撤另一路  （`set_coil(xLoadExt)` + `reset_coil(xLoadRet)`），v1 只置了一路、另一路没撤。

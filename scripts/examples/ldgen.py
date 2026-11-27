@@ -179,13 +179,47 @@ def reset_coil(var, typ=u"BOOL"):
     return coil(var, typ, 3)
 
 
-def coil_tree(coils):
-    """梯级末端是一组线圈：AND{ 母线连接器, OUTCONN } + OutputItems=线圈们。
+def _split_outer(item):
+    """把 item 的 <Single Type="{...}" ...> 外层标签剥下来，返回 (guid, 内层正文)。"""
+    s = item.strip()
+    if not s.startswith(u'<Single Type="'):
+        raise RuntimeError(u"item 不是 Single 节点")
+    gt = s.index(u'>')
+    head = s[:gt + 1]
+    m = re.search(r'Type="\{([0-9a-f\-]+)\}"', head)
+    if not m:
+        raise RuntimeError(u"item 缺少 Type")
+    tail = u'</Single>'
+    body = s[gt + 1:len(s) - len(tail)]
+    return m.group(1), body
 
-    empty_tree() 的「空」正是用户指出要避免的形态（路末尾没有线圈或功能框），
-    这里把线圈挂上去，图形上就是「母线 → 一个/多个线圈」。
+
+def netitem(rvalue, outputs):
+    """真实梯级（NETITEM）：条件项作 RValue，线圈挂在 OutputItems。
+
+    2026-11-27 用户截图指出：线圈挂在 AND 框的 OutputItems 上，IDE 只画一个空方块。
+    A00 实测：线圈挂 NETITEM.OutputItems 15 处、挂触点 PIN.OutputItems 5 处，
+    挂在 BOX 的 OutputItems 上一处都没有 —— 所以必须用 NETITEM 包一层。
+    RValue 的 Type 属性就是条件项自己的类型（触点 = G_PIN，框 = G_BOX）。
     """
-    return and_box([connector(), outconn()], outputs=list(coils))
+    guid, body = _split_outer(rvalue)
+    outs = u"\n".join(outputs)
+    return (u'<Single Type="%s" Method="IArchivable">\n'
+            u'  %s\n'
+            u'  <Single Name="RValue" Type="{%s}" Method="IArchivable">\n'
+            u'%s\n'
+            u'  </Single>\n'
+            u'  <Single Name="OutputItems" Type="%s" Method="IArchivable">\n'
+            u'  <List2 Name="OutputItems">\n%s\n  </List2>\n'
+            u'  </Single>\n'
+            u'  <Single Name="Id" Type="long">%d</Single>\n'
+            u'</Single>' % (G_NETITEM, flags_block(False), guid, body,
+                            G_OUTPUTS, outs, nid()))
+
+
+def coil_tree(coils):
+    """输入端直接接母线的线圈梯级：NETITEM{ RValue: 连接器, OutputItems: 线圈们 }。"""
+    return netitem(connector(), list(coils))
 
 
 def step_net2(n, desc, coils, next_n, done_contact=None, unconditional=False,
@@ -235,8 +269,8 @@ def ton_net(inst, in_item, pt_text, title=None):
 
 
 def abort_coils_net(cond_item, coils, title):
-    """中断：条件成立 → 一组复位线圈（末尾是线圈）。"""
-    return network([and_box([cond_item, connector()], outputs=list(coils))], title)
+    """中断：条件成立 → 一组复位线圈（末尾是线圈，NETITEM 承载）。"""
+    return network([netitem(cond_item, list(coils))], title)
 
 
 def abort_clear_net(cond_item, title):
@@ -246,10 +280,11 @@ def abort_clear_net(cond_item, title):
                              move_box(value_pin(u"0", u"INT"), BUF, u"INT")])], title)
 
 
-def coil_net(cond_items, var, typ=u"BOOL", title=None):
-    """条件 → 线圈赋值网络：链条元素放 InputItems，线圈放 OutputItems。
-    （A00 实测形态：BRANCH/BOX 自带 OutputItems，线圈是 LValue+IsCoil=True 的 Operand）"""
-    return network([and_box(list(cond_items), outputs=[coil(var, typ)])], title)
+def coil_net(cond_items, var, typ=u"BOOL", title=None, mode=0):
+    """条件 → 线圈：条件（单个或 AND 串联）作 NETITEM.RValue，线圈挂 OutputItems。"""
+    items = list(cond_items)
+    cond = items[0] if len(items) == 1 else and_box(items)
+    return network([netitem(cond, [coil(var, typ, mode)])], title)
 
 
 def outconn():

@@ -46,7 +46,7 @@
 | 查某个编译错误的含义与修法 | `references/precompile-errors.md` |
 | 想让某个框「只执行一次」/ 加边沿 | `references/edge-detection.md`（框的 `InputFlags[0]=16`，不是触点） |
 | 从零写一段「步进/步序」状态机 | `references/mode-cards/step-sequence.md`（三梯级母语法 + 可跑的 ldgen 示例） |
-| 从零写完整工站流程（延时/超时/报警/复位/中断） | `references/mode-cards/process-flow.md`（35 网络排布 + BOOL 全用线圈 + TON 结构 + 四道验收） |
+| 从零写完整工站流程（延时/超时/报警/复位/中断） | `references/mode-cards/process-flow.md`（35 网络排布 + BOOL 全用线圈 + 线圈挂 NETITEM + 四道验收） |
 | 验收 PASS 但怀疑是假通过 | `references/false-pass-catalog.md`（八种假象逐条对照） |
 | 查某个 API 到底存不存在 / 怎么调 | `references/native-structure.md` + `ide/studies/` 里对应的 probe 脚本 |
 | 装守护 / 重装守护 | `ide/boot_daemon.py`（人工点菜单）；改完 `plc_daemon.py` 用 `ide/reload_daemon.py` |
