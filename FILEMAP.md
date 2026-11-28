@@ -13,6 +13,12 @@
 | `references/native-structure.md` | native XML 字段级真相：GUID、槽位、线圈 / 边沿 / 树的载体 |
 | `references/false-pass-catalog.md` | 假通过目录：哪些「0 错误」不可信 |
 
+> ⚠ **两类对象没有可克隆的 native 样本**（写之前先补样本或从 git 取回）：
+> ① 运动对象 —— 轴组 / 凸轮 / 轴控调用：按 `native-structure.md` §27（轴控）/ §32（CAM）/ §33（AxesGroup）重建，
+> 或 `git show 014a4ab:assets/natives/axesgroup_cart_xy_sample.native`、`cam_index_345_sample.native`；
+> ② 整段 ST 的 POU —— 库里只有「LD 内嵌 EXECUTE ST 块」（§24），ST POU 级骨架无端到端样本，
+> 取回参照 `prg_EM01_Logic.native`。其余（LD 任意框 / 树 / 定时器 / GVL / DUT / FB·FC / 动作槽）都有样本或生成器。
+
 ## 1. 文件分布
 
 | 位置 | 数量 | 内容 | 能不能改 |
