@@ -269,6 +269,17 @@ Win32 GetMenu(hwnd) = 0
   曲线写法规则见 `native-structure.md §32`。
 - ⚠ `Guid` 是 `script_engine.Guid`（.NET 类型），不是 Python 内建——裸写 `Guid("{...}")` 会静默 `NameError`
 
+## 读消息的双通道与三个上限（task_check v4）
+
+- **两个通道**：`get_message_objects(cat)` 全量（可见通道，单分类最多 100 条、错误池 500 条）；
+  `get_message_objects(cat, Severity.Error / FatalError)` 在完整池上过滤（过滤通道）。1.10 实测
+  `all=540 / Error=502`、各 severity 相加等于 all，所以截断后过滤通道仍精确。SP19 上出现过相反行为（2 错误只回 1 条 warning、0 错误），
+  故两通道必须交叉校验，计数取**较大值**。
+- **三个上限**：Warning 100、Message(Text) 100、Error 500，各自独立计数；提示行分别写作
+  「多于100个警告发生：跳过更多的警告信息」「多于100个消息发生：…」「多于500个错误：跳过更多的错误信息」（错误级**不带「发生」**）。
+- **分类按需注册**：没 build 过的工程可能一个分类都没有（`cats=0`）；先 `app.build()` + `system.process_messageloop()` 各一次再枚举。
+- **判定**：`VERDICT: PASS|FAIL|UNKNOWN`；`UNKNOWN` 表示读数不可信（无编译分类 / 未知 severity / 通道冲突 / 通用消息截断且无过滤通道），**绝不当通过**。
+- 工具：`scripts/ide/tasks/task_check.py`；主机侧等 ≥10s 再读（`clear_messages` 见铁律 47，注意它是进程级）。
 ## system.commands
 
 - 索引 91 ≈「检查程序」（tokens=project/buildactiveapp）—— ⚠ 2026-11-26 实测该命令**不产生任何消息**，只读，不能用于验收；验收走 `app.build()`

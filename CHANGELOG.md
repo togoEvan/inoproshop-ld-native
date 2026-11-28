@@ -7,6 +7,24 @@
 
 ## [Unreleased]
 
+### 新增（2026-11-28 task_check v4：双通道交叉校验 + 按 severity 分档判定）
+
+- **问题**：v3 只读可见通道 `get_message_objects(cat)`。单分类最多回传 **100** 条、错误池 **500** 条，超了截断少报；
+  再叠加「错误数与上一轮一样」这类假干净，0 错误根本不可证。
+- **两个通道**：通道 1 = 全量（截断少报）；通道 2 = `get_message_objects(cat, Severity.Error / FatalError)`，
+  1.10 实测按**完整池**过滤（`all=540 / Error=502`、各 severity 相加等于 all，灌 1300 个未定义标识符时 Error 恰 500 实体 + 1 提示行），
+  截断后仍精确。inoproshop-mcp 在 CODESYS SP19 上实测过相反行为（2 错误只回 1 条 warning、0 错误），所以必须两边对。
+- **计数规则**：取两通道**较大值** —— 过滤通道坏（少报）不能把已有错误洗成 0；可见通道被截断（少报）由过滤补。
+- **交叉校验**：未截断分类要求两通道相等，不等标 `cross=BAD` → `UNKNOWN`；已截断分类只做单向校验（过滤 ≥ 可见）标 `cross=GE`。
+- **分类按需注册**：刚打开、从没 build 过的工程 `cats=0`（隐藏实例实测）→ 先 `app.build()` + `process_messageloop()` 各一次再枚举，仍空才判 `UNKNOWN`，绝不当 0 错误。
+- **判定顺序**：无编译分类 → `UNKNOWN`；未知 severity → `UNKNOWN`；错误 > 0 → `FAIL`；通道冲突 → `UNKNOWN`；通用消息截断且无过滤通道 → `UNKNOWN`；否则 `PASS`。
+  末行 `VERDICT: PASS|FAIL|UNKNOWN (errors=... chan=dual|dual-unchecked|mismatch|all why=...)`，**`UNKNOWN` 不是通过**。
+- **实测（隐藏桌面副本，2026-11-28 14:25–14:26，全程 75 秒）**：A 干净工程 `PASS errors=0 warnings=100 chan=dual-unchecked built=True`；
+  B 挂一个引用未定义标识符的 POU `FAIL errors=2 chan=dual`（导入导出 0==0 cross=OK）；
+  C 灌 1300 个未定义标识符 `total=605 errors=500 warnings=100 filter=500 cross=GE trunc=1/1/0` → `FAIL`，
+  同时实证错误池 500 上限、警告池 100 上限。
+- 文件：`scripts/ide/tasks/task_check.py`（v4，保留 tasks/ 布局的两级上溯与动态分类名）、`references/mcp-bridge.md`（双通道与上限一节）、
+  `README.md` / `SKILL.md`（铁律 48）、本 CHANGELOG。
 ### 修复（2026-11-28 库内容审计：5 处纠错 + 隐藏实例作用域实测）
 
 - **审计口径**：拉全库 **21** 个 md/txt（含 AGENTS / README / SKILL / FILEMAP / CHANGELOG / docs / references 全部 / 三个 scripts README），

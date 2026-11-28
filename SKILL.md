@@ -13,7 +13,7 @@ description: 汇川 InoProShop（CODESYS V3.5 SP11 系）LD 梯形图 native XML
 
 ## 铁律（违反必踩坑）
 
-47 条，按主题分六组；编号与 `README.md` 一致（沿用历史编号、不重排）。完整论证见 `README.md`。
+48 条，按主题分六组；编号与 `README.md` 一致（沿用历史编号、不重排）。完整论证见 `README.md`。
 > **2026-11-28 修重号**：A 段原 25 / 26 → **45 / 46**，F 段原 41 → **47**（曾与 D 段 25 / 26、B 段 41 撞号）。
 
 ### A. 验收与消息
@@ -28,6 +28,8 @@ description: 汇川 InoProShop（CODESYS V3.5 SP11 系）LD 梯形图 native XML
 24. **两分类作用域不同（2026-11-26 实测）**：① **预编译**在 `build()` 阶段覆盖 **Application 下全部 POU**，与挂不挂任务**无关**；② **编译**只含**挂进任务调用列表**的 POU。负样本：未挂任务 → 预编译 ZZZ **1** / 编译 **0**；挂上 MainTask → 预编译 **1** / 编译 **2**。⚠ 预编译消息**异步补齐**：`clear_messages(cat)`（**必须传分类参数**，无参报 `takes exactly 1 argument`）后立刻读 0 条，约 10s 后才 101 条；空闲 20s 仍是 0 条（不自恢复）。⚠ **隐藏桌面实例差异（2026-11-28 实测）**：`HiddenLaunch` + `--runscript` 起的实例上 `app.build()` 后只出现编译分类 `97f48d64`，预编译分类 `217bc73e` 从不出现 —— 未挂任务的 POU 一条消息都不产生（A 未挂 hit=0 → 挂进 MainTask 后 2 条）。**隐藏实例验收必须先挂 MainTask 再 build**。证据：references/evidence/hidden-instance-scope/README.md。
 45. **消息截断阈值按 severity 各自计数：Warning 100、Error 500**（隐藏实例灌 1300 个未定义标识符 → Error 恰 501 = 500 实体 + 1 提示行）。**提示措辞不统一**：警告/消息级是「多于N个警告/消息发生：跳过更多的…」，错误级**不带「发生」**——原文 `多于500个错误：跳过更多的错误信息`。按文本判截断的正则不能锚定「发生」，否则 >500 错误看不见截断 → 条数差恒 0 → **假 PASS**。
 46. **判导入成败要看三条，`2af7707f` 不是结果台账**：① `import_native()` 抛不抛异常——**不可靠**（同 GUID + 同名二次导入会**卡死 6 分钟**，不返回不报错）；② **唯一可靠的成功信号**：`2af7707f` 新增 `Text|导入对象 '<name>'`（它的 Error 恒 0 是设计如此）；③ 失败原因看 `194b48a9`「脚本消息」的新增 Error（坏 native 抛异常时 `194b48a9 n=1 err=1`、`2af7707f` 完全不变）。外层必须超时 + 「台账没新增就判失败」。
+
+48. **验收要双通道交叉校验，单通道的 `errors=0` 随时可能是读漏**。通道 1 `get_message_objects(cat)` 全量，单分类最多 100 条、错误池 500 条，超了截断少报；通道 2 `get_message_objects(cat, Severity.Error / FatalError)` 在完整池上过滤（1.10 实测 all=540 / Error=502、相加等于 all），截断后仍精确。**取两通道较大值**：过滤通道坏（SP19 实测 2 错误只回 1 条 warning、0 错误）不能把错误洗成 0，可见通道被截断时由过滤补。未截断分类要求两通道相等，不等 → `UNKNOWN`；已截断分类只做单向校验（过滤 ≥ 可见）。**分类按需注册**：刚打开的工程可能一个都没有 → 先 build + pump 一次再枚举，仍空才判 `UNKNOWN`，绝不当 0 错误。工具 `task_check.py` v4 末行 `VERDICT: PASS|FAIL|UNKNOWN`，`UNKNOWN` 不是通过。
 
 ### B. 结构合法性
 
