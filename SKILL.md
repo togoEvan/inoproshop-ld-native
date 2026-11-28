@@ -13,7 +13,7 @@ description: 汇川 InoProShop（CODESYS V3.5 SP11 系）LD 梯形图 native XML
 
 ## 铁律（违反必踩坑）
 
-50 条，按主题分六组；编号与 `README.md` 一致（沿用历史编号、不重排）。完整论证见 `README.md`。
+51 条，按主题分六组；编号与 `README.md` 一致（沿用历史编号、不重排）。完整论证见 `README.md`。
 > **2026-11-28 修重号**：A 段原 25 / 26 → **45 / 46**，F 段原 41 → **47**（曾与 D 段 25 / 26、B 段 41 撞号）。
 
 ### A. 验收与消息
@@ -56,6 +56,7 @@ description: 汇川 InoProShop（CODESYS V3.5 SP11 系）LD 梯形图 native XML
 8. **导出文件每次唯一命名**（`silent_after_HHMMSS.native`），否则弹覆盖确认框。
 12. **改声明区必须锚定 `Interface` 再找 `TextLines`**，禁止裸 `find('<Array Name="TextLines"')`。`TextLines` 至少 2 处（声明区 + EXECUTE 框 `STSnippet`），网络列表排在 `Interface` 之前，裸 `find` 会把声明写进 ST 代码块 → 预编译 40+ 条 `符号 'PROGRAM'/'BOOL' 不能识别`（实测 48 条）。
 19. **action 的 ST 体只能引用宿主 POU 声明区的变量**。三个特征：① 消息归属对象是 **action 名**不是 POU 名；② 只在**预编译**分类；③ 编译分类照样报「0 错误, 0 警告」。
+51. **工站子程序按 A00 骨架写，由总控 POU 调用，不挂 `MainTask`**。模板里 `F20_POU_Station0_总控` 按工站号调 A00/A01…，工站 POU 本身不在任务调用列表里（2026-11-28 用户明确「可以不用调用到MainTask」）。骨架 8 段：NET1 `FB_StepLogger` 记录器（整块克隆 A00 net01）/ NET2 单步·单站·总控三路放行（克隆 net02）/ NET3 流程开始 `10000→10` / NET4–7 安全自检 `10→15→20→30→100` / NET8 工位判断（0 无料→1000 取料段，1 有料→2000 放料段，异常置多料·少料，克隆 net08 换 4 个符号）/ 取料段 `1000–1120` / 放料段 `2000–2060`，两段收尾无条件 `MOVE 100`。变量用模板现成的 `STNControl[0..20] OF Struct_StationControl`（0 总控 / 1 上料移栽 / 2 擦拭 / 3..20 空闲），生成前把 `ldgen` 的 `AUTOING/STEP/BUF/DESC` 指向 `STNControl[n]`。片段 `assets/natives/a00-fragments/`，生成器 `scripts/examples/gen_a00_stn3.py`，配方 `references/mode-cards/a00-skeleton.md`。⚠ 不挂任务 = 不进编译单元，验证时必须临时挂一次或用总控真实调用，否则 0 错误是假通过。
 20. **造负样本必须精确替换目标字段**。`s.replace('>actAbs<', ...)` 会把 `BoxType` **和** Entry `Name` 一起改 → 0 错误是**正确结果**却被误判「验收链路失效」。改完 `grep -c` 自查。
 
 ### D. 任务配置与 GVL
@@ -270,5 +271,6 @@ description: 汇川 InoProShop（CODESYS V3.5 SP11 系）LD 梯形图 native XML
 | `prg_EM01_Logic.native` | 旧工程完整 LD（功能框/多线圈/连接器样本） |
 | `startstop_state3.native` | 早期 MOVE 状态字版本（历史对照，新写请用 `user_fixed.native`） |
 | `fb_call_test.native` | **FB 调用模板**。三类 CallType（Function/Program/FunctionBlock）各一个，含 REF 形参、实例调用、12 入 12 出；双分类 0 错误 |
+| `prg_Stn3LoadSeq.native` | **工站子程序样本**（31 网络 / 铁律 51 的 A00 骨架），配套 `a00-fragments/` 5 个可克隆片段 |
 
 生成新 native 时**必须从这些已验证样本克隆节点**，不要凭空构造。

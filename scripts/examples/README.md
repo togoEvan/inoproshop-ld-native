@@ -1,4 +1,4 @@
-# scripts/examples/ —— native 生成器（38 个 + 本索引）
+# scripts/examples/ —— native 生成器（39 个 + 本索引）
 
 这里都是**主机侧 Python 3** 脚本：读现有 native / 从零构造节点 → 生成新的 `.native` → 交给 `scripts/do_replace.py` 导入。
 节点构造的公共层在 [`ldgen.py`](ldgen.py)，它才是唯一需要当「库」用的文件。
@@ -11,7 +11,7 @@
 | **已验证结构样本生成器**（13） | 绑定 InoPack 模板里的具体对象名，但结论已进 `references/`，可照抄结构 | 参考用，换个工程要改符号 |
 | **一次性 F0x 考古**（20） | 只用于回答「F0x 这组对象能不能复制/翻译」这一类问题，答完即冻结 | ❌ 不改（要新写就新建文件） |
 
-## 一、可复用库 / 模板生成器（5）
+## 一、可复用库 / 模板生成器（6）
 
 | 脚本 | 用途 |
 |------|------|
@@ -20,8 +20,9 @@
 | `gen_flow_ld.py` | 生成「完整工站流程」示例 35 网络（对应模式卡 `references/mode-cards/process-flow.md`） |
 | `gen_tontest.py` | 最小 TON 样本（2 网络），验证「TON 每周期执行 + 线圈挂 NETITEM」 |
 | `gen_coiltest.py` | 最小线圈样本（2 网络），验证普通 / S / R 三种线圈同梯级并联 |
+| `gen_a00_stn3.py` | 生成「工站子程序」31 网络样本（A00 骨架：记录器 / 缓存放行 / 工位判断 / 取放料两段），片段读 `assets/natives/a00-fragments/`，对应模式卡 `references/mode-cards/a00-skeleton.md` |
 
-三件套用法：
+三件套用法（`gen_a00_stn3.py` 同理，另需 `assets/natives/a00-fragments/` 5 个片段）：
 
 ```
 set LDSKEL=<骨架 native，例如 assets/natives/prg_FlowDemo.native>

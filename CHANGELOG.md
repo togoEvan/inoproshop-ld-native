@@ -7,6 +7,21 @@
 
 ## [Unreleased]
 
+### 新增（2026-11-28 模式卡 03：A00 工站骨架 + 可克隆片段 + 生成器）
+
+- 新增 `references/mode-cards/a00-skeleton.md`（8.5KB）：工站子程序的 A00 骨架配方 —— 8 段网络顺序、三个可整块克隆的网络（NET1 步序号记录器 / NET2 步序号缓存处理 / NET8 工位判断）、
+  克隆时只换 `STNControl[1].` → `STNControl[n].` 与 NET8 的 4 个专有符号、变量容器 `STNControl[0..20]`（0 总控 / 1 上料移栽 / 2 擦拭 / 3..20 空闲）、取放料两段式步号（1000 段 / 2000 段，段内 +10，条件步 +5，段尾无条件回 100）。
+- 新增 `assets/natives/a00-fragments/`（5 个 A00 原样片段，共 177KB）：`net01_step_logger.xml` / `net02_step_buffer.xml` / `net08_station_dispatch.xml` / `fc_cylinderexe.xml` / `fc_axisabsgo.xml`。
+  前三个是网络节点，后两个是功能框模板（按文档顺序替换 `Single Name="Operand" Type="string"` 的文本即可复用，不用手搭框）。
+- 新增 `scripts/examples/gen_a00_stn3.py`（仓库版）：按上述骨架生成 31 网络样本，读 `assets/natives/a00-fragments/`，骨架走 `LDSKEL`、输出走 `LDOUT`。
+  可复现性自检：连跑两次产物**只有对象 GUID 不同**（`Single Name="Guid"` 由 `build_doc` 每次新生成），其余 22915 行逐行一致。
+- 新增 `assets/natives/prg_Stn3LoadSeq.native`（1.19MB / 31 网络 / 1145 个 Id 全唯一 / AND 84 · MOVE 59 · EQ 29 · BRANCH 32）。
+- 新增 `scripts/corpus/split_networks.py`：按 `List2 Name="NetworkList"` 的子元素切网络（ElementTree）。字符串配对标签深度实测会把每块截成 140 字符，不要用字符串切。
+- README/SKILL 新增铁律 51：**工站子程序由总控 POU 调用，不挂 `MainTask`**（模板里 `F20_POU_Station0_总控` 按工站号调 A00/A01…，2026-11-28 用户明确「可以不用调用到MainTask」）；
+  ⚠ 同时写明验证阶段必须临时挂一次或用总控真实调用，否则「未挂任务不进编译单元」会让 0 错误变成假通过。
+- 实测（InoProShop V1.10.0.3）：隐藏桌面副本导入 → 临时挂 `MainTask` → build `编译完成 -- 0 错误, 101 警告`；
+  写进 13MB 真实工程 `import_native ok 1.51s / networks 31 / saved`，双分类 预编译 `total=101 errors=0`、编译 `total=104 errors=0`；IDE 里程序段 8 显示 EQ 门控 + 三条支路 + `(S)` 报警线圈。
+- `FILEMAP.md` / `README.md` 目录树 / 铁律组表同步（文件数 301 → 310，assets 18 → 24，examples 38 → 39，corpus 4 → 5）。
 ### 新增（2026-11-28 第 3 件：写入锁 task_setpou + 守护 deadline / uncertain latch）
 
 - 新增 `scripts/ide/tasks/task_setpou.py`：带乐观锁的 POU 源码写入。写前 `sha256(decl + '\x00' + impl)` 与 `expect_hash` 比对，
