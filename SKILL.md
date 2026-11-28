@@ -13,7 +13,7 @@ description: 汇川 InoProShop（CODESYS V3.5 SP11 系）LD 梯形图 native XML
 
 ## 铁律（违反必踩坑）
 
-51 条，按主题分六组；编号与 `README.md` 一致（沿用历史编号、不重排）。完整论证见 `README.md`。
+52 条，按主题分六组；编号与 `README.md` 一致（沿用历史编号、不重排）。完整论证见 `README.md`。
 > **2026-11-28 修重号**：A 段原 25 / 26 → **45 / 46**，F 段原 41 → **47**（曾与 D 段 25 / 26、B 段 41 撞号）。
 
 ### A. 验收与消息
@@ -32,6 +32,7 @@ description: 汇川 InoProShop（CODESYS V3.5 SP11 系）LD 梯形图 native XML
 
 49. **任务与对象移动走「改 → 逐字段读回 → 失败回滚」，且不能靠 `dir()` / `is` 判断**。① `TaskConfiguration.create_task(name)` 存在（`dir()` 里看不见，`hasattr` 或直接调用才有效）；新建默认 `interval_unit=ms` / `priority=2` / `kind_of_task=Cyclic`，`interval` 读回可能是 `t#20ms` 字面量，设成 `'20'` 后读回 `'20'`，比较前先归一化；`KindOfTask` **按名字反射 `System.Type.GetType(...)` 返回 `None`**，要拿已有任务的 `kind_of_task` 当枚举值赋值。② 对象移动 `obj.move(parent, -1)` 返回 `None`，**没有 `get_parent()`**，且每次 `get_children()` 返回的 .NET 包装对象都是新实例、`k is target` 恒假 —— 父节点与移动结果只能靠 `get_children()` 的名字列表核对。③ 保护对象四类 `is_application / is_device / is_task_configuration / is_task`，命中即拒。④ 失败必须回滚（任务 `t.remove()`；移动 `obj.move(old, -1)`）。工具 `scripts/ide/tasks/task_extended.py`；副本实测：建任务 20ms/优先级 5 → 改 50ms/6 → 关工程重开仍是 50/6；`prg_SeqDemo` 移进 `F05_FC` 再移回 `Application`，重开位置正确；受保护对象与不存在对象被明确拒绝。
 50. **写源码要带乐观锁，超时后先锁死（`task_setpou.py` / `deadline` / `uncertain.json`）**。写前算 `sha256(decl + '\x00' + impl)` 与读到的 `expect_hash` 比对，不符抛 `STALE_WRITE` 且一个字都不写；写完读回逐字比对（`READBACK_MISMATCH`），不符逆序 `replace` 回旧值 + `save()` 并报 `rolled_back`。bridge 每条命令自动带 `deadline = now + timeout - 2`，过期命令守护直接拒（`expired:true`）不执行。守护把 `timeout waiting for main thread` 判为结果未知，写 `ipc/uncertain.json` latch；latch 存在时除 `ping` / `ack_uncertain` / `stop` 外全拒，bridge 抛 `E_UNCERTAIN`，需 `python bridge.py ack_uncertain` 解锁（`boot_daemon.py` 判陈旧时清除）。`eval_file` 里 `__name__` 是 `__eval__`，不能用 `__main__` 守卫（否则静默空跑）；`eval_file` 会临时改写 `sys.argv[0]` 让 `_base` 按被执行脚本自身路径推导 BASE。
+52. **禁止用 `--project=` 启动 IDE 打开复杂工程（2026-11-28 实测）**。命令行打开与设备/库初始化抢跑，带 EtherCAT / CANopen 的工程（InoPack 13MB 模板）编译时冒出 **500 条「未知类型: `Tparam_64_..._StructStatistics`」**（500 是错误池截断），VERDICT 直接 FAIL；这是环境假错，与代码无关（换备份副本同样 500，只有小工程 655KB 的 `未命名1.project` 幸免）。正解：**空 IDE 起守护 → 等 `ipc/ready.flag` → `bridge.call("open_project", path=...)`**，实测同一副本 errors=0 / PASS。已封进 `scripts/hidden_launch.py`（默认空起再 open，`--raw-project` 才退回旧行为）。冷启动全流程见 `docs/quickstart.md`。
 
 ### B. 结构合法性
 

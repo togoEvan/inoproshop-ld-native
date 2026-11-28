@@ -29,6 +29,11 @@ import os
 import sys
 import traceback
 
+try:
+    import System          # IronPython：解析 Severity 枚举要靠它
+except Exception:
+    System = None
+
 # 本脚本在 scripts/ide/tasks/ 下，上溯两级才是 scripts/ide（_base.py 所在）
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(sys.argv[0]))))
 import _base
@@ -120,7 +125,8 @@ def _find_sev_type():
     if _SEV_TYPE[0] is not None:
         return _SEV_TYPE[0]
     t = None
-    for n in (u"_3S.CoDeSys.ScriptEngine.BasicFunctionality.Severity, ScriptEngine",
+    for n in (u"_3S.CoDeSys.Core.Messages.Severity, Core",
+              u"_3S.CoDeSys.ScriptEngine.BasicFunctionality.Severity, ScriptEngine",
               u"_3S.CoDeSys.ScriptEngine.BasicFunctionality.Severity"):
         try:
             t = System.Type.GetType(n)
@@ -163,15 +169,23 @@ def _find_sev_type():
     return t
 
 
+# .NET 的 Enum.Parse 区分大小写；本机 1.10 的成员名是 FatalError/Error/...
+SEV_ALIAS = {u"fatalerror": u"FatalError", u"error": u"Error", u"warning": u"Warning",
+             u"information": u"Information", u"text": u"Text"}
+
+
 def _sev_value(name):
     t = _find_sev_type()
     if t is None:
         return None
-    try:
-        return System.Enum.Parse(t, name)
-    except Exception, e:
-        L(u"  [chan] Enum.Parse(%s) 失败：%s" % (name, e))
-        return None
+    low = unicode(name).lower()
+    for cand in (SEV_ALIAS.get(low, name), name, unicode(name).capitalize()):
+        try:
+            return System.Enum.Parse(t, cand)
+        except Exception:
+            continue
+    L(u"  [chan] Enum.Parse(%s) 失败（成员名不匹配）" % name)
+    return None
 
 
 def _filter_pool(cat_obj, sev_name, label):

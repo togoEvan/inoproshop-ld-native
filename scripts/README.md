@@ -9,23 +9,25 @@
 移动它们的代价是同步改几十份文档、并且让所有已部署的旧副本失效；收益只是目录好看一点。
 所以**根目录保持平铺，靠这份索引分类**。新增主机侧脚本仍放根，并在下表登记一行。
 
-## 五组（19 个）
+## 六组（22 个）
 
 | 组 | 个数 | 脚本 |
 |----|------|------|
-| 桥与守护 | 5 | `bridge.py` / `bridge.cmd` / `launch_ide_daemon.py` / `ide_trigger.ps1` / `start_daemon.cmd` |
+| 桥与守护 | 6 | `bridge.py` / `bridge.cmd` / `hidden_launch.py` / `launch_ide_daemon.py` / `ide_trigger.ps1` / `start_daemon.cmd` |
+| 验收与自检 | 2 | `accept.py` / `selfcheck.py` |
 | 导入 | 3 | `do_replace.py` / `run_overwrite_import.py` / `click_overwrite_all.py` |
 | 自检闸门 | 5 | `check_slots.py` / `check_symbols.py` / `check_valpin.py` / `ld_logic.py` / `check_ipy_syntax.py` |
 | 消息差分 | 2 | `delta_snap.py` / `run_build_check.py` |
 | 打包与诊断 | 4 | `pack_skill.py` / `sync_skill_dir.py` / `probe_windows.py` / `test_bridge_protocol.py` |
 
-## 桥与守护（5）
+## 桥与守护（6）
 
 | 脚本 | 用途 |
 |------|------|
 | `bridge.py` | IPC 客户端：`ping` / `eval_file` / `selftest`；每条命令带 `run_id` 与迟到结果对账 |
 | `bridge.cmd` | 命令行包装，自动挑一个能跑的 Python 3（避开应用商店 0 字节存根） |
-| `launch_ide_daemon.py` | 启动 IDE（可带 `--project=`）并注入守护，子进程继承 `PLC_MCP_BASE` |
+| `hidden_launch.py` | **零干扰入口（推荐）**：`CreateDesktopW` 建不可见桌面 → `CreateProcessW` 起 IDE → `--runscript` 注入守护 → 等 READY → `bridge.open_project` 打开工程；`--status` / `--stop` 只管自己起的 pid |
+| `launch_ide_daemon.py` | 旧入口：启动**可见** IDE（可带 `--project=`）并注入守护；⚠ `--project=` 对带 EtherCAT 的复杂工程会出 500 条假错，改用 `hidden_launch.py` |
 | `ide_trigger.ps1` | 早先的 UIA 触发注入脚本；⚠ **对 InoProShop 无效**（菜单自绘，UIA 拿不到 MenuBar），保留仅作诊断 |
 | `start_daemon.cmd` | 同上，已失效；正确入口是 IDE 菜单 → 执行 `ide/boot_daemon.py` |
 
@@ -47,6 +49,13 @@
 | `ld_logic.py` | 图形拓扑 → 布尔表达式 → DNF 规范化比对；含 S/R 与 NETITEM 载体判定 |
 | `check_ipy_syntax.py` | 语法门禁：按文件头 `@py3` / `@ipy2` 标记分流，py3 文件不降级（否则 `except Exception, e:` 会被放过） |
 
+## 验收与自检（2）
+
+| 脚本 | 用途 |
+|------|------|
+| `accept.py` | 一条命令验收：`--names=` 先断言挂载 → 清「预编译/编译/导出导入」三分类 → build → 等 12s → 双通道判定；退出码 0 PASS / 1 FAIL / 2 UNKNOWN / 3 前置不满足 |
+| `selfcheck.py` | 换机体检：Python / 12 个必需文件 / 任务数 / IDE 安装路径 / 守护心跳 / `ping`，逐项 PASS-FAIL 并给修复提示 |
+
 ## 消息差分（2）
 
 | 脚本 | 用途 |
@@ -66,6 +75,9 @@
 ## 常用命令
 
 ```
+python scripts\selfcheck.py                        # 换机体检（文件 / IDE / 守护 / ping）
+python scripts\hidden_launch.py --project=D:\work\probe.project   # 隐藏实例 + 打开工程
+python scripts\accept.py --names=prg_MyFlow        # 一条命令验收（0=PASS）
 python scripts\bridge.py selftest                 # 一次给出 base / ipc / ide_running / heartbeat / ping
 python scripts\do_replace.py work\x.native Application prg_StartStop   # 静默写入
 python scripts\check_symbols.py work\x.native     # 导入前的符号闸门

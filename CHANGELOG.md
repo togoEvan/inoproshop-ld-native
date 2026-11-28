@@ -7,6 +7,20 @@
 
 ## [Unreleased]
 
+### 新增（2026-11-28 拉取即用：隐藏启动器 + 一条命令验收 + 冷启动文档）
+
+- **目标**：换电脑 / 换 AI 拉下仓库就能直接做项目，不再依赖本机 `D:\plc_mcp` 的历史状态。
+- **新增 `scripts/hidden_launch.py`**（纯 ctypes，无 .NET）：`CreateDesktopW` 建不可见桌面 → `CreateProcessW` 带 `STARTUPINFO.lpDesktop` 起 IDE → `--runscript=<BASE>/ide/plc_daemon.py` 注入守护 → 等 `ipc/ready.flag` → **再用 `bridge.call("open_project")` 打开工程**；`--status` / `--stop` 只处理自己记的 pid。实测无工程 READY **+9.5s**、带工程 OPEN **+12.4s**，全程无可见窗口。
+- **发现并封掉 `--project=` 陷阱**：命令行打开复杂工程会与设备/库初始化抢跑，InoPack 13MB 模板编译冒出 **500 条「未知类型: `Tparam_64_..._StructStatistics`」**（500 = 错误池截断）→ FAIL；同一副本改「空起 + `open_project`」→ **errors=0 / PASS**（小工程 655KB 的 `未命名1.project` 不受影响，所以容易误判成代码问题）。`hidden_launch.py` 默认走正解，`--raw-project` 才复现旧行为；已写入 SKILL 铁律 **52**。
+- **修 `ide/tasks/task_check.py` 的隐性单通道 bug**：脚本从未 `import System`，`_find_sev_type()` 里的 `NameError` 被 `except` 吞掉 → 日志常驻「找不到 Severity 枚举」→ 双通道退化成单通道 → 只要消息池截断就判 `UNKNOWN`（导出/导入/预编译三类一出现必 UNKNOWN，假阴性）。修法：补 `import System`；候选类型加 `_3S.CoDeSys.Core.Messages.Severity, Core`（程序集 `Core`，成员 `FatalError/Error/Warning/Information/Text` = 1/2/4/8/16，`Enum.Parse` 区分大小写），新增 `SEV_ALIAS` 逐个候选重试。修后日志：`=== 通道 : dual tested=2 exact=4 visible=0 mismatch=0 ===`。
+- **`ide/tasks/task_build_clean.py` 重写**：清「预编译 `217bc73e` / 编译 `97f48d64` / 导出导入 `2af7707f`」三个分类后再 build；带闸门 `PLC_MCP_HIDDEN=1`（由 `hidden_launch.py` 注入）或 `PLC_MCP_ALLOW_CLEAR=1` 才清，否则只 build 不清——**清用户面板的消息等于打扰**。
+- **新增 `scripts/accept.py`**：一条命令验收 = `--names=` 断言挂载（`task_mount_assert`，没挂直接退出码 3）→ 干净 build → 主机侧等 12s → `task_check` 双通道 → 打印 `VERDICT:` 与前 10 条错误；退出码 0 PASS / 1 FAIL / 2 UNKNOWN / 3 前置失败。
+- **新增 `scripts/selfcheck.py`**：换机体检（Python 版本 / 12 个必需文件 / `ide/tasks` 任务数 / InoProShop 安装路径 / 守护心跳 / `ping` / `--project=` 是否存在），逐项 PASS-FAIL 并给下一步提示。
+- **新增 `docs/quickstart.md`**：换电脑 8 步（体检 → 隐藏实例 → 确认守护 → 拿程序 → 三闸门 → 写入 → 验收 → 收工）+ 两个「能让结论整体翻转」的坑 + 常见失败对照表；README 的「60 秒上手」换成指向它的 7 行速查。
+- **验收闭环实证**（隐藏实例副本）：把挂载对象 `prg_Stn3LoadSeq` 里一处 `STNControl[3].aiAutoStep[0]` 改成 `aiAutoStepZZ[0]` → 静默导入 OK → `errors=2 / VERDICT: FAIL`；导入回原文件 → `errors=0 / PASS`。另把 `prg_CoilTest` 副本的声明改错（函数体仍引用旧名）→ 导入 OK → **0 错误 PASS**，挂进 MainTask 后立刻 2 条错误 —— 复证「未挂任务不进编译单元」。
+- 计数：126 → **130** 个文件 / 3.6MB（+hidden_launch、accept、selfcheck、quickstart；`ide/tasks` 保持 47）；铁律 51 → **52** 条。
+
+
 ### 整理（2026-11-28 精简仓库：313 → 126 个文件，6.4MB → 3.6MB）
 
 - **目的**：库是给 AI 读的，不是供考古的。删一次性探针与原始日志，只保留「能直接生成 → 能验证 → 能写入」的闭环。
