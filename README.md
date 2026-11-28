@@ -13,7 +13,7 @@ InoProShop 的梯形图存在一个 native XML 结构里。这个仓库提供：
 
 1. **已验证的结构知识**（`references/`）：节点 GUID、槽位规则、预编译错误对照表。所有结论都经过实测，不是猜的。
 2. **可运行的桥接脚本**（`scripts/`）：通过文件 IPC 向**已经打开的** InoProShop 进程注入 IronPython 脚本，实现导入 / 导出 / 预编译检查。
-3. **克隆模板**（`assets/natives/`）：19 份已验证的 native 样本，生成新结构时从这里克隆，不要凭空构造。
+3. **克隆模板**（`assets/natives/`）：21 份已验证的 native 样本，生成新结构时从这里克隆，不要凭空构造。
    写**树形/分支组**结构时，必须从 `assets/natives/user_fixed.native` 克隆（见下方「已验证的合法模式」）。
 
 **能做什么**
@@ -87,7 +87,7 @@ InoProShop 的梯形图存在一个 native XML 结构里。这个仓库提供：
 | 8 | **导出文件每次唯一命名**（`silent_after_HHMMSS.native`），否则弹覆盖确认框。 |
 | 12 | **改声明区必须锚定 `Interface` 再找 `TextLines`**，禁止裸 `find('<Array Name="TextLines"')`。一份 native 里 `TextLines` 至少 2 处（声明区 + EXECUTE 框 `STSnippet`），而网络列表排在 `Interface` 之前——只要网络里有 EXECUTE 框，裸 `find` 就会把声明写进 ST 代码块，预编译报 40+ 条 `符号 'PROGRAM'/'BOOL' 不能识别`（实测 48 条）。正确：`raw.find('<Array Name="TextLines"', raw.find('<Single Name="Interface"'))`。 |
 | 19 | **action 的 ST 体只能引用宿主 POU 声明区的变量**。三个特征：① 消息归属对象是 **action 名**不是 POU 名；② 只在**预编译**分类；③ 编译分类照样报「0 错误, 0 警告」。 |
-| 51 | **工站子程序按 A00 骨架写，由总控 POU 调用，不挂 `MainTask`**。模板里每个工站 POU（`A00_上料移栽`/`A01_中转移栽`…）都由 `F20_POU_Station0_总控` 按工站号调用，本身不在任务调用列表里 —— 2026-11-28 用户明确「可以不用调用到MainTask」。骨架固定 8 段：NET1 步序号记录器（`FB_StepLogger`，整块克隆 A00 net01）/ NET2 步序号缓存处理（单步·单站·总控三路放行，整块克隆 net02）/ NET3 流程开始 `10000→10` / NET4–7 安全自检 `10→15→20→30→100` / NET8 工位判断（产品状态 0/1 → 取料段 1000 / 放料段 2000，异常置多料·少料，克隆 net08 换 4 个符号）/ 取料段 `1000–1120` / 放料段 `2000–2060`，两段收尾都无条件 `MOVE 100`。变量不要新建结构体，直接用模板的 `STNControl[0..20] OF Struct_StationControl`（0 总控 / 1 上料移栽 / 2 擦拭，3..20 空闲），生成前把 `ldgen` 的 `AUTOING/STEP/BUF/DESC` 指向 `STNControl[n]`。片段在 `assets/natives/a00-fragments/`，生成器 `scripts/examples/gen_a00_stn3.py`，配方 `references/mode-cards/a00-skeleton.md`。⚠ 不挂任务时它不进编译单元，验证阶段必须临时挂一次或用总控真实调用，否则 0 错误是假通过。 |
+| 51 | **流程写进工站自动 POU 的动作槽 `A0x`，不要新建子程序、不要挂 `MainTask`**。用户 2026-11-28 原话：「正常是将A00_4写流程，不用调用子程序，内部已经调用完成了」——宿主 `STN1_02_Auto` 的 ST 体里已有一整段无条件调用 `A00_上料移栽()`…`A09_()`（约 11875–11885 行，注释 `//____子程序调用`），动作槽天然被调用。动作是 `ActionEntry`（TypeGuid `8ac092e5-3128-4e26-9e7e-11016c6684f2`），**没有 `Interface`/`TextLines`、没有声明区**，只能用宿主与全局符号；槽位下标 = 动作名尾号（`A04_` → `STNControl[1].aiAutoStep[4]` / `aiAutoStepBuffer[4]` / `awstrAutoDescription[4]` / `v_aFBStepLogger[4]`）。动作自带 6 个骨架网络，生成时**只保留前 5 个、把空的「流程」网络换成取放料步序**。替换动作 = `old.remove()` + `import_native()`，**不能改名让位**（报 `名称 'A04__old_tmp' 对于本工程无效。`），且同名存在时导入会长时间无返回。样本 `assets/natives/A04_slot4.native`、骨架 `assets/natives/a04-action-skeleton.native`、生成器 `scripts/examples/gen_a04.py`、配方 `references/mode-cards/a00-skeleton.md`。 |
 | 20 | **造负样本必须精确替换目标字段**。`s.replace('>actAbs<', '>actAbs_ZZZ<')` 会把 `BoxType` **和** Entry `Name` 一起改 → `actAbs_ZZZ` 成了合法 action，0 错误是**正确结果**却被误判「验收链路失效」。只改 `<Single Name="BoxType">` 一处，改完 `grep -c` 自查。 |
 
 ### D. 任务配置与 GVL
@@ -301,7 +301,8 @@ inoproshop-ld-native/
 │       ├── make_fix45.py         # 补声明 + 删多余 TRUE
 │       ├── make_packml_cmd_test.py  # 从零生成完整 POU（7 网络 PackML 命令层）
 │       ├── make_fb_call_test.py     # FB 调用（Function/Program/FunctionBlock 三类）
-│       └── gen_a00_stn3.py          # ★ A00 工站骨架生成器（31 网络样本）
+│       ├── gen_a00_stn3.py          # ★ A00 工站骨架生成器（独立 PROGRAM 版，31 网络）
+      └── gen_a04.py               # ★ 动作槽版生成器（写进 A04_，22 网络）
 ├── assets/natives/               # 已验证克隆模板 19 份 + a00-fragments/ 5 个 A00 骨架片段（含 negative/ 负样本）
 ├── scripts/corpus/                # 语料工具链：index_native / scan_forms / parse_net / ld_dump / split_networks
 ├── sync.ps1                      # 一键：校验 CHANGELOG → commit → push
@@ -324,7 +325,7 @@ inoproshop-ld-native/
 - **取反/置位/复位**：Operand 内部 `Flags` 位掩码，`1=NOT`、`2=S`、`3=R`。
 - **功能链末端不需要 ENO**：分支内最后一个功能框的 `ENO` 引脚可以删掉（不往后连接），已实测预编译 0 错误。
 - **声明区**：`Interface/TextDocument/TextLines` 里逐行写 `VAR … END_VAR`；`Id` 全表唯一且递增。详见 `references/native-structure.md`。
-- **工站子程序 = A00 骨架**：NET1 记录器 / NET2 缓存放行 / NET8 工位判断三块整块克隆，取料 1000 段、放料 2000 段，收尾无条件回 100；变量用 `STNControl[n]`，由总控调用而不挂 `MainTask`（铁律 51，配方 `mode-cards/a00-skeleton.md`）。
+- **工站流程 = 工站 POU 的动作槽**：写进 `A0x`（如 `A04_`，数组下标 4），宿主 `STN1_02_Auto` 的 ST 体已无条件调用 `A00_()`…`A09_()`；动作自带 6 段骨架（记录器 / 缓存放行 / 流程开始 / 安全自检 / 工位判断 / 空流程），只替换最后的空「流程」网络；不要新建 `PROGRAM`、也不要新建子程序（铁律 51，配方 `mode-cards/a00-skeleton.md`）。
 
 ---
 

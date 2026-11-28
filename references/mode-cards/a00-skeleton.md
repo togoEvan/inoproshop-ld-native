@@ -1,133 +1,168 @@
-# 模式卡 03 · A00 骨架（工站子程序）
+# 模式卡 03 · A00 骨架：把流程写进工站自动 POU 的动作槽
 
-> 状态：**已在软件里验证**（2026-11-28）。样本 `assets/natives/prg_Stn3LoadSeq.native`（31 网络 / 1145 个 Id 全唯一 / 1.19 MB）
-> 由 `scripts/examples/gen_a00_stn3.py` 生成，导入 InoProShop V1.10.0.3 编译分类 **0 错误 / 101 警告**（警告全是模板自带的枚举转换）。
-> 前置阅读：`step-sequence.md`（单个步序网络的母语法）、`process-flow.md`（完整流程 + 定时/超时/中断）、`../edge-detection.md`（框的 EN 边沿）。
-
----
-
-## 0. 这张卡解决什么
-
-会写步序网络 ≠ 会写一个**工站子程序**。InoPack 模板里每个工站 POU（`A00_上料移栽`、`A01_中转移栽`…）的第 1、2、8 个网络是固定的骨架，缺了它们：
-
-- 总控看不到本工站的步序号（HMI 上没有「当前步号 / 当前步描述 / 步序日志」）
-- 单步模式、单站模式、总控启动三种放行方式全部失效（现场调试只能整段跑）
-- 工位判断（有料/无料/多料/少料）没有，换工位就要重写跳转
-
-这张卡给的是：**8 个骨架网络 + 两段式步号 + 变量容器约定**，以及从哪里克隆、怎么换符号。
+> 状态：**已在软件里验证**（2026-11-28，v2 按用户纠正后的容器改写）。
+> 样本 `assets/natives/A04_slot4.native`（847,782 B / 22 网络 / 768 个 Id 全唯一）、骨架 `assets/natives/a04-action-skeleton.native`（186,228 B，`A04_` 的原始导出）。
+> 由 `scripts/examples/gen_a04.py` 生成，导入 InoProShop V1.10.0.3 编译分类 **0 错误 / 101 警告**（警告全是模板自带的枚举转换）。
+> 前置阅读：`step-sequence.md`（单个步序网络）、`process-flow.md`（延时/超时/报警/中断）、`../edge-detection.md`（框的 EN 边沿）。
 
 ---
 
-## 1. 骨架的 8 个网络（顺序不可换）
+## 0. 先选对容器（选错整件事白做）
 
-| # | 网络 | 作用 | 来源 |
-|---|------|------|------|
-| 1 | 步序号记录器 | `FB_StepLogger` 实例，把每周期步号/描述/日志写给 HMI | **整块克隆** A00 net01 |
-| 2 | 步序号缓存处理 | 单步 / 单站 / 总控 三路放行 `aiAutoStep := aiAutoStepBuffer` | **整块克隆** A00 net02 |
-| 3 | 流程开始 | `10000 → 10`（无条件跳，只为把步号从 0 拉进流程） | 生成 |
-| 4–7 | 安全自检 | `10 → 15 → 20 → 30 → 100`：逐缸复位、逐轴回安全位 | 生成 |
-| 8 | 工位判断跳转 | `100`：产品状态 0/1 → 取料段 / 放料段；异常置多料/少料报警 | **整块克隆** A00 net08（换 4 个符号） |
-| 9–23 | 取料段 | `1000 – 1120`，做完跳回 100 | 生成 |
-| 24–31 | 放料段 | `2000 – 2060`，做完跳回 100 | 生成 |
+工站流程有三种写法，只有第三种是模板的做法：
 
-克隆件在 `assets/natives/a00-fragments/`：`net01_step_logger.xml`（12 KB）、`net02_step_buffer.xml`（39 KB）、`net08_station_dispatch.xml`（96 KB）。
-它们是 A00 导出里**原样的网络节点**，用 `split_networks.py` 从完整导出中切出来的。
-
----
-
-## 2. 克隆三个网络时只换什么
-
-### NET1 / NET2：只换工站位号
-
-```python
-s = open("net01_step_logger.xml").read().replace("STNControl[1].", "STNControl[3].")
-```
-
-两个网络里所有变量都在 `STNControl[1]` 这个结构体数组元素上，换一个前缀就整套搬到新工站。**别改结构**：NET2 的三路线由（单步模式 / 单站模式 + 本站 `xStart` 上升沿 / 非单站模式 + 总控 `xStart` 上升沿）是现场三种调试方式的全部，删一条现场就少一种。
-
-### NET8：换 4 个上料移栽专有符号
-
-| A00 原符号 | 换成 | 含义 |
-|---|---|---|
-| `Gr_stS1上料移栽工位状态.ui产品状态` | `iStationProductState` | 本工位有料/无料 |
-| `G_xS1上料移载有无料检测感应` | `xMaterialAtStation` | 工位有无料检测 |
-| `HAL_stStation1Alarm.x上料移栽异常多料报警` | `xAlarmOver` | 异常多料 |
-| `HAL_stStation1Alarm.x上料移栽异常少料报警` | `xAlarmShort` | 异常少料 |
-
-网络语义（照 A00 原样，不要简化）：
-
-- 产品状态 = 0 **且** 工位无料 → `MOVE 1000`（去取料）
-- 产品状态 = 1 **且**（工位无料 **或** 总控空跑 `xEmptyMode`）→ `MOVE 2000`（去放料）
-- 其余组合 → 报警线圈（`(S)` 多料 / 少料）
-
-⚠ 报警线圈在 A00 里挂在**最后一个触点的 `OutputItems`** 上（net08 实测 4 处），不是挂在 AND 框上——挂框上 IDE 只画空方块（见 `../false-pass-catalog.md` 第 9 条）。
-
----
-
-## 3. 变量容器：不要再造结构体
-
-模板已经给了 `STNControl : ARRAY[0..20] OF Struct_StationControl`（`F01_Variable`）。
-
-| 下标 | 占用 |
+| 写法 | 结果 |
 |---|---|
-| 0 | 总控 `F20_POU_Station0_总控` |
-| 1 | 上料移栽 `A00` |
-| 2 | 擦拭工站 |
-| 3..20 | **空闲，新工站直接用** |
+| 新建独立 `PROGRAM` 挂 `MainTask` | 能编译、能跑，但和模板的工站体系不接：HMI 看不到本工站步号、单步/单站模式失效、总控不知道这个工站 |
+| 新建子程序、由总控调用 | 同样游离在工站体系外，还要额外接线 |
+| **写进工站自动 POU 的动作槽 `A0x`** | 模板原生写法。用户原话（2026-11-28）：**「正常是将A00_4写流程，不用调用子程序，内部已经调用完成了」** |
 
-字段（新增工站会用到的一部分）：`xAutoing` / `xStart` / `xSingleStepMode` / `xSingleStationMode` / `xEmptyMode` / `aiAutoStep[0..9]` / `aiAutoStepBuffer[0..9]` / `awstrAutoDescription[0..9]` / `astAutoStepLog0..9`。
+---
 
-所以生成器只做一件事：把 `ldgen` 的四个语义全局指向本工站——
+## 1. 动作槽在树里的位置
+
+```
+Device
+└── PLC 逻辑
+    └── Application
+        └── F21_POU_Station1_工站1_搬运移栽        （Folder）
+            └── STN1_02_Auto                    （PRG，ST）
+                ├── A00_上料移栽                  （动作，LD）
+                ├── A01_中转移栽
+                ├── A02_下料移栽
+                ├── A03_下料翻转
+                ├── A04_                          ← 第 5 个动作槽，数组下标 4
+                └── … A09_
+```
+
+宿主 `STN1_02_Auto` 的 ST 体里有一整段**无条件调用**（原导出约 11875–11885 行，注释 `//____子程序调用`）：
+
+```iecst
+A00_上料移栽();
+A01_中转移栽();
+A02_下料移栽();
+A03_下料翻转();
+A04_();
+A05_();
+…
+A09_();
+```
+
+所以动作槽天然每个周期都被调用——**不需要任何接线、不需要挂 `MainTask`**。
+
+---
+
+## 2. 动作对象和 `PROGRAM` 不一样
+
+| 项 | 动作 `A0x` |
+|---|---|
+| TypeGuid | `8ac092e5-3128-4e26-9e7e-11016c6684f2`（ActionEntry） |
+| ParentGuid | 宿主 POU 的 Guid（如 `1e1af19e-9582-40b0-975f-b4f47f49da10` = `STN1_02_Auto`） |
+| EmbeddedTypeGuids | `25e509de-33d4-4447-93f8-c9e4ea381c8b`（LD） |
+| `Interface` / `TextLines` | **没有** |
+| 声明区 `VAR` | **没有**（只能用宿主 POU 与全局符号） |
+| 改名 | **不支持**：`old.rename(u"A04__old_tmp")` 报 `名称 'A04__old_tmp' 对于本工程无效。` |
+| 删除 | `old.remove()` 可用（不可撤销，回滚只能靠 `.project` 备份） |
+| 槽位下标 | **动作名尾号**：`A04_` → `4` |
+
+所以变量一律落在这套现成容器上：
+
+```
+STNControl[1].xAutoing                // 自动运行总使能
+STNControl[1].aiAutoStep[4]           // 当前步（唯一状态源，只读）
+STNControl[1].aiAutoStepBuffer[4]     // 下一步（跳步只写它）
+STNControl[1].awstrAutoDescription[4] // 当前步描述（HMI 显示）
+v_aFBStepLogger[4]                    // 步序日志实例
+```
+
+`STNControl : ARRAY[0..20] OF Struct_StationControl` 是模板 `F01_Variable` 里的现成数组（0 总控 / 1 上料移栽 / 2 擦拭 / 3..20 空闲），**不要新建结构体**。
+
+---
+
+## 3. `A04_` 里已经有的 6 个网络（不要重建）
+
+| 网络名 | 作用 | 处理 |
+|---|---|---|
+| `Network000000_步序号记录器` | `FB_StepLogger` 实例，把步号/描述/日志送 HMI | **保留** |
+| `Network000001_步序号缓存处理` | 单步 / 单站 / 总控 三路放行 `aiAutoStep := aiAutoStepBuffer` | **保留** |
+| `Network000002_流程开始` | `10000 → 10` | **保留** |
+| `Network000003_安全自检` | `10 → 100`，逐缸复位、逐轴回安全位 | **保留**（本项目里只做到 100 前一跳） |
+| `Network000004_工位判断跳转` | `100 → 1000`（本工位直接进取料段） | **保留** |
+| `Network000005_流程` | **空** | **替换成取放料步序** |
+
+要写的只有最后这一个网络。生成时把前 5 个原样留下，把「流程」换成步序网络。
+
+---
+
+## 4. 生成：保留前 5 个网络，拼步序
 
 ```python
-L.AUTOING = u"STNControl[3].xAutoing"
-L.STEP    = u"STNControl[3].aiAutoStep[0]"
-L.BUF     = u"STNControl[3].aiAutoStepBuffer[0]"
-L.DESC    = u"STNControl[3].awstrAutoDescription[0]"
+import io, re
+import xml.etree.ElementTree as ET
+import ldgen as L
+
+# 只认网络节点：Type 是 Network（d9a99d73-…）的 Single
+G_NET = u'<Single Type="{d9a99d73-b633-47db-b876-a752acb25871}"'
+
+s = io.open(TPL_A04, "r", encoding="utf-8").read()
+key = u'<List2 Name="NetworkList">'
+i = s.find(key)
+inner_start = i + len(key)
+j = L.find_list2_end(s, i)                 # 深度配对，别用字符串 find 找 </List2>
+inner = s[inner_start: j - len(u'</List2>')]
+
+starts = [m.start() for m in re.finditer(re.escape(G_NET), inner)]
+blocks = [inner[starts[k]: starts[k + 1] if k + 1 < len(starts) else len(inner)]
+          for k in range(len(starts))]
+kept = blocks[:5]                          # 只留骨架 5 个
+
+s2 = s[:inner_start] + u"\n" + u"\n".join(kept + nets) + u"\n  " + s[j - len(u'</List2>'):]
+s2 = L.renumber(s2, [0])                   # 全表 Id 重编，必须
+# 再校：Id 无重复 + UniqueIdGenerator = max(Id)+1
 ```
 
-之后 `step_net` / `step_net2` / `judge_net` / `desc_tree` / `jump_tree` / `coil_tree` 全部自动落到本工站，不用逐个改字符串。
+生成前先把 `ldgen` 的四个语义全局指到第 4 号槽（`step_net` / `step_net2` / `judge_net` / `coil_tree` 都读它们）：
 
----
-
-## 4. 步号两段式
-
-| 段 | 步号 | 说明 |
-|---|---|---|
-| 公共 | 0 / 10 / 15 / 20 / 30 | 0 待命，10–30 安全自检，100 工位判断 |
-| 取料 | 1000 → 1010 → 1020 → 1025 → 1030 → 1040 → 1050 → 1060 → 1070 → 1090 → 1095 → 1100 → 1110 → 1120 | 段内 +10，条件步用 +5（`1025` 请求后伸出、`1095` 置状态） |
-| 放料 | 2000 → 2010 → 2020 → 2030 → 2040 → 2050 → 2060 | 同上 |
-| 收尾 | 1120 / 2060 | **无条件** `MOVE 100` 跳回工位判断 |
-
-规则：**段首是 1000 / 2000 的整数倍，段内 +10，条件插入用 +5，段尾跳回 100**。
-这样一眼能从步号看出来在哪个工位、哪个阶段——A00/A01/A02 全部照此。
-
----
-
-## 5. 部署：由总控调用，**不要挂 MainTask**
-
-工站子程序是**被总控 POU 调用**的（`F20_POU_Station0_总控` 里按工站号调 `A00`…`A0x`），它本身不进 `MainTask.pous` 列表。
-（2026-11-28 用户明确：「可以不用调用到MainTask」。）
-
-⚠ 但验证阶段必须让它进编译单元，否则 0 错误是假的：
-
-- 要么临时 `main_task.pous.add("prg_Stn3LoadSeq")` 编一次、验完摘掉；
-- 要么先让总控真的调用它再 build。
-
-隐藏桌面实例上**只有编译分类**（无预编译分类），未挂任务的 POU 静默漏检——见 `../evidence/hidden-instance-scope/README.md`。
-
----
-
-## 6. 从零生成
-
-```bash
-# 仓库自带片段 + 任意 PROGRAM 骨架
-LDSKEL=assets/natives/user_fixed.native LDOUT=work/prg_Stn3LoadSeq.native \
-  python scripts/examples/gen_a00_stn3.py
+```python
+L.AUTOING = u"STNControl[1].xAutoing"
+L.STEP    = u"STNControl[1].aiAutoStep[4]"
+L.BUF     = u"STNControl[1].aiAutoStepBuffer[4]"
+L.DESC    = u"STNControl[1].awstrAutoDescription[4]"
 ```
 
-产物统计（脚本自己打印）：`networks 31 / ids 1145 / max_id 1145 / AND 84 · MOVE 59 · EQ 29 / branch 32 / pin 230`。
-连续两次运行**只有对象 GUID 不同**（`Single Name="Guid"` 由 `build_doc` 每次新生成），其余逐行一致——可用来验证生成器没被改坏。
+---
+
+## 5. 步序（本次样本）
+
+| 步号 | 描述 | 动作 | 完成条件 |
+|---|---|---|---|
+| 1000 | 夹紧缸复位、A0 去取料位 | `FC_CylinderExe(C0,0)` + `FC_AxisAbsGo(A0,A0P_上料机取料位)` | `AND(C0.xDone, A0.o_xAbsDone)` |
+| 1010 | A1 去取料位 | `FC_AxisAbsGo(A1,A1P_上料机取料位)` | `A1.o_xAbsDone` |
+| 1020 | 等上料机请求取料 | — | `G_xS1上料机请求取料` |
+| 1030 / 1040 / 1050 | C2 伸出 → C1 伸出 → C0 夹紧（抓料） | 三个 `FC_CylinderExe(…,1)` | 各自 `xDone` |
+| 1060 / 1070 | C1 复位 → C2 缩回 | `FC_CylinderExe(…,0)` | 各自 `xDone` |
+| 1080 | A0/A1 去擦拭 A1 平台 1 放料位 | 两个 `FC_AxisAbsGo` | `AND(A0.o_xAbsDone, A1.o_xAbsDone)` |
+| 1090 | 等擦拭平台请求放料 | — | `G_xS2擦拭A1平台1请求上料移栽放料` |
+| 1100–1140 | C2 伸出 → C1 伸出 → C0 复位（放料）→ C1 复位 → C2 缩回 | 五个 `FC_CylinderExe` | 各自 `xDone` |
+| 1150 | 本工位完成 | — | 无条件 `MOVE 100` |
+
+符号全部是模板现成的：`A0_上料移栽直线电机轴` / `A1_上料移栽R轴` / `C0_上料移载夹紧气缸` / `C1_上料移载升降气缸` / `C2_上料移载伸出气缸` / `G_astCylinder[…]` / `G_astAxis[…]`。
+
+---
+
+## 6. 替换动作：`remove` 旧 + `import_native` 新
+
+```python
+old = find_action(host, u"A04_")        # 宿主 POU 的直接子对象里按名字找
+old.remove()
+system.process_messageloop()
+r = host.import_native(SRC)              # 返回 NativeImportResult
+```
+
+⚠ 两条硬约束：
+
+1. **动作不能改名让位**。`old.rename(u"A04__old_tmp")` 直接失败（见 §2），只能 `remove()`。
+2. **同名对象存在时 `import_native` 会长时间无返回**（不是卡在 `projects.open`）。顺序必须是先 remove 再 import。
 
 ---
 
@@ -135,10 +170,13 @@ LDSKEL=assets/natives/user_fixed.native LDOUT=work/prg_Stn3LoadSeq.native \
 
 | 项 | 结果 |
 |---|---|
-| 隐藏桌面副本导入 → 临时挂 MainTask → build | `编译完成 -- 0 错误, 101 警告`（104 条消息） |
-| 写进用户工程（`do_replace.py`，改名让位） | `import_native ok 1.51s` / `networks 31` / `saved` |
-| 双分类 | 预编译 `total=101 errors=0`，编译 `total=104 errors=0` |
-| 人眼 | IDE 里程序段 8 显示 EQ 门控 + 三条支路 + `(S)` 报警线圈 |
+| 隐藏桌面副本（`a04_test.project`）remove → import → build | `import: ok` / `编译完成 -- 0 错误, 101 警告`（104 条消息）/ `saved` |
+| 写进实时工程 `D:\plc_study\study.project`（先备份 `.project`） | 同上，0 错误 / 101 警告 / `saved` |
+| 实时导出核对 | `live_a04.native` 1,108,990 B / **22 个网络节点** / 含「取料位」6 处、「擦拭A1放料位」2 处 |
+| 人眼 | IDE 里 `STN1_02_Auto_A04_` 标签页程序段 16/17 显示 1090、1100 步；消息栏 0 错误 |
+| 生成器可复现 | 仓库版脚本连续两次运行产物**逐字节相同**（对象 GUID 也来自模板，不经 `build_doc` 重生成） |
+
+⚠ 设备树可能仍只显示 6 个网络（树是缓存，未刷新）——**以导出为准**，别据此判断导入失败。
 
 ---
 
@@ -146,19 +184,29 @@ LDSKEL=assets/natives/user_fixed.native LDOUT=work/prg_Stn3LoadSeq.native \
 
 | 现象 | 根因 | 正解 |
 |---|---|---|
-| 流程开始/跳回这类无动作步报 `'AND'需要至少'2' 个操作数` | 用 `step_net` 且动作列表为空，生成出单条件 AND | 用 `step_net2(..., unconditional=True)` |
-| 夹爪检测判不出来 | 用两个独立 `step_net` 表达二选一 | `judge_net(step, [(cond, n1), (cond_neg, n2)])`，一个 BRANCH 两条 MOVE |
-| 换工站后所有变量都指向 1 号工站 | 只改了声明，没改 `ldgen` 的四个语义全局 | 生成前先改 `L.AUTOING/STEP/BUF/DESC` |
-| 导入后 IDE 里网络显示但线圈是空方块 | 线圈挂在功能框 `OutputItems` | 挂末触点 `OutputItems`（A00 写法）或 `NETITEM.OutputItems` |
-| `import gen_loadseq` 后产物被覆盖 | 那个生成器有模块级副作用 | 只 import `ldgen`，动作框模板自己解析 |
-| 切网络切出 140 字符碎片 | 字符串配对 `List2` 嵌套深度 | 用 `scripts/corpus/split_networks.py`（ElementTree） |
+| 编译 0 错误，但工程里找不到这段流程 | 写成了新建 `PROGRAM`，没进动作槽 | 改写 `A0x` 动作 |
+| 改动作名报 `名称 'A04__old_tmp' 对于本工程无效。` | 动作不支持改名 | `remove()` + `import_native()` |
+| `import_native` 长时间不返回 | 同名动作已存在 | 先 `remove()` 再导入 |
+| 设备树里只有 6 个网络 | 树缓存未刷新 | 导出核对网络数 |
+| 动作里写 `VAR` 不生效 | 动作没有声明区 | 变量用宿主 / `STNControl[1]` |
+| 步号不前进、描述不更新 | 骨架网络被删掉 | 保留前 5 个网络 |
 
 ---
 
 ## 9. 还没验证的
 
-- 总控 `F20` 真实调用本 POU 的联调（本次只验证了 POU 自身编译 0 错误）
-- 多工站并行（`STNControl[4]`/`[5]`）同时跑
-- 步序号记录器 `FB_StepLogger` 的 HMI 侧显示效果
+- 总控 `F20_POU_Station0_总控` 真实调用本工站后的联调（本次只验证到动作自身 0 错误）
+- 多工站并行（`STNControl[4]` / `[5]`）同时跑
+- `FB_StepLogger` 在 HMI 上的显示效果
 
-最后更新：2026-11-28（lead）
+---
+
+## 附录 A · 独立 `PROGRAM` 版（只在工站没有自动 POU 宿主时用）
+
+`assets/natives/prg_Stn3LoadSeq.native`（1,191,815 B / 31 网络 / 1145 个 Id，生成器 `scripts/examples/gen_a00_stn3.py`）把 8 段骨架全部写进一个独立 `PROGRAM`，变量用 `STNControl[3]`，验证时需临时挂 `MainTask`（否则不进编译单元，0 错误是假通过）。
+
+它适合：工站没有动作槽宿主、要把骨架当教学样本、或要单独调试一段流程。**模板工程里不要这么做**——会绕开工站体系。
+
+---
+
+最后更新：2026-11-28（lead，v2：容器改为工站 POU 的动作槽 `A0x`）

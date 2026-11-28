@@ -7,7 +7,23 @@
 
 ## [Unreleased]
 
-### 新增（2026-11-28 模式卡 03：A00 工站骨架 + 可克隆片段 + 生成器）
+### 修正（2026-11-28 模式卡 03 v2：流程写进工站 POU 的动作槽 `A04_`，不是独立 PROGRAM）
+
+- **容器结论纠正**：v1 把工站流程写成独立 `PROGRAM`（`prg_Stn3LoadSeq`，31 网络）再由总控调用，是错的。用户 2026-11-28 原话：
+  **「正常是将A00_4写流程，不用调用子程序，内部已经调用完成了」** —— 流程应直接写进工站自动 POU（`STN1_02_Auto`）的动作槽 `A0x`（如 `A04_`，数组下标 4），
+  宿主 ST 体里已有一整段无条件调用 `A00_上料移栽()`…`A09_()`（原导出约 11875–11885 行，注释 `//____子程序调用`），不需要任何接线、也不需要挂任务。
+- 动作对象的事实（实测）：`ActionEntry`（TypeGuid `8ac092e5-3128-4e26-9e7e-11016c6684f2`）、`EmbeddedTypeGuids` 是 LD、**没有 `Interface`/`TextLines`、没有声明区**，只能用宿主与全局符号；
+  **不支持改名**（`old.rename(u"A04__old_tmp")` 报 `名称 'A04__old_tmp' 对于本工程无效。`），替换只能 `old.remove()` + `import_native()`；同名动作存在时 `import_native` 会长时间无返回。
+- 动作自带 6 个骨架网络（`Network000000_步序号记录器` … `Network000005_流程`，最后一个空），写流程只需**保留前 5 个、替换空的「流程」**。
+- 新增 `assets/natives/A04_slot4.native`（847,782 B / 22 网络 / 768 个 Id 全唯一 / AND 58 · MOVE 39 · EQ 19 · BRANCH 21）：工位 4 的取放料流程（1000–1150 步）。
+- 新增 `assets/natives/a04-action-skeleton.native`（186,228 B）：`A04_` 的原始导出，当生成器的输入骨架。
+- 新增 `scripts/examples/gen_a04.py`：读骨架 → 保留前 5 个网络 → 拼 16 个步序网络 → `renumber` 重编 Id；`LDTPL` / `LDOUT` 可覆盖输入输出。
+  可复现性自检：与样本**逐字节相同**（对象 GUID 来自模板，不经 `build_doc` 重生成）。
+- 实测（InoProShop V1.10.0.3）：隐藏桌面副本 `remove → import_native ok → build` 得 `编译完成 -- 0 错误, 101 警告`；
+  写进 13MB 实时工程 `D:\plc_study\study.project` 同样 0 错误 / 101 警告 / `saved`，实时导出核对为 **22 个网络节点**（1,108,990 B，含「取料位」6 处、「擦拭A1放料位」2 处），IDE 程序段 16/17 人眼确认。
+- 文档同步：`references/mode-cards/a00-skeleton.md` 重写为动作槽版本（§0 三种写法对比 / §1 树位置 / §2 动作对象特征 / §3 现成 6 网络 / §4 生成 / §5 步序 / §6 替换 / §7 验收 / §8 坑表），
+  独立 `PROGRAM` 版降为附录 A；README/SKILL 铁律 51 改为「写进动作槽 `A0x`，不新建子程序、不挂 `MainTask`」；`FILEMAP.md` / `scripts/examples/README.md` / 目录树同步（文件数 310 → 313，assets 24 → 26，examples 39 → 40）。
+### 新增（2026-11-28 模式卡 03 v1：A00 工站骨架 + 可克隆片段 + 生成器）⚠ 容器结论已被下面的 v2 修正
 
 - 新增 `references/mode-cards/a00-skeleton.md`（8.5KB）：工站子程序的 A00 骨架配方 —— 8 段网络顺序、三个可整块克隆的网络（NET1 步序号记录器 / NET2 步序号缓存处理 / NET8 工位判断）、
   克隆时只换 `STNControl[1].` → `STNControl[n].` 与 NET8 的 4 个专有符号、变量容器 `STNControl[0..20]`（0 总控 / 1 上料移栽 / 2 擦拭 / 3..20 空闲）、取放料两段式步号（1000 段 / 2000 段，段内 +10，条件步 +5，段尾无条件回 100）。

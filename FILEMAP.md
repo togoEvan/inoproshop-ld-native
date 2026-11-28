@@ -1,6 +1,6 @@
 # FILEMAP —— 仓库文件地图
 
-> 目的：**新会话 / 三个月后的你**，不读完全部 310 个文件也能在 30 秒内找到该改哪个。
+> 目的：**新会话 / 三个月后的你**，不读完全部 313 个文件也能在 30 秒内找到该改哪个。
 > 整理于 2026-11-26。目录结构若再改，请同步更新本文件。
 
 ---
@@ -17,21 +17,21 @@
 
 ---
 
-## 2. 文件分布（310 个）
+## 2. 文件分布（313 个）
 
 | 位置 | 数量 | 性质 | 能不能改 |
 |------|------|------|---------|
 | 根目录 | 10 | 门面 + 铁律 + 变更日志 + 本文件 + 同步脚本 | README/AGENTS/CHANGELOG 要改；LICENSE 不改 |
 | 根下隐藏文件 | 2 | `.gitattributes`（`*.cmd text eol=crlf`）/ `.gitignore` | 少动 |
 | `docs/` | 2 | 面向使用者的长文档（`usage.md` 操作手册、`iteration.md` 迭代史） | 要改 |
-| `references/` | 58 | 知识库正文 11 篇（`native-structure.md` 102KB / `precompile-errors.md` 25KB / `mcp-bridge.md` 21KB / `edge-detection.md` 4KB / `false-pass-catalog.md` 5KB / `mode-cards/step-sequence.md` 4KB / `mode-cards/process-flow.md` 14KB / `mode-cards/a00-skeleton.md` 8KB / `corpus/inopack-template-survey.md` 5KB / `corpus/ld-network-shapes.md` 3KB / `corpus/toolchain.md` 4KB）+ `evidence/notask-scope/` 46 个原始日志 + `evidence/hidden-instance-scope/` 1 篇 | 正文要改；evidence 只加不改 |
+| `references/` | 58 | 知识库正文 11 篇（`native-structure.md` 102KB / `precompile-errors.md` 25KB / `mcp-bridge.md` 21KB / `edge-detection.md` 4KB / `false-pass-catalog.md` 5KB / `mode-cards/step-sequence.md` 4KB / `mode-cards/process-flow.md` 14KB / `mode-cards/a00-skeleton.md` 9KB / `corpus/inopack-template-survey.md` 5KB / `corpus/ld-network-shapes.md` 3KB / `corpus/toolchain.md` 4KB）+ `evidence/notask-scope/` 46 个原始日志 + `evidence/hidden-instance-scope/` 1 篇 | 正文要改；evidence 只加不改 |
 | `scripts/`（根） | 19 | 主机侧 Python 3 工具（桥 / 导入 / 5 个自检闸门 / 消息差分 / 打包）+ 三个 .cmd / .ps1；索引见 `scripts/README.md` | 要改 |
 | `scripts/ide/`（core） | 6 | IDE 内 IronPython：守护本体 5 个 + 索引 README | 谨慎改（改完要 reload） |
 | `scripts/ide/tasks/` | 47 | **可复用操作**：验收 / 导入 / 导出 / 建对象 / 任务槽 / GVL | 要改 |
 | `scripts/corpus/` | 5 | 语料工具链（主机 py3）：`index_native.py` / `scan_forms.py` / `parse_net.py` / `ld_dump.py` / `split_networks.py`（按网络切 native）；IDE 内的全量导出在 `ide/tasks/export_all.py` | 要改 |
 | `scripts/ide/studies/` | 98 | 一次性考古脚本，回答问题即冻结 | **不改**（要新写就进 tasks/） |
-| `scripts/examples/` | 39 | native 生成器（可复用库 5 / 已验证样本生成器 14 / 一次性 F0x 考古 20，分类见 `examples/README.md`） | 参考用，别当库 |
-| `assets/natives/` | 24 | 已验证的克隆模板 19 份 + `a00-fragments/` 5 个 A00 骨架片段（约 3.2MB；含 `negative/` 负样本与 `prg_TonTest` / `prg_CoilTest` 最小样本） | **只读**（结构来源） |
+| `scripts/examples/` | 40 | native 生成器（可复用库 5 / 已验证样本生成器 15 / 一次性 F0x 考古 20，分类见 `examples/README.md`） | 参考用，别当库 |
+| `assets/natives/` | 26 | 已验证的克隆模板 21 份 + `a00-fragments/` 5 个 A00 骨架片段（约 4.0MB；含 `negative/` 负样本、动作槽骨架 `a04-action-skeleton.native` 与 `prg_TonTest` / `prg_CoilTest` 最小样本） | **只读**（结构来源） |
 
 ---
 
@@ -50,7 +50,7 @@
 | 查某个编译错误的含义与修法 | `references/precompile-errors.md` |
 | 想让某个框「只执行一次」/ 加边沿 | `references/edge-detection.md`（框的 `InputFlags[0]=16`，不是触点） |
 | 从零写一段「步进/步序」状态机 | `references/mode-cards/step-sequence.md`（三梯级母语法 + 可跑的 ldgen 示例） |
-| 写一个**工站子程序**（A00 骨架：步序号记录器 / 单站放行 / 工位判断 / 取放料两段） | `references/mode-cards/a00-skeleton.md`（8 段骨架 + `STNControl[n]` + 生成器 `scripts/examples/gen_a00_stn3.py`） |
+| 把工站流程**写进动作槽**（模板正解：`A04_` 这一类，宿主已调用） | `references/mode-cards/a00-skeleton.md`（动作容器 + 6 段现成骨架 + 生成器 `scripts/examples/gen_a04.py`）；独立 `PROGRAM` 版看同卡附录 A |
 | 把多网络 native 按网络切开当模板 | `scripts/corpus/split_networks.py`（ElementTree，别用字符串配对） |
 | 从零写完整工站流程（延时/超时/报警/复位/中断） | `references/mode-cards/process-flow.md`（35 网络排布 + BOOL 全用线圈 + 线圈挂 NETITEM + 四道验收） |
 | 验收 PASS 但怀疑是假通过 | `references/false-pass-catalog.md`（九种假象逐条对照） |
