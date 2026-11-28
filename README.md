@@ -31,7 +31,7 @@ InoProShop 的梯形图存在一个 native XML 结构里。这个仓库提供：
 
 ## 铁律（先读这段，能省几小时）
 
-48 条，按主题分六组。编号沿用历史编号、不重排，方便 `SKILL.md` / `CHANGELOG.md` 交叉引用。
+49 条，按主题分六组。编号沿用历史编号、不重排，方便 `SKILL.md` / `CHANGELOG.md` 交叉引用。
 
 > **2026-11-28 修重号**：A 段原 25 / 26 → **45 / 46**（消息截断阈值、判导入成败三条），F 段原 41 → **47**（build 是增量编译）。原编号曾与 D 段 25 / 26、B 段 41 撞号。只此一次调整，之后仍不重排。
 
@@ -42,7 +42,7 @@ InoProShop 的梯形图存在一个 native XML 结构里。这个仓库提供：
 | C | 挂载与实例 | 6、7、8、12、19、20（6 条） |
 | D | 任务配置与 GVL | 25、26、27、28、29、30（6 条） |
 | E | 枚举 / POU / 凸轮 / 轴组 | 31、32、33、34、35、36、37、38（8 条） |
-| F | 桥与守护 · 脚本卫生 | 39、40、42、43、44、47（6 条） |
+| F | 桥与守护 · 脚本卫生 | 39、40、42、43、44、47、49（7 条） |
 
 （编号沿用历史编号，不重排，方便 `SKILL.md` / `CHANGELOG.md` 交叉引用。）
 
@@ -58,7 +58,6 @@ InoProShop 的梯形图存在一个 native XML 结构里。这个仓库提供：
 | 24 | **两分类的作用域不同（2026-11-26 实测）**：① **预编译分类**在 `build()` 阶段覆盖 **Application 下全部 POU**，与是否挂任务**无关**；② **编译分类**只含**挂进任务调用列表**的 POU。负样本 `xOut := ZZZ_NotExist_Symbol;`：未挂任务 → 预编译 ZZZ **1**、编译 ZZZ **0**；挂上 MainTask → 预编译 **1**、编译 **2**。**预编译消息异步补齐**：`clear_messages(cat)`（**必须传分类参数**）后立刻读 0 条，约 10s 后 101 条；空闲 20s 仍是 0 条（不自恢复）。⚠ **隐藏桌面实例差异（2026-11-28 实测）**：`HiddenLaunch` + `--runscript` 起的实例上 `app.build()` 后**只出现编译分类 `97f48d64`，预编译分类 `217bc73e` 从不出现** —— 未挂任务的 POU 一条消息都不产生（样本 A 未挂 hit=0，挂进 MainTask 后立刻 2 条）。**隐藏实例的验收必须先把目标 POU 挂进 MainTask 再 build**，不能指望预编译兜底。证据：references/evidence/hidden-instance-scope/README.md。 |
 | 45 | **消息截断阈值按 severity 各自计数：Warning 100、Error 500**（lead 隐藏实例 1.10.0.3 实测：灌 1300 个未定义标识符 → Error 恰 **501** = 500 实体 + 1 提示行）。**提示措辞不统一**：警告/消息级是「多于N个**警告/消息发生**：跳过更多的…」，错误级**不带「发生」**——原文 `多于500个错误：跳过更多的错误信息`。按文本识别截断的正则**绝不能锚定「发生」**，否则 >500 错误的工程看不见截断 → 条数差恒 0 → **假 PASS**（2026-11-26 踩过）。 |
 | 46 | **判导入成败要看三条，`2af7707f` 不是结果台账**（lead 实测）：① `import_native()` 是否抛异常——**不可靠**，同 GUID+同名的二次导入会**卡死 6 分钟**，不返回不报错；② **唯一可靠的「真成功」信号**：`2af7707f` 是否新增 `Text|导入对象 '<name>'`（它的 Error **恒 0 是设计如此**）；③ 失败原因看 `194b48a9`「脚本消息」的新增 Error。坏文件（截断的 native）抛异常时：`194b48a9 n=1 err=1`、`2af7707f` 完全不变。外层必须有超时 + 「台账没新增就判失败」。 |
-
 | 48 | **验收要双通道交叉校验，单通道的 `errors=0` 随时可能是读漏**。通道 1 `get_message_objects(cat)` 全量：单分类最多 100 条、错误池 500 条，超了截断少报。通道 2 `get_message_objects(cat, Severity.Error / FatalError)` 在**完整池**上过滤：1.10 实测 `all=540 / Error=502`、各 severity 相加等于 all；灌 1300 个未定义标识符时 Error 恰 500 实体 + 1 提示行，说明过滤通道不受可见截断影响。**计数取两通道较大值**：过滤通道坏（inoproshop-mcp 在 CODESYS SP19 上实测「2 错误只回 1 条 warning、0 错误」）不能把已有错误洗成 0，可见通道被截断时由过滤通道补。未截断的分类要求两通道**相等**，不等标 `cross=BAD` → `UNKNOWN`；已截断的分类只做单向校验（过滤 ≥ 可见）标 `cross=GE`。另：**消息分类是按需注册的**，刚打开、从没 build 过的工程可能一个分类都没有（隐藏实例上 `cats=0`）→ 先 `app.build()` + `system.process_messageloop()` 各一次再枚举，仍为空才判 `UNKNOWN`，绝不当 0 错误。工具 `scripts/ide/tasks/task_check.py` v4：末行 `VERDICT: PASS|FAIL|UNKNOWN`，并把通道状态（`dual / dual-unchecked / mismatch / all`）一并写出；**`UNKNOWN` 不是通过**。 |
 
 ### B. 结构合法性
@@ -123,6 +122,7 @@ InoProShop 的梯形图存在一个 native XML 结构里。这个仓库提供：
 | 42 | **ST 声明区在 native 里是「每行一个独立 Text 节点」，不能按 VAR/PROGRAM 关键字筛节点**。`Single Name="Text"` 节点粒度是**一行**（如 `\ti\t\t\t\t:INT;`），整块 `VAR…END_VAR` 从不落在同一个节点里；按关键字筛会漏掉绝大多数声明行，导致 `locals` 识别为空。**后果最危险**：局部名被当成全局名一起改写（静默错误，双分类仍 0 错误）。**正确做法**：从 `PROGRAM/FUNCTION_BLOCK/FUNCTION <name>` 那一行开始，**把所有后续 Text 节点 join 起来**再解析 `VAR…END_VAR`，并剥掉 `//` 行注释。**自检**：locals 数量应为个位数到十几（F20 实测 6~16/个），出现 0 一定是提取逻辑坏了。 |
 | 43 | **IDE 脚本不要用 `sys.exit()` 收尾 —— 会弹出 `Uncaught exception` 模态框**。IronPython 里 `SystemExit` 不继承 `Exception`，`handle_on_main` 的 `except Exception` 兜不住，IDE 弹出标题 `Uncaught exception, please check the error log for details.`、内容 `SystemExit` 的模态框，一直挡着界面（轮询线程靠 `except BaseException` 能活，但弹框要人工关）。**做法**：脚本末尾直接 `print(u"done")` 结束，需要分步就在文件/标志位上判断，不要 `sys.exit(0)`。⚠ 附带两类弹框的关法（`PostMessage`，不动鼠标/不抢焦点）：`Uncaught exception` 的「确定」对 `WM_COMMAND IDOK(1)` **无反应**，须 `WM_CLOSE(0x0010)`；`导出的文件已经存在：…，是否希望替换？` 是 `IDYES(6)`/`IDNO(7)`，**误点「是」会覆盖主机侧刚改好的 native**，选之前必须核对目标文件 mtime 与内容。 |
 | 44 | **LD POU 的标识符有 4 类载体，只改 `Text` 会漏掉约 90%**。纯 ST 组（F01~F11/F20）只处理 `Text` + `Operand` 就够；2026-11-27 F21 实测 `STN1_02_Auto` 的 2155 处改写里 **1953 处落在 `Operand Type="string"`**，`Text` 只有 114 处。四类载体：① `Single Name="Text"`（ST 代码）；② `Operand Type="string"`（LD 触点/线圈操作数）；③ `BoxType`（LD 功能框类型名，如 `AND`/`MOVE`/`EQ`/`FC_CylinderExe`）；④ `Instance > Operand Type="string"`（FB 实例操作数）。`SymbolComment` / `Address` 在 LD native 里**全为空**，不能靠它们定位。⚠ 另：**LD 的 `Path` 数组是「每个 network 一个」**（`STN1_02_Auto` 有 87 个，`STN1_03_Manual` 2 个），每个数组元素 4 = POU 自身名（必须改）、元素 5 = network 名（不能改）；纯 ST 的 POU 一个 `Path` 数组都没有，按「每文件一个 Path」的旧写法会漏改 86 个。**自检**：翻译后按载体统计命中数，若某 POU 含 `NetworkList` 而 `Operand` 命中数为 0 → 一定漏改。参考 `scripts/examples/make_f21_translate.py`。 |
+| 49 | **任务与对象移动走「改 → 逐字段读回 → 失败回滚」，且不能靠 `dir()` / `is` 判断**。① `TaskConfiguration.create_task(name)` 存在（`dir()` 里看不见，`hasattr` 或直接调用才有效）；新建默认 `interval_unit=ms` / `priority=2` / `kind_of_task=Cyclic`，`interval` 读回可能是 `t#20ms` 字面量，设成 `'20'` 后读回 `'20'`，比较前先归一化；`KindOfTask` **按名字反射 `System.Type.GetType(...)` 返回 `None`**，要拿已有任务的 `kind_of_task` 当枚举值赋值。② 对象移动 `obj.move(parent, -1)` 返回 `None`，**没有 `get_parent()`**，且每次 `get_children()` 返回的 .NET 包装对象都是新实例、`k is target` 恒假 —— 父节点与移动结果只能靠 `get_children()` 的名字列表核对。③ 保护对象四类 `is_application / is_device / is_task_configuration / is_task`，命中即拒。④ 失败必须回滚（任务 `t.remove()`；移动 `obj.move(old, -1)`）。工具 `scripts/ide/tasks/task_extended.py`；副本实测：建任务 20ms/优先级 5 → 改 50ms/6 → 关工程重开仍是 50/6；`prg_SeqDemo` 移进 `F05_FC` 再移回 `Application`，重开位置正确；受保护对象与不存在对象被明确拒绝。 |
 
 ### 三条元教训
 

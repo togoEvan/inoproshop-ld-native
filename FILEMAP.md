@@ -1,6 +1,6 @@
 # FILEMAP —— 仓库文件地图
 
-> 目的：**新会话 / 三个月后的你**，不读完全部 299 个文件也能在 30 秒内找到该改哪个。
+> 目的：**新会话 / 三个月后的你**，不读完全部 300 个文件也能在 30 秒内找到该改哪个。
 > 整理于 2026-11-26。目录结构若再改，请同步更新本文件。
 
 ---
@@ -13,11 +13,11 @@
 | `AGENTS.md` | **铁律**（验收唯一标准、禁用 API、不抢前台、哪些做法必炸） |
 | `references/native-structure.md` | native XML 的字段级真相（容器不对称、Flags 位、GUID 关系） |
 | `scripts/README.md` | scripts/ 根 **19** 个脚本的分类索引（桥 / 导入 / 自检闸门 / 消息差分 / 打包） |
-| `scripts/ide/README.md` | **149** 个 IDE 内脚本的索引（core 5 / tasks 45 / studies 98） |
+| `scripts/ide/README.md` | **150** 个 IDE 内脚本的索引（core 6 / tasks 46 / studies 98） |
 
 ---
 
-## 2. 文件分布（299 个）
+## 2. 文件分布（300 个）
 
 | 位置 | 数量 | 性质 | 能不能改 |
 |------|------|------|---------|
@@ -26,7 +26,7 @@
 | `references/` | 57 | 知识库正文 10 篇（`native-structure.md` 102KB / `precompile-errors.md` 25KB / `mcp-bridge.md` 18KB / `edge-detection.md` 4KB / `false-pass-catalog.md` 5KB / `mode-cards/step-sequence.md` 4KB / `mode-cards/process-flow.md` 14KB / `corpus/inopack-template-survey.md` 5KB / `corpus/ld-network-shapes.md` 3KB / `corpus/toolchain.md` 4KB）+ `evidence/notask-scope/` 46 个原始日志 + `evidence/hidden-instance-scope/` 1 篇 | 正文要改；evidence 只加不改 |
 | `scripts/`（根） | 19 | 主机侧 Python 3 工具（桥 / 导入 / 5 个自检闸门 / 消息差分 / 打包）+ 三个 .cmd / .ps1；索引见 `scripts/README.md` | 要改 |
 | `scripts/ide/`（core） | 6 | IDE 内 IronPython：守护本体 5 个 + 索引 README | 谨慎改（改完要 reload） |
-| `scripts/ide/tasks/` | 45 | **可复用操作**：验收 / 导入 / 导出 / 建对象 / 任务槽 / GVL | 要改 |
+| `scripts/ide/tasks/` | 46 | **可复用操作**：验收 / 导入 / 导出 / 建对象 / 任务槽 / GVL | 要改 |
 | `scripts/corpus/` | 4 | 语料工具链（主机 py3）：`index_native.py` / `scan_forms.py` / `parse_net.py` / `ld_dump.py`；IDE 内的全量导出在 `ide/tasks/export_all.py` | 要改 |
 | `scripts/ide/studies/` | 98 | 一次性考古脚本，回答问题即冻结 | **不改**（要新写就进 tasks/） |
 | `scripts/examples/` | 38 | native 生成器（可复用库 5 / 已验证样本生成器 13 / 一次性 F0x 考古 20，分类见 `examples/README.md`） | 参考用，别当库 |

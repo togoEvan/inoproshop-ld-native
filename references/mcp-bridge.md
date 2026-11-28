@@ -280,6 +280,27 @@ Win32 GetMenu(hwnd) = 0
 - **分类按需注册**：没 build 过的工程可能一个分类都没有（`cats=0`）；先 `app.build()` + `system.process_messageloop()` 各一次再枚举。
 - **判定**：`VERDICT: PASS|FAIL|UNKNOWN`；`UNKNOWN` 表示读数不可信（无编译分类 / 未知 severity / 通道冲突 / 通用消息截断且无过滤通道），**绝不当通过**。
 - 工具：`scripts/ide/tasks/task_check.py`；主机侧等 ≥10s 再读（`clear_messages` 见铁律 47，注意它是进程级）。
+## 任务配置与对象移动（task_extended.py）
+
+`scripts/ide/tasks/task_extended.py` 提供 6 个操作，全部走「改 → 逐字段读回 → 失败回滚」：
+`create_task` / `set_task` / `task_info` / `list_tasks` / `move_object` / `remove_task`。
+参数 `<BASE>/ipc/ext_args.json`，结果 `<BASE>/ipc/ext_result.json`，日志 `ext.log`，结果块用
+`### RESULT_JSON ### ... ### END_RESULT_JSON ###` 包裹（对齐 inoproshop-mcp 的 emit_result）。
+
+API 真相（1.10.0.3 隐藏桌面实例实测）：
+
+| 事实 | 细节 |
+|---|---|
+| `dir()` 完全不可信 | 脚本对象是 .NET 包装类，`dir()` 只列 Python 侧成员；`create_task` / `move` / `kind_of_task` 都看不见，必须 `hasattr` 或直接调用 |
+| `tc.create_task(name)` 存在 | 新建任务默认 `interval_unit=ms`、`priority=2`、`kind_of_task=Cyclic`；`interval` 读回可能是 `t#20ms` 字面量，设成 `'20'` 后读回 `'20'`，比较前要归一化 |
+| `KindOfTask` 取不到类型 | `System.Type.GetType('...KindOfTask, ScriptEngine')` 返回 `None`（`Enum.Parse(None, ...)` 报「值不能为 null」）；拿已有任务的 `kind_of_task` 当枚举值赋给新任务即可 |
+| 移动没有 `get_parent()` | `obj.move(parent, -1)` 返回 `None`；父节点只能自己 BFS 找，移动结果靠 `get_children()` 名字列表核对 |
+| `is` 比较会失效 | 每次 `get_children()` 返回的 .NET 包装对象都是新实例，`k is target` 恒假（第一版因此报「找不到 prg_SeqDemo 的父节点」） |
+| 保护对象 | `is_application` / `is_device` / `is_task_configuration` / `is_task`，命中即拒绝移动 |
+
+实测（副本 `tc4_test.project`，不碰用户工程）：建 `LeadTestTask2` 20ms/优先级 5 → 改 50ms/6 → 关工程重开后仍是 50/6；
+`prg_SeqDemo` 移进 `F05_FC` 再移回 `Application`，重开后位置正确；移动 `Task Configuration` 与不存在的对象都被明确拒绝；
+`remove_task` 删掉任务后再 `save` 生效。
 ## system.commands
 
 - 索引 91 ≈「检查程序」（tokens=project/buildactiveapp）—— ⚠ 2026-11-26 实测该命令**不产生任何消息**，只读，不能用于验收；验收走 `app.build()`

@@ -12,7 +12,7 @@ daemon 再 `exec` 这里的脚本。
 | `ide/tasks/` | 45 | 验收 / 导入 / 导出 / 建对象 / 任务槽 / GVL 等**可复用操作** | ✅ 是 |
 | `ide/studies/` | 98 | 一次性考古脚本（探 API、探结构、A/B 对照、F0x 普查） | ❌ 否 |
 
-本索引逐条覆盖 **tasks 45/45** 与 **studies 98/98**（2026-11-28 由 git 文件清单核对，无遗漏、无残留）。
+本索引逐条覆盖 **tasks 46/46** 与 **studies 98/98**（2026-11-28 由 git 文件清单核对，无遗漏、无残留）。
 
 **`studies/` 的边界**：它们是为回答某个具体问题临时写的，问题答完就冻结。
 新增能力请写进 `tasks/`，不要往 `studies/` 里堆；验收链路里不要引用 `studies/`，
@@ -41,7 +41,7 @@ daemon 再 `exec` 这里的脚本。
 | `reload_daemon.py` | 热重载：改完 plc_daemon.py 后用它换新，不必重启 IDE |
 | `scan_all_native.py` | 批量导出全工程对象为 native（结构学习语料，只读） |
 
-## tasks/（45 个，可复用）
+## tasks/（46 个，可复用）
 
 | 脚本 | 用途 |
 |------|------|
@@ -66,6 +66,7 @@ daemon 再 `exec` 这里的脚本。
 | `tasks/task_export_fixed.py` | 导出当前工程里的 prg_StartStop（用户手改后版本），供学习其结构 |
 | `tasks/task_export_gvl.py` | 按「文件夹/对象」路径导出单个对象（支持子文件夹），用于观察单对象导出的 SV 结构 |
 | `tasks/task_export_gvl_names.py` | 导出 F01_Variable_GVLVerify 的 GVL 变量名 → GVLVerify 变量名映射 + F04 副本将引用的引脚类型 |
+| `tasks/task_extended.py` | 任务配置与对象移动：create_task / set_task / task_info / list_tasks / move_object / remove_task，改-读回-回滚 |
 | `tasks/task_export_named.py` | 通用：导出 Application 下指定名字的对象（含子对象）为 native，供往返比对 |
 | `tasks/task_export_one.py` | 导出 prg_ReproStudy 到指定路径（供往返比对） |
 | `tasks/task_final_verify.py` | 复核：MainTask 调用列表是否真的摘掉了验证 POU |

@@ -7,6 +7,15 @@
 
 ## [Unreleased]
 
+### 新增（2026-11-28 第 2 件：任务配置与对象移动 task_extended.py）
+
+- 新增 `scripts/ide/tasks/task_extended.py`：6 个操作 `create_task` / `set_task` / `task_info` / `list_tasks` / `move_object` / `remove_task`，
+  统一「改 → 逐字段读回 → 失败回滚」，参数走 `<BASE>/ipc/ext_args.json`，结果用 `### RESULT_JSON ###` 包裹。
+- 实测（1.10.0.3 隐藏桌面实例，副本 `tc4_test.project`，不碰用户工程）：建任务 20ms/优先级 5 → 改 50ms/6 → 关工程重开仍是 50/6；
+  `prg_SeqDemo` 移进 `F05_FC` 再移回 `Application`，重开后位置正确；移动 `Task Configuration`（受保护）与不存在的对象被明确拒绝；`remove_task` 生效。
+- 三条 API 真相：`dir()` 对 .NET 包装对象不可信（接口方法一个都看不见）；`KindOfTask` 按名字反射取不到类型，要用已有任务的 `kind_of_task` 当枚举值；
+  移动没有 `get_parent()`，且 `get_children()` 每次返回新包装实例导致 `is` 比较恒假 —— 结果只能靠名字列表核对。
+- README/SKILL 新增铁律 49；`references/mcp-bridge.md` 新增「任务配置与对象移动」一节；`FILEMAP.md` 与 `scripts/ide/README.md` 同步。
 ### 新增（2026-11-28 task_check v4：双通道交叉校验 + 按 severity 分档判定）
 
 - **问题**：v3 只读可见通道 `get_message_objects(cat)`。单分类最多回传 **100** 条、错误池 **500** 条，超了截断少报；
