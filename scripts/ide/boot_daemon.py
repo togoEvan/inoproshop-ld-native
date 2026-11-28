@@ -146,7 +146,8 @@ else:
 
     if _stale:
         for _n in (u"heartbeat", u"instance.lock", u"daemon.pid",
-                   u"ready.flag", u"cmd.json", u"running.json", u"result.json"):
+                   u"ready.flag", u"cmd.json", u"running.json", u"result.json",
+                   u"uncertain.json"):
             _p = os.path.join(IPC, _n)
             if os.path.exists(_p):
                 try:

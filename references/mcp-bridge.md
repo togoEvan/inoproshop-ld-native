@@ -301,6 +301,64 @@ API 真相（1.10.0.3 隐藏桌面实例实测）：
 实测（副本 `tc4_test.project`，不碰用户工程）：建 `LeadTestTask2` 20ms/优先级 5 → 改 50ms/6 → 关工程重开后仍是 50/6；
 `prg_SeqDemo` 移进 `F05_FC` 再移回 `Application`，重开后位置正确；移动 `Task Configuration` 与不存在的对象都被明确拒绝；
 `remove_task` 删掉任务后再 `save` 生效。
+## 写入锁与未知结果（task_setpou / deadline / uncertain.json）
+
+两个 agent 同时写一个工程时，**后写者会静默覆盖前写者**——改名让位法只防同名冲突，防不住这一层。
+另一半是「超时 ≠ 失败」：IDE 主线程可能还在跑那条命令，重试就是双重执行。这两件事在 `inoproshop-mcp` 里分别叫
+`hash_before_write` 与 `uncertain latch`，本库按同样语义实现。
+
+### 1. 乐观锁写 POU（`scripts/ide/tasks/task_setpou.py`）
+
+```python
+# 主机侧：先读、算哈希、再带着哈希写
+d = bridge.call('get_decl', pou='FC_XOR8')
+c = bridge.call('get_pou', pou='FC_XOR8')
+h = sha256(decl + '\x00' + code)   # 只归一化 CRLF，不做别的清洗
+json.dump({'pou': 'FC_XOR8', 'code': new_code, 'expect_hash': h},
+          open(BASE + '/ipc/setpou_args.json', 'w'), ensure_ascii=False)
+bridge.call('eval_file', path=BASE + '/ide/tasks/task_setpou.py')
+r = json.load(open(BASE + '/ipc/setpou_result.json'))   # ok / hash_before / hash_after / rolled_back
+```
+
+| 情形 | 行为 |
+|------|------|
+| `expect_hash` 不符 | `STALE_WRITE: POU changed since read (expect … got …)`，**一个字都不写** |
+| 写完读回不同 | `READBACK_MISMATCH: decl,code`，逆序 `replace` 回旧值 + `save()`，`rolled_back:ok` |
+| 正常 | `{ok:true, hash_before, hash_after, decl_len, code_len, saved}` |
+
+### 2. deadline：排队过久的命令不执行
+
+`bridge.send()` 自动补 `deadline = now + timeout - 2`。守护领取命令时先看 `deadline`，已过期直接回
+`{ok:false, expired:true, error:'command expired before execution; not applied'}`，**不调用主线程**。
+这挡住的是「上一条卡了 3 分钟、这条在队列里等过期」的重复执行风险。
+
+### 3. uncertain latch：结果未知就锁死
+
+- 触发：`handle_on_main()` 返回 `timeout waiting for main thread`（主线程可能还在跑那条命令）。
+- 落盘：`<BASE>/ipc/uncertain.json` = `{request_id, action, ts, error}`。
+- 拒绝：latch 存在时，除 `ping` / `ack_uncertain` / `stop` 外**全部拒绝**（`uncertain:true, need_ack:true`）。
+  `ping` 必须放行，否则 bridge 的存活看门狗会把守护误判成死了。
+- 解锁：`python scripts/bridge.py ack_uncertain`（人工确认「那条命令的结果到底是什么」之后）。
+- `boot_daemon.py` 判心跳陈旧时会把 `uncertain.json` 一起清掉，避免 IDE 崩溃留下的 latch 永久锁死。
+
+### 4. 实测（2026-11-28，1.10.0.3 隐藏桌面实例 + 副本工程）
+
+| 场景 | 结果 |
+|------|------|
+| 错哈希写 `FC_XOR8` | `STALE_WRITE`，`rolled_back:ok`，内容未变 |
+| 正确哈希写 | `saved:true`，`hash_before=301f29c7…` → `hash_after=993276e7…`，读回多出注释行 |
+| 再用旧哈希写 | 再次 `STALE_WRITE`（拿到的是新哈希） |
+| 过期 `deadline` 的 ping | `expired:true`，命令未执行 |
+| latch 存在时 `get_decl` | bridge 抛 `E_UNCERTAIN`（`need_ack:true`） |
+| latch 存在时 `ping` | 正常 `pong` |
+| `ack_uncertain` 之后 | `{acked:true}`，`get_decl` 恢复 |
+
+### 5. 两个坑
+
+- `eval_file` 里被执行的脚本 `__name__` 是 `__eval__`，**不能用 `if __name__ == '__main__':` 守卫**——
+  脚本会「函数定义完就结束」，`eval_file` 照样回 `ok:true`，但什么都没写（本次实测踩到）。
+- `eval_file` 现在会临时把 `sys.argv[0]` 指向被执行脚本，`_base` 才能按它自己的路径推导 BASE；
+  否则会沿守护脚本的路径算，日志与结果文件落到别处。
 ## system.commands
 
 - 索引 91 ≈「检查程序」（tokens=project/buildactiveapp）—— ⚠ 2026-11-26 实测该命令**不产生任何消息**，只读，不能用于验收；验收走 `app.build()`

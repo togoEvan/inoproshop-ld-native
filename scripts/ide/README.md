@@ -12,7 +12,7 @@ daemon 再 `exec` 这里的脚本。
 | `ide/tasks/` | 45 | 验收 / 导入 / 导出 / 建对象 / 任务槽 / GVL 等**可复用操作** | ✅ 是 |
 | `ide/studies/` | 98 | 一次性考古脚本（探 API、探结构、A/B 对照、F0x 普查） | ❌ 否 |
 
-本索引逐条覆盖 **tasks 46/46** 与 **studies 98/98**（2026-11-28 由 git 文件清单核对，无遗漏、无残留）。
+本索引逐条覆盖 **tasks 47/47** 与 **studies 98/98**（2026-11-28 由 git 文件清单核对，无遗漏、无残留）。
 
 **`studies/` 的边界**：它们是为回答某个具体问题临时写的，问题答完就冻结。
 新增能力请写进 `tasks/`，不要往 `studies/` 里堆；验收链路里不要引用 `studies/`，
@@ -41,7 +41,7 @@ daemon 再 `exec` 这里的脚本。
 | `reload_daemon.py` | 热重载：改完 plc_daemon.py 后用它换新，不必重启 IDE |
 | `scan_all_native.py` | 批量导出全工程对象为 native（结构学习语料，只读） |
 
-## tasks/（46 个，可复用）
+## tasks/（47 个，可复用）
 
 | 脚本 | 用途 |
 |------|------|
@@ -87,6 +87,7 @@ daemon 再 `exec` 这里的脚本。
 | `tasks/task_rt_funcret.py` | 往返验证 prg_FuncRetTest：导出导入后的 POU，比对 Function 框结构是否保持 |
 | `tasks/task_show_state.py` | 显示 MainTask 调用列表 + prg_NoTaskTest 是否存在 |
 | `tasks/task_silent_import.py` | 静默导入 native：改名让位 → import_native → 同 tick 读消息 → 失败回滚 → 删旧 → 保存 |
+| `tasks/task_setpou.py` | **带乐观锁写 POU**：`sha256(decl + \x00 + impl)` 对 `expect_hash`，不符抛 `STALE_WRITE` 一个字不写；写完读回逐字比对（`READBACK_MISMATCH`），失败逆序回滚 + save。参数 `ipc/setpou_args.json`，结果 `setpou_result.json` + `setpou.log` |
 | `tasks/task_snap.py` | 消息池快照（before/after 各一拍）→ 主机侧 delta_snap.py 差分。主判据是 **err_pool**（`get_message_objects(cat, Severity.Error)` 按完整池过滤，不受 100 条截断）；另含 meta.which 自证、err_total/err_addrs 对象级兜底；severity 读不到直接 raise（不产坏快照） |
 | `tasks/task_taskcfg_read.py` | 只读：打印 Task Configuration 每个任务的 pous 列表 + Application 顶层对象名 |
 | `tasks/task_tree_dump.py` | 列出 Application 下的全部对象（含 Folder/GVL），并展开 F01_Variable |

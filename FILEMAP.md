@@ -1,6 +1,6 @@
 # FILEMAP —— 仓库文件地图
 
-> 目的：**新会话 / 三个月后的你**，不读完全部 300 个文件也能在 30 秒内找到该改哪个。
+> 目的：**新会话 / 三个月后的你**，不读完全部 301 个文件也能在 30 秒内找到该改哪个。
 > 整理于 2026-11-26。目录结构若再改，请同步更新本文件。
 
 ---
@@ -13,20 +13,20 @@
 | `AGENTS.md` | **铁律**（验收唯一标准、禁用 API、不抢前台、哪些做法必炸） |
 | `references/native-structure.md` | native XML 的字段级真相（容器不对称、Flags 位、GUID 关系） |
 | `scripts/README.md` | scripts/ 根 **19** 个脚本的分类索引（桥 / 导入 / 自检闸门 / 消息差分 / 打包） |
-| `scripts/ide/README.md` | **150** 个 IDE 内脚本的索引（core 6 / tasks 46 / studies 98） |
+| `scripts/ide/README.md` | **151** 个 IDE 内脚本的索引（core 6 / tasks 47 / studies 98） |
 
 ---
 
-## 2. 文件分布（300 个）
+## 2. 文件分布（301 个）
 
 | 位置 | 数量 | 性质 | 能不能改 |
 |------|------|------|---------|
 | 根目录 | 10 | 门面 + 铁律 + 变更日志 + 本文件 + 同步脚本 | README/AGENTS/CHANGELOG 要改；LICENSE 不改 |
 | `docs/` | 2 | 面向使用者的长文档（`usage.md` 操作手册、`iteration.md` 迭代史） | 要改 |
-| `references/` | 57 | 知识库正文 10 篇（`native-structure.md` 102KB / `precompile-errors.md` 25KB / `mcp-bridge.md` 18KB / `edge-detection.md` 4KB / `false-pass-catalog.md` 5KB / `mode-cards/step-sequence.md` 4KB / `mode-cards/process-flow.md` 14KB / `corpus/inopack-template-survey.md` 5KB / `corpus/ld-network-shapes.md` 3KB / `corpus/toolchain.md` 4KB）+ `evidence/notask-scope/` 46 个原始日志 + `evidence/hidden-instance-scope/` 1 篇 | 正文要改；evidence 只加不改 |
+| `references/` | 57 | 知识库正文 10 篇（`native-structure.md` 102KB / `precompile-errors.md` 25KB / `mcp-bridge.md` 21KB / `edge-detection.md` 4KB / `false-pass-catalog.md` 5KB / `mode-cards/step-sequence.md` 4KB / `mode-cards/process-flow.md` 14KB / `corpus/inopack-template-survey.md` 5KB / `corpus/ld-network-shapes.md` 3KB / `corpus/toolchain.md` 4KB）+ `evidence/notask-scope/` 46 个原始日志 + `evidence/hidden-instance-scope/` 1 篇 | 正文要改；evidence 只加不改 |
 | `scripts/`（根） | 19 | 主机侧 Python 3 工具（桥 / 导入 / 5 个自检闸门 / 消息差分 / 打包）+ 三个 .cmd / .ps1；索引见 `scripts/README.md` | 要改 |
 | `scripts/ide/`（core） | 6 | IDE 内 IronPython：守护本体 5 个 + 索引 README | 谨慎改（改完要 reload） |
-| `scripts/ide/tasks/` | 46 | **可复用操作**：验收 / 导入 / 导出 / 建对象 / 任务槽 / GVL | 要改 |
+| `scripts/ide/tasks/` | 47 | **可复用操作**：验收 / 导入 / 导出 / 建对象 / 任务槽 / GVL | 要改 |
 | `scripts/corpus/` | 4 | 语料工具链（主机 py3）：`index_native.py` / `scan_forms.py` / `parse_net.py` / `ld_dump.py`；IDE 内的全量导出在 `ide/tasks/export_all.py` | 要改 |
 | `scripts/ide/studies/` | 98 | 一次性考古脚本，回答问题即冻结 | **不改**（要新写就进 tasks/） |
 | `scripts/examples/` | 38 | native 生成器（可复用库 5 / 已验证样本生成器 13 / 一次性 F0x 考古 20，分类见 `examples/README.md`） | 参考用，别当库 |
@@ -40,6 +40,7 @@
 |-------|------|
 | 写一个新 POU 进工程 | `scripts/do_replace.py`（调 `ide/tasks/task_silent_import.py`） |
 | 验收一次改动 | `ide/tasks/task_check.py`（**必须先 build 再等 ≥10s**，见 §4） |
+| 改 POU 源码（带乐观锁、防覆盖） | `ide/tasks/task_setpou.py`；超时/未知结果语义见 `references/mcp-bridge.md` |
 | 只触发构建 | `ide/tasks/task_build.py` |
 | 导入前拦结构错 | `scripts/check_slots.py` / `check_symbols.py` / `ld_logic.py` |
 | 从零生成一段 LD 的 native | `scripts/examples/make_ld_learn.py`（最全）、`make_gvl.py`（GVL/Folder） |

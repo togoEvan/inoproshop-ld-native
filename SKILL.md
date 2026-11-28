@@ -13,7 +13,7 @@ description: 汇川 InoProShop（CODESYS V3.5 SP11 系）LD 梯形图 native XML
 
 ## 铁律（违反必踩坑）
 
-49 条，按主题分六组；编号与 `README.md` 一致（沿用历史编号、不重排）。完整论证见 `README.md`。
+50 条，按主题分六组；编号与 `README.md` 一致（沿用历史编号、不重排）。完整论证见 `README.md`。
 > **2026-11-28 修重号**：A 段原 25 / 26 → **45 / 46**，F 段原 41 → **47**（曾与 D 段 25 / 26、B 段 41 撞号）。
 
 ### A. 验收与消息
@@ -31,6 +31,7 @@ description: 汇川 InoProShop（CODESYS V3.5 SP11 系）LD 梯形图 native XML
 48. **验收要双通道交叉校验，单通道的 `errors=0` 随时可能是读漏**。通道 1 `get_message_objects(cat)` 全量，单分类最多 100 条、错误池 500 条，超了截断少报；通道 2 `get_message_objects(cat, Severity.Error / FatalError)` 在完整池上过滤（1.10 实测 all=540 / Error=502、相加等于 all），截断后仍精确。**取两通道较大值**：过滤通道坏（SP19 实测 2 错误只回 1 条 warning、0 错误）不能把错误洗成 0，可见通道被截断时由过滤补。未截断分类要求两通道相等，不等 → `UNKNOWN`；已截断分类只做单向校验（过滤 ≥ 可见）。**分类按需注册**：刚打开的工程可能一个都没有 → 先 build + pump 一次再枚举，仍空才判 `UNKNOWN`，绝不当 0 错误。工具 `task_check.py` v4 末行 `VERDICT: PASS|FAIL|UNKNOWN`，`UNKNOWN` 不是通过。
 
 49. **任务与对象移动走「改 → 逐字段读回 → 失败回滚」，且不能靠 `dir()` / `is` 判断**。① `TaskConfiguration.create_task(name)` 存在（`dir()` 里看不见，`hasattr` 或直接调用才有效）；新建默认 `interval_unit=ms` / `priority=2` / `kind_of_task=Cyclic`，`interval` 读回可能是 `t#20ms` 字面量，设成 `'20'` 后读回 `'20'`，比较前先归一化；`KindOfTask` **按名字反射 `System.Type.GetType(...)` 返回 `None`**，要拿已有任务的 `kind_of_task` 当枚举值赋值。② 对象移动 `obj.move(parent, -1)` 返回 `None`，**没有 `get_parent()`**，且每次 `get_children()` 返回的 .NET 包装对象都是新实例、`k is target` 恒假 —— 父节点与移动结果只能靠 `get_children()` 的名字列表核对。③ 保护对象四类 `is_application / is_device / is_task_configuration / is_task`，命中即拒。④ 失败必须回滚（任务 `t.remove()`；移动 `obj.move(old, -1)`）。工具 `scripts/ide/tasks/task_extended.py`；副本实测：建任务 20ms/优先级 5 → 改 50ms/6 → 关工程重开仍是 50/6；`prg_SeqDemo` 移进 `F05_FC` 再移回 `Application`，重开位置正确；受保护对象与不存在对象被明确拒绝。
+50. **写源码要带乐观锁，超时后先锁死（`task_setpou.py` / `deadline` / `uncertain.json`）**。写前算 `sha256(decl + '\x00' + impl)` 与读到的 `expect_hash` 比对，不符抛 `STALE_WRITE` 且一个字都不写；写完读回逐字比对（`READBACK_MISMATCH`），不符逆序 `replace` 回旧值 + `save()` 并报 `rolled_back`。bridge 每条命令自动带 `deadline = now + timeout - 2`，过期命令守护直接拒（`expired:true`）不执行。守护把 `timeout waiting for main thread` 判为结果未知，写 `ipc/uncertain.json` latch；latch 存在时除 `ping` / `ack_uncertain` / `stop` 外全拒，bridge 抛 `E_UNCERTAIN`，需 `python bridge.py ack_uncertain` 解锁（`boot_daemon.py` 判陈旧时清除）。`eval_file` 里 `__name__` 是 `__eval__`，不能用 `__main__` 守卫（否则静默空跑）；`eval_file` 会临时改写 `sys.argv[0]` 让 `_base` 按被执行脚本自身路径推导 BASE。
 
 ### B. 结构合法性
 

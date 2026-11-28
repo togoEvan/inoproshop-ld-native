@@ -7,6 +7,20 @@
 
 ## [Unreleased]
 
+### 新增（2026-11-28 第 3 件：写入锁 task_setpou + 守护 deadline / uncertain latch）
+
+- 新增 `scripts/ide/tasks/task_setpou.py`：带乐观锁的 POU 源码写入。写前 `sha256(decl + '\x00' + impl)` 与 `expect_hash` 比对，
+  不符抛 `STALE_WRITE` 且**一个字都不写**；写完读回逐字比对（`READBACK_MISMATCH`），失败把 decl/impl 逆序 `replace` 回旧值 + `save()`，
+  结果里报 `rolled_back`。参数 `<BASE>/ipc/setpou_args.json`，结果用 `### RESULT_JSON ###` 包裹。
+- `scripts/ide/plc_daemon.py` 新增两件事：① bridge 传的 `deadline`（float 秒）已过期 → 回 `expired:true` 且**不执行**（排队过久的命令宁可丢弃也不双重执行）；
+  ② 执行结果含 `timeout` 时写 `ipc/uncertain.json` latch，latch 存在时除 `ping` / `ack_uncertain` / `stop` 外一律拒绝（回 `uncertain:true, need_ack:true`），`ack_uncertain` 删 latch 解锁。
+- `scripts/bridge.py` 新增 `E_UNCERTAIN`，`send()` 自动补 `deadline = now + timeout - 2`，收到 `uncertain` 结果抛 `E_UNCERTAIN`（带 `need_ack:true`）。
+- `scripts/ide/boot_daemon.py`：判心跳陈旧时把 `uncertain.json` 一并清掉（否则 IDE 崩溃留下的 latch 会把后续所有命令锁死）。
+- **修复**：`eval_file` 里被执行的脚本 `__name__` 是 `__eval__`，`if __name__ == '__main__'` 守卫会导致「函数全定义完就结束、返回 ok 但什么都没做」；
+  同时 `eval_file` 现在临时改写 `sys.argv[0]`，让 `_base` 按被执行脚本自身路径推导 BASE（此前会沿守护脚本路径算）。
+- 实测（1.10.0.3 隐藏桌面实例，副本 `test.project`，不碰用户工程）：`FC_XOR8` 错哈希 → `STALE_WRITE`（未写、`rolled_back:ok`）→ 正确哈希写入 `saved:true`、`hash_after` 变化、读回带新注释 →
+  再用旧哈希 → 再次 `STALE_WRITE`（乐观锁生效）；带过期 `deadline` 的 ping 回 `expired:true`；写 `uncertain.json` 后 `get_decl` 抛 `E_UNCERTAIN`、`ping` 正常、`ack_uncertain` 后恢复。
+- README/SKILL 新增铁律 50；`references/mcp-bridge.md` 新增「写入锁与未知结果」一节；`FILEMAP.md` 与 `scripts/ide/README.md` 同步。
 ### 新增（2026-11-28 第 2 件：任务配置与对象移动 task_extended.py）
 
 - 新增 `scripts/ide/tasks/task_extended.py`：6 个操作 `create_task` / `set_task` / `task_info` / `list_tasks` / `move_object` / `remove_task`，

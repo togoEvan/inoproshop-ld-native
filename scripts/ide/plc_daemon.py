@@ -21,6 +21,7 @@ BASE = _base.resolve_base()
 CMD_DIR = _base.ensure_ipc(BASE)
 CMD_FILE = os.path.join(CMD_DIR, "cmd.json")
 CMD_RUNNING = os.path.join(CMD_DIR, "running.json")
+UNCERTAIN_FILE = os.path.join(CMD_DIR, "uncertain.json")
 RES_FILE = os.path.join(CMD_DIR, "result.json")
 STOP_FILE = os.path.join(CMD_DIR, "stop.flag")
 READY_FILE = os.path.join(CMD_DIR, "ready.flag")
@@ -690,7 +691,16 @@ def a_eval_file(cmd):
         return {u"ok": False, u"error": u"read err: %s" % e}
     g = {u"projects": projects, u"online": online, u"system": system,
          u"__name__": u"__eval__"}
-    exec(compile(src, path, "exec"), g)
+    # 让被执行的脚本按「它自己的路径」推导 BASE（否则 _base 会沿守护脚本的路径算）
+    _old0 = sys.argv[0] if len(sys.argv) > 0 else u""
+    try:
+        sys.argv[0] = path
+        exec(compile(src, path, "exec"), g)
+    finally:
+        try:
+            sys.argv[0] = _old0
+        except Exception:
+            pass
     return {u"ok": True, u"done": True}
 
 
@@ -865,15 +875,44 @@ def loop():
                             _gen_at_send = int(cmd.get(u"cancel_gen_at_send") or 0)
                         except Exception:
                             _gen_at_send = 0
+                        _action = cmd.get(u"action")
                         log(u"CMD: %s (run_id=%s gen=%s)"
-                            % (cmd.get("action"), _run_id, _gen_at_send))
+                            % (_action, _run_id, _gen_at_send))
 
-                        # 领取后、执行前先看一眼：命令排队期间就被取消了？
-                        if read_cancel_gen() > _gen_at_send:
-                            res = {u"ok": False, u"cancelled": True,
-                                   u"error": u"cancelled before execution"}
-                            log(u"CMD cancelled before execution")
+                        res = None
+                        if _action == u"ack_uncertain":
+                            # 人工确认「上一条结果未知」后解锁
+                            try:
+                                if os.path.exists(UNCERTAIN_FILE):
+                                    os.remove(UNCERTAIN_FILE)
+                            except Exception, e:
+                                log(u"ack remove err: %s" % e)
+                            res = {u"ok": True, u"acked": True}
+                            log(u"CMD ack_uncertain")
+                        elif (_action not in (u"ping", u"ack_uncertain", u"stop")) \
+                                and os.path.exists(UNCERTAIN_FILE):
+                            # 上一条命令超时、主线程可能还在跑：新命令一律拒绝，
+                            # 必须 ack_uncertain 才解锁（学 inoproshop-mcp 的 latch）
+                            res = {u"ok": False, u"uncertain": True, u"need_ack": True,
+                                   u"error": u"previous command outcome UNKNOWN; "
+                                             u"run bridge.py ack_uncertain first"}
+                            log(u"CMD refused: uncertain latch present")
                         else:
+                            _dl = 0
+                            try:
+                                _dl = float(cmd.get(u"deadline") or 0)
+                            except Exception:
+                                _dl = 0
+                            if _dl and time.time() > _dl:
+                                res = {u"ok": False, u"expired": True,
+                                       u"error": u"command expired before execution; not applied"}
+                                log(u"CMD expired before execution")
+                            elif read_cancel_gen() > _gen_at_send:
+                                res = {u"ok": False, u"cancelled": True,
+                                       u"error": u"cancelled before execution"}
+                                log(u"CMD cancelled before execution")
+
+                        if res is None:
                             try:
                                 res = handle_on_main(cmd)
                             except Exception, e:
@@ -881,18 +920,24 @@ def loop():
                                        u"traceback": traceback.format_exc()}
                             except BaseException, e:
                                 # ⚠ 关键：IronPython 里 SystemExit / KeyboardInterrupt
-                                #   不继承 Exception。被 eval_file 执行的脚本若
-                                #   raise SystemExit（例如再注入一次 daemon 时
-                                #   _acquire_instance() 判定「已有实例存活」），
-                                #   会穿透 except Exception 一路抛出，把本守护
-                                #   的轮询线程直接干掉 —— 实测 2026-11-25：
-                                #   注入后心跳 0.7s 内停摆、bridge 全部超时。
-                                #   所以命令执行层必须兜到 BaseException。
+                                #   不继承 Exception，会穿透并杀掉守护线程 —— 必须兜到 BaseException
                                 res = {u"ok": False,
                                        u"error": u"%s: %s" % (type(e).__name__, e),
                                        u"traceback": traceback.format_exc()}
                                 log(u"CMD raised %s: %s" % (type(e).__name__, e))
 
+                        # 超时 = 结果未知：写 latch，后续命令全部拒绝直到 ack
+                        if (not res.get(u"ok")) and (u"timeout" in unicode(res.get(u"error") or u"")):
+                            try:
+                                dump_json(UNCERTAIN_FILE, {
+                                    u"request_id": _run_id,
+                                    u"action": _action,
+                                    u"ts": time.time(),
+                                    u"error": unicode(res.get(u"error")),
+                                })
+                                log(u"UNCERTAIN latch written (run_id=%s)" % _run_id)
+                            except Exception, e:
+                                log(u"write latch err: %s" % e)
                         # ── 结果如实回带 run_id + 取消状态
                         if not isinstance(res, dict):
                             res = {u"result": res}

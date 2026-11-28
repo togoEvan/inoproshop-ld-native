@@ -31,6 +31,7 @@ E_TIMEOUT = "E_TIMEOUT"                        # 命令超时（守护还活着�
 E_CANCELLED = "E_CANCELLED"                    # 命令被 cancel() 取消
 E_LOCK_TIMEOUT = "E_LOCK_TIMEOUT"              # 抢不到进程内互斥锁
 E_BAD_RESULT = "E_BAD_RESULT"                  # 结果文件存在但解析不出来
+E_UNCERTAIN = "E_UNCERTAIN"                    # 上一条命令结果未知，需先 ack_uncertain
 E_TRIGGER_FAILED = "E_TRIGGER_FAILED"          # 注入脚本执行失败
 
 ERRORS = {
@@ -41,6 +42,7 @@ ERRORS = {
     E_CANCELLED: "命令已被取消",
     E_LOCK_TIMEOUT: "另一个 bridge 调用持有锁且未释放",
     E_BAD_RESULT: "结果文件无法解析",
+    E_UNCERTAIN: "上一条命令结果未知（latch 未清），先跑 bridge.py ack_uncertain",
     E_TRIGGER_FAILED: "触发 IDE 执行守护脚本失败",
 }
 
@@ -396,6 +398,8 @@ def send(payload, timeout=180):
     payload["run_id"] = run_id
     # 让守护知道本命令对应的取消基线（守护也会自己读，这里显式带上更可靠）
     payload.setdefault("cancel_gen_at_send", current_cancel_gen())
+    # 守护侧据此丢弃排队过久的命令（结果未知比双重执行安全）
+    payload.setdefault("deadline", time.time() + max(1.0, float(timeout) - 2.0))
 
     with _IpcLock(LOCK):
         # 清掉可能残留的上一轮结果（有 run_id 对账兜底，这里只是减少噪声）
@@ -421,6 +425,9 @@ def send(payload, timeout=180):
                     data["legacy_daemon"] = True
                     return data
                 if got == run_id:
+                    if data.get("uncertain"):
+                        raise BridgeError(E_UNCERTAIN, data.get("error") or "",
+                                          run_id=run_id, need_ack=True)
                     return data
                 # 迟到的上一轮结果 —— 丢弃，继续等本轮
                 continue
