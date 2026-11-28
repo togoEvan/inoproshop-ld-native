@@ -394,6 +394,7 @@ MOVE 框（功能框）有两个合法位置：
 其他：
 
 - NETITEM.OutputItems 可挂**多个线圈**
+- **线圈的载体只有两种**：NETITEM（`{9873c309}`）的 `OutputItems`，或触点 PIN（`{9de7f100}`）的 `OutputItems`。**挂到功能框（`{acfc6f68}`，如 AND 框）的 `OutputItems` 上，IDE 只画一个空占位小方块**，预编译 / 编译仍然是 0 错误（2026-11-27 实测；A00 语料分布：NETITEM 15 处 / 触点 PIN 5 处 / 功能框 0 处）。生成器用 `netitem(条件, [线圈...])` 包一层。
 - 分支组的 `Input` 槽可放一个公共前缀触点（如 `TRUE`），实现「公共条件只画一次 + 竖线分叉」
 
 ## 11 ENO 引脚
@@ -1518,6 +1519,21 @@ Gv_xRetain2  :BOOL;          →  Gv_xRetain2 AT %MB146918 : BOOL;
 2. **菜单「检查程序」本身是只读的**，不产生任何消息，**不能用于验收**。
 3. **预编译覆盖全部 POU**（含未挂任务的），**编译只覆盖挂进任务的**。
    所以「build 的编译分类干净」不能说明未挂任务的 POU 没问题。
+
+⚠ **环境差异（2026-11-28 实测，隐藏桌面实例）**：上面第 3 条只在**交互式 IDE**（用户自己
+打开工程、消息分类已注册）成立。用 `HiddenLaunch.exe` + `--runscript` 起的隐藏实例上，
+`app.build()` 之后**只出现编译分类 `97f48d64`，预编译分类 `217bc73e` 从头到尾不出现**，
+未挂任务的 POU **一条消息都不产生**：
+
+| 动作 | 97f48d64 | 217bc73e | 未挂 POU 的 ZZZ 命中 |
+|---|---|---|---|
+| 导入 A、B，都不挂任务 → build（28s） | n=104 err=0 | 分类不存在 | A=0 / B=0 |
+| 把 B 挂进 MainTask → build（9s） | n=106 err=**2** | 分类不存在 | B=2 / A=0 |
+| 再把 A 也挂进 MainTask → build | n=108 err=**4** | 分类不存在 | A=2 / B=2 |
+
+⇒ **隐藏实例不做预编译语义检查，只做编译**。所以隐藏实例上的验收**必须先把目标 POU
+挂进 MainTask 再 build**（`scripts/ide/tasks/task_mount_assert.py` 就是这道前置断言），
+否则漏检是静默的（0 错误、0 消息）。证据：`references/evidence/hidden-instance-scope/README.md`。
 
 要让 POU 真正参与构建：
 

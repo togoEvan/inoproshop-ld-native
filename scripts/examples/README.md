@@ -1,4 +1,4 @@
-# scripts/examples/ —— native 生成器（38 个）
+# scripts/examples/ —— native 生成器（38 个 + 本索引）
 
 这里都是**主机侧 Python 3** 脚本：读现有 native / 从零构造节点 → 生成新的 `.native` → 交给 `scripts/do_replace.py` 导入。
 节点构造的公共层在 [`ldgen.py`](ldgen.py)，它才是唯一需要当「库」用的文件。

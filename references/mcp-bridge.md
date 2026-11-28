@@ -239,7 +239,7 @@ Win32 GetMenu(hwnd) = 0
 
 - `system.get_messages()` → 返回字符串数组（DeprecationWarning），**不可用**
 - `system.get_message_objects(category_guid)` → 返回 ScriptMessage 对象，**唯一正确方式**
-- 消息对象属性：`severity` / `text` / `object.get_name()` / `position`
+- 消息对象属性：`severity` / `text` / `object.get_name()` / `position`。⚠ **属性名必须小写**（用 `GetType().GetProperty('severity')` 反射取）；写成大写 `Severity` / `Text` 会静默拿到 `None`，于是 `err=0` 的假通过。**取不到要 `raise`，不要当 0 条处理**。
 - **动态枚举全部分类，不要只读硬编码的几个**（学自 inoproshop-mcp，2026-11-25）：
   `system.get_message_categories()` 先枚举运行时暴露的**每一个**分类，全量扫描。
   大工程里编译错误会落到已知分类之外的分类（Library Manager、POU 专属、工程树等），

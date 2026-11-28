@@ -7,6 +7,24 @@
 
 ## [Unreleased]
 
+### 修复（2026-11-28 库内容审计：5 处纠错 + 隐藏实例作用域实测）
+
+- **审计口径**：拉全库 **21** 个 md/txt（含 AGENTS / README / SKILL / FILEMAP / CHANGELOG / docs / references 全部 / 三个 scripts README），
+  正则扫 13 类可疑模式（电源流 / 触点 `Flags=2` / 值域 / `R_TRIG` / `InputFlags` / `IsCoil` / `create_pou` / `CallType=Action` /
+  `clear_messages` / `get_messages` / `get_symbols` / `get_name` / 旧数字）。**已纠正过的三处**（Flags=16 不是「电源流引脚」、
+  触点值域是 0/1/16 且无边沿语义、边沿要用 `InputFlags[0]=16`）与 `CallType=Action` 的 `Instance.Operand` 必须 `<Null/>`，**确认无需再改**。
+- **`references/native-structure.md`**：线圈段补「**合法载体只有两种** —— NETITEM.OutputItems 或触点 PIN 的 OutputItems；
+  挂到功能框（`G_BOX` `acfc6f68`）上 IDE 只画**空占位小方块**，编译仍 0 错误」。附 A00 语料父节点分布（NETITEM **15** / 触点 PIN **5** / 功能框 **0**）。
+- **`references/mcp-bridge.md`**：消息对象属性行补「属性名必须**小写**（`GetType().GetProperty('severity')` 反射取）；
+  写 `Severity` / `Text` 会静默 `None` → **err=0 假通过**；取不到就 `raise`，不要当成 0 条」。
+- **`README.md` / `SKILL.md` 铁律 18**：补第三条「**导入失败的原因不看编译分类，看 `194b48a9` 脚本消息的新增 Error**」。
+- **`README.md` / `SKILL.md` 铁律 47**：补「`clear_messages` 是**进程级**，同一 IDE 里别的守护/脚本的消息会被一起清掉，与他人共用实例时不要清」。
+- **新增 `references/evidence/hidden-instance-scope/README.md`** + 铁律 24 补**环境差异**：`HiddenLaunch` + `--runscript` 起的隐藏实例上，
+  `app.build()` 之后**只注册编译分类 `97f48d64`，预编译 `217bc73e` 不存在**，未挂任务的 POU **一条消息都不产生**。
+  实测（A/B 两个引用未定义标识符的样本）：都不挂任务 → `n=104 err=0`；B 挂上 → `n=106 err=2`（只有 B）；A 也挂上 → `n=108 err=4`。
+  ⇒ **隐藏实例验收必须先挂 MainTask 再 build**（`task_mount_assert.py` 是前置断言），不能指望预编译兜底。
+- **`scripts/examples/README.md`**：标题改「native 生成器（38 个 + 本索引）」。
+- **`FILEMAP.md`**：文件数 296 → **299**、`references/` 56 → **57**，新增 evidence 段。
 ### 整理（2026-11-28，目录索引补齐 + 文档数字对齐 + 铁律修重号）
 
 - **新增 `scripts/README.md`**：scripts/ 根 **19** 个主机侧脚本分五组索引（桥与守护 5 / 导入 3 / 自检闸门 5 / 消息差分 2 / 打包与诊断 4），

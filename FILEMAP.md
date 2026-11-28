@@ -1,6 +1,6 @@
 # FILEMAP —— 仓库文件地图
 
-> 目的：**新会话 / 三个月后的你**，不读完全部 296 个文件也能在 30 秒内找到该改哪个。
+> 目的：**新会话 / 三个月后的你**，不读完全部 299 个文件也能在 30 秒内找到该改哪个。
 > 整理于 2026-11-26。目录结构若再改，请同步更新本文件。
 
 ---
@@ -17,13 +17,13 @@
 
 ---
 
-## 2. 文件分布（296 个）
+## 2. 文件分布（299 个）
 
 | 位置 | 数量 | 性质 | 能不能改 |
 |------|------|------|---------|
 | 根目录 | 10 | 门面 + 铁律 + 变更日志 + 本文件 + 同步脚本 | README/AGENTS/CHANGELOG 要改；LICENSE 不改 |
 | `docs/` | 2 | 面向使用者的长文档（`usage.md` 操作手册、`iteration.md` 迭代史） | 要改 |
-| `references/` | 56 | 知识库正文 10 篇（`native-structure.md` 102KB / `precompile-errors.md` 25KB / `mcp-bridge.md` 18KB / `edge-detection.md` 4KB / `false-pass-catalog.md` 5KB / `mode-cards/step-sequence.md` 4KB / `mode-cards/process-flow.md` 14KB / `corpus/inopack-template-survey.md` 5KB / `corpus/ld-network-shapes.md` 3KB / `corpus/toolchain.md` 4KB）+ `evidence/notask-scope/` 46 个原始日志 | 正文要改；evidence 只加不改 |
+| `references/` | 57 | 知识库正文 10 篇（`native-structure.md` 102KB / `precompile-errors.md` 25KB / `mcp-bridge.md` 18KB / `edge-detection.md` 4KB / `false-pass-catalog.md` 5KB / `mode-cards/step-sequence.md` 4KB / `mode-cards/process-flow.md` 14KB / `corpus/inopack-template-survey.md` 5KB / `corpus/ld-network-shapes.md` 3KB / `corpus/toolchain.md` 4KB）+ `evidence/notask-scope/` 46 个原始日志 + `evidence/hidden-instance-scope/` 1 篇 | 正文要改；evidence 只加不改 |
 | `scripts/`（根） | 19 | 主机侧 Python 3 工具（桥 / 导入 / 5 个自检闸门 / 消息差分 / 打包）+ 三个 .cmd / .ps1；索引见 `scripts/README.md` | 要改 |
 | `scripts/ide/`（core） | 6 | IDE 内 IronPython：守护本体 5 个 + 索引 README | 谨慎改（改完要 reload） |
 | `scripts/ide/tasks/` | 45 | **可复用操作**：验收 / 导入 / 导出 / 建对象 / 任务槽 / GVL | 要改 |
@@ -92,4 +92,5 @@
 - `scripts/ide/studies/`（98 个）：探 API / 探结构 / A-B 对照 / F0x 普查的考古脚本，多数硬编码了某个工程的对象名（`prg_GvlVerifyUse`、`F08_AxisGroup_Verify`、`F10_POU_EthercatTask_Verify`…），换工程即失效。**结论要沉淀到 `references/`，脚本本身冻结。**
 - `scripts/examples/` 里 `make_f0x_*`、`make_axis_call.py`、`make_cam1_curve.py`、`analyze_*`：针对 InoPack 模板特定对象写的生成器。通用度较高的只有 `make_ld_learn.py`、`make_gvl.py`、`make_full8.py`、`make_fix45.py`、`make_fb_call_test.py`、`make_packml_cmd_test.py`、`make_func_return_test.py`、`make_repro_study.py`。
 - `references/evidence/notask-scope/`（46 个日志）：`task_exp_notask` 那轮「未挂任务的 POU 不参与编译」的原始证据，只读存档。
+- `references/evidence/hidden-instance-scope/`（1 篇）：2026-11-28 隐藏桌面实例实测 —— 该环境只注册编译分类、未挂任务 POU 静默漏检，验收必须先挂 MainTask。
 - `ipc/`、`work/`、`tmp/`：运行时产物，已在 `.gitignore` 里，不要提交。
