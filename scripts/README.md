@@ -75,5 +75,5 @@ python scripts\check_ipy_syntax.py scripts/ide    # 改完 IDE 脚本必跑
 ## 维护约定
 
 1. 新增主机侧脚本 → 放 `scripts/` 根，并在上表登记用途一句话。
-2. 新增 IDE 内脚本 → 放 `scripts/ide/tasks/`（可复用）或 `studies/`（一次性考古），见 `ide/README.md`。
+2. 新增 IDE 内脚本 → 放 `scripts/ide/tasks/`，见 `ide/README.md`；一次性探针不进库。
 3. 自检闸门的规则改动必须拿真实工程回归一遍（铁律 22：校验脚本本身也会误报）。

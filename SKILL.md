@@ -25,7 +25,7 @@ description: 汇川 InoProShop（CODESYS V3.5 SP11 系）LD 梯形图 native XML
 17. **不要在 IDE 脚本里 `sleep()` 或轮询消息**——IDE 脚本跑在主线程，会把界面冻死。IDE 侧只做「读一次、写文件、立刻返回」（<1s），**计时与重试全部放主机侧 Python**。
 18. **消息来源只有两个可靠通道**：① `import_native` 导入瞬间；② `app.build()`。**编译/检查类菜单命令走缓存，读不到真实错误**；菜单「检查程序」`ab02b3c3` 实测**不产生任何消息**。⚠ 别指望 `clear_messages` 后消息自己回来；「改一个字符再改回」强制变脏实测无效。③ 导入失败的原因不看编译分类，看 `194b48a9`「脚本消息」的新增 Error（见 46）。
 23. **从未构建过的工程，编译分类 `97f48d64` 不存在**。必须先跑一次 `app.build()`（**不 clear**）才出现第 3 个分类。别因分类不存在就当 0 错误通过。真实工程构建后剩下的错误不一定是你的——先 `grep 你的 POU 名`，为 0 即无关。
-24. **两分类作用域不同（2026-11-26 实测）**：① **预编译**在 `build()` 阶段覆盖 **Application 下全部 POU**，与挂不挂任务**无关**；② **编译**只含**挂进任务调用列表**的 POU。负样本：未挂任务 → 预编译 ZZZ **1** / 编译 **0**；挂上 MainTask → 预编译 **1** / 编译 **2**。⚠ 预编译消息**异步补齐**：`clear_messages(cat)`（**必须传分类参数**，无参报 `takes exactly 1 argument`）后立刻读 0 条，约 10s 后才 101 条；空闲 20s 仍是 0 条（不自恢复）。⚠ **隐藏桌面实例差异（2026-11-28 实测）**：`HiddenLaunch` + `--runscript` 起的实例上 `app.build()` 后只出现编译分类 `97f48d64`，预编译分类 `217bc73e` 从不出现 —— 未挂任务的 POU 一条消息都不产生（A 未挂 hit=0 → 挂进 MainTask 后 2 条）。**隐藏实例验收必须先挂 MainTask 再 build**。证据：references/evidence/hidden-instance-scope/README.md。
+24. **两分类作用域不同（2026-11-26 实测）**：① **预编译**在 `build()` 阶段覆盖 **Application 下全部 POU**，与挂不挂任务**无关**；② **编译**只含**挂进任务调用列表**的 POU。负样本：未挂任务 → 预编译 ZZZ **1** / 编译 **0**；挂上 MainTask → 预编译 **1** / 编译 **2**。⚠ 预编译消息**异步补齐**：`clear_messages(cat)`（**必须传分类参数**，无参报 `takes exactly 1 argument`）后立刻读 0 条，约 10s 后才 101 条；空闲 20s 仍是 0 条（不自恢复）。⚠ **隐藏桌面实例差异（2026-11-28 实测）**：`HiddenLaunch` + `--runscript` 起的实例上 `app.build()` 后只出现编译分类 `97f48d64`，预编译分类 `217bc73e` 从不出现 —— 未挂任务的 POU 一条消息都不产生（A 未挂 hit=0 → 挂进 MainTask 后 2 条）。**隐藏实例验收必须先挂 MainTask 再 build**。证据：`references/native-structure.md`「隐藏实例」节的读数表（原始日志已归档，git 014a4ab）。
 45. **消息截断阈值按 severity 各自计数：Warning 100、Error 500**（隐藏实例灌 1300 个未定义标识符 → Error 恰 501 = 500 实体 + 1 提示行）。**提示措辞不统一**：警告/消息级是「多于N个警告/消息发生：跳过更多的…」，错误级**不带「发生」**——原文 `多于500个错误：跳过更多的错误信息`。按文本判截断的正则不能锚定「发生」，否则 >500 错误看不见截断 → 条数差恒 0 → **假 PASS**。
 46. **判导入成败要看三条，`2af7707f` 不是结果台账**：① `import_native()` 抛不抛异常——**不可靠**（同 GUID + 同名二次导入会**卡死 6 分钟**，不返回不报错）；② **唯一可靠的成功信号**：`2af7707f` 新增 `Text|导入对象 '<name>'`（它的 Error 恒 0 是设计如此）；③ 失败原因看 `194b48a9`「脚本消息」的新增 Error（坏 native 抛异常时 `194b48a9 n=1 err=1`、`2af7707f` 完全不变）。外层必须超时 + 「台账没新增就判失败」。
 48. **验收要双通道交叉校验，单通道的 `errors=0` 随时可能是读漏**。通道 1 `get_message_objects(cat)` 全量，单分类最多 100 条、错误池 500 条，超了截断少报；通道 2 `get_message_objects(cat, Severity.Error / FatalError)` 在完整池上过滤（1.10 实测 all=540 / Error=502、相加等于 all），截断后仍精确。**取两通道较大值**：过滤通道坏（SP19 实测 2 错误只回 1 条 warning、0 错误）不能把错误洗成 0，可见通道被截断时由过滤补。未截断分类要求两通道相等，不等 → `UNKNOWN`；已截断分类只做单向校验（过滤 ≥ 可见）。**分类按需注册**：刚打开的工程可能一个都没有 → 先 build + pump 一次再枚举，仍空才判 `UNKNOWN`，绝不当 0 错误。工具 `task_check.py` v4 末行 `VERDICT: PASS|FAIL|UNKNOWN`，`UNKNOWN` 不是通过。
@@ -93,7 +93,7 @@ description: 汇川 InoProShop（CODESYS V3.5 SP11 系）LD 梯形图 native XML
 | 47 | **`app.build()` 是增量编译：无改动时预编译分类不重跑，读到的是上一轮陈旧消息**。2026-11-27 F20 实测：连跑三次都是「预编译 0 / 编译 104」，看似 0 错误，实为上一轮留下的 104 条。**验收前必须先清分类**：`system.clear_messages(cat)` 逐个清预编译 `217bc73e` 与编译 `97f48d64`（**必须传分类参数**，无参重载报 `takes exactly 1 argument`），再 build，主机侧等 ≥10s 后读。**自检**：清完再 build 预编译必须重新出现 ~101 条，仍为 0 说明没重跑、结论无效。工具 `scripts/ide/tasks/task_build_clean.py`。⚠ `clear_messages` 是**进程级**，共用 IDE 时别人的消息会被一起清掉。 |
 | 42 | **ST 声明区在 native 里是「每行一个独立 Text 节点」，不能按 VAR/PROGRAM 关键字筛节点**。`Single Name="Text"` 粒度是**一行**，整块 `VAR…END_VAR` 从不落在同一节点里；按关键字筛会漏掉绝大多数声明行，`locals` 识别为空。**后果最危险**：局部名被当全局名一起改写（静默错误，双分类仍 0 错误）。**正确做法**：从 `PROGRAM/FUNCTION_BLOCK/FUNCTION <name>` 那一行起把所有后续 Text 节点 join 起来再解析 `VAR…END_VAR`，剥掉 `//` 行注释。**自检**：locals 应为个位数到十几（F20 实测 6~16/个），出现 0 一定是提取逻辑坏了。 |
 | 43 | **IDE 脚本不要用 `sys.exit()` 收尾 —— 会弹 `Uncaught exception` 模态框**。IronPython 里 `SystemExit` 不继承 `Exception`，`handle_on_main` 的 `except Exception` 兜不住，IDE 弹出标题 `Uncaught exception, please check the error log for details.`、内容 `SystemExit` 的框，一直挡界面。**做法**：脚本末尾直接 `print(u"done")`，需要分步就用文件/标志位判断。⚠ 两类弹框关法（`PostMessage`，不动鼠标/不抢焦点）：`Uncaught exception` 的「确定」对 `WM_COMMAND IDOK(1)` **无反应**，须 `WM_CLOSE(0x0010)`；`导出的文件已经存在：…，是否希望替换？` 是 `IDYES(6)`/`IDNO(7)`，**误点「是」会覆盖主机侧刚改好的 native**，选前必须核对目标文件 mtime 与内容。 |
-| 44 | **LD POU 的标识符有 4 类载体，只改 `Text` 会漏掉 90%**。纯 ST 组（F01~F11/F20）只处理 `Text`+`Operand` 就够；F21 实测 `STN1_02_Auto` 2155 处改写里 **1953 处在 `Operand Type="string"`**，`Text` 只有 114 处。四类载体：① `Single Name="Text"`（ST 代码）；② `Operand Type="string"`（LD 触点/线圈操作数）；③ `BoxType`（LD 功能框类型名）；④ `Instance > Operand Type="string"`（FB 实例操作数）。`SymbolComment`/`Address` 在 LD native 里**全为空**，不能靠它们定位。⚠ 另：**LD 的 `Path` 数组是「每个 network 一个」**（`STN1_02_Auto` 有 87 个），每个数组元素 4 = POU 自身名（要改），元素 5 = network 名（不改）；纯 ST 的 POU 一个 `Path` 数组都没有。**自检**：翻译后统计各载体命中数，`Operand` 命中数为 0 而该 POU 含 `NetworkList` → 一定漏改。参考 `scripts/examples/make_f21_translate.py`。 |
+| 44 | **LD POU 的标识符有 4 类载体，只改 `Text` 会漏掉 90%**。纯 ST 组（F01~F11/F20）只处理 `Text`+`Operand` 就够；F21 实测 `STN1_02_Auto` 2155 处改写里 **1953 处在 `Operand Type="string"`**，`Text` 只有 114 处。四类载体：① `Single Name="Text"`（ST 代码）；② `Operand Type="string"`（LD 触点/线圈操作数）；③ `BoxType`（LD 功能框类型名）；④ `Instance > Operand Type="string"`（FB 实例操作数）。`SymbolComment`/`Address` 在 LD native 里**全为空**，不能靠它们定位。⚠ 另：**LD 的 `Path` 数组是「每个 network 一个」**（`STN1_02_Auto` 有 87 个），每个数组元素 4 = POU 自身名（要改），元素 5 = network 名（不改）；纯 ST 的 POU 一个 `Path` 数组都没有。**自检**：翻译后统计各载体命中数，`Operand` 命中数为 0 而该 POU 含 `NetworkList` → 一定漏改。参考 `references/native-structure.md` §30（F21 工站整树复制验证）。 |
 
 ## 结构速查（详见 references/）
 
@@ -230,7 +230,7 @@ description: 汇川 InoProShop（CODESYS V3.5 SP11 系）LD 梯形图 native XML
 | ide/tasks/task_readnow.py | 不清空直接读全部消息（排查异步） |
 | ide/tasks/task_export_fixed.py | 导出指定 POU（学结构用） |
 | ide/scan_all_native.py | **批量导出全工程**（IDE 内 eval_file 执行）：递归遍历 `active_application` 全部后代，凡能 `export_native` 的都导出为 `<IPC>/scan_<序号>_<名字>.native`，空壳自动删。用途：①学习时批量扫描未知 BoxType；②回归对比（新生成结构与模板原生 POU 同场跑 check_slots）。实测一次导出 126 个对象 |
-| examples/make_*.py | 生成脚本范例。`make_full8.py` / `make_fix45.py` 读 `PLC_SRC_NATIVE` / `PLC_DST_NATIVE` 环境变量；`make_packml_cmd_test.py` / `make_fb_call_test.py` 用相对路径（前者含 `contact/coil/and_box/branch/netitem/network` 全套节点构造函数；后者含 `fb_box/pin/connector_input/output_target` FB 调用构造函数）；`make_ld_learn.py` 是**当前最完整的可复用基座**（`contact/value_pin/connector_slot/coil/fb_box/ton_box/execute_box/network/textlines_block/xml_text/build_pou` 全套，带 `__main__` 守卫可被 import）；`make_axis_call.py` 演示轴控 FB 调用 + `CallType=Action`；`make_func_return_test.py` 演示 **Function 调用框接返回值**（OutputItems 按索引对应 OutputParam.Names，[1]=返回值；含「REF 形参接全局实例成员」避坑）；`extract_action_entry.py` 从模板 native 里切出 action Entry 原始 XML 作模板 |
+| examples/*.py | 14 个生成器，三类：① 模板生成器 `gen_seq_ld` / `gen_flow_ld` / `gen_a04` / `gen_tontest` / `gen_coiltest`（基座 `ldgen.py`）；② 结构样本 `make_fb_call_test` / `make_gvl` / `make_packml_cmd_test` / `make_func_return_test` / `make_ld_learn` / `make_repro_study`；③ 任务槽工具 `del_task_pou`。索引见 `scripts/examples/README.md` 
 
 `ide/*.py` 是 IronPython 2 语法，`except Exception, e:` 合法，**勿用 Python 3 的 ast 校验**。
 
@@ -266,11 +266,13 @@ description: 汇川 InoProShop（CODESYS V3.5 SP11 系）LD 梯形图 native XML
 
 | 文件 | 用途 |
 |------|------|
-| `user_fixed.native` | **首选模板**。8 支路树形状态机，完整支路（AND[MOVE, CONN]）+ 声明区齐全，预编译 0 错误 0 警告 |
-| `ss_manual_142651.native` | 用户手画并联起保停基线（触点/分支组最小样本） |
-| `prg_EM01_Logic.native` | 旧工程完整 LD（功能框/多线圈/连接器样本） |
-| `startstop_state3.native` | 早期 MOVE 状态字版本（历史对照，新写请用 `user_fixed.native`） |
-| `fb_call_test.native` | **FB 调用模板**。三类 CallType（Function/Program/FunctionBlock）各一个，含 REF 形参、实例调用、12 入 12 出；双分类 0 错误 |
-| `prg_Stn3LoadSeq.native` | **工站子程序样本**（31 网络 / 铁律 51 的 A00 骨架），配套 `a00-fragments/` 5 个可克隆片段 |
+| `A04_slot4.native` | **工站动作槽成品**（22 网络：A00 骨架 + 16 步取放料，铁律 51 的参考实现） |
+| `a04-action-skeleton.native` | A04_ 原始骨架（前 5 个网络），生成新动作槽的克隆底 |
+| `prg_FlowDemo.native` | **完整工站流程**（37 网络：步序 / 延时 / 超时 / 报警 / 复位 / 中断） |
+| `prg_SeqDemo.native` | 步序最小样本（分支 + 条件跳步） |
+| `user_fixed.native` | **首选树形模板**。8 支路树形状态机，完整支路（AND[MOVE, CONN]）+ 声明区齐全 |
+| `fb_call_test.native` | **FB 调用模板**。三类 CallType 各一个，含 REF 形参、实例调用、12 入 12 出 |
+| `prg_TonTest.native` / `prg_CoilTest.native` | TON 单网络 / S-R 线圈最小样本 |
+| `negative/*.native` | 两个负样本（S/R 同变量、值引脚 IsContact=True），校验器回归用 |
 
 生成新 native 时**必须从这些已验证样本克隆节点**，不要凭空构造。

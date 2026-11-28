@@ -1533,7 +1533,7 @@ Gv_xRetain2  :BOOL;          →  Gv_xRetain2 AT %MB146918 : BOOL;
 
 ⇒ **隐藏实例不做预编译语义检查，只做编译**。所以隐藏实例上的验收**必须先把目标 POU
 挂进 MainTask 再 build**（`scripts/ide/tasks/task_mount_assert.py` 就是这道前置断言），
-否则漏检是静默的（0 错误、0 消息）。证据：`references/evidence/hidden-instance-scope/README.md`。
+否则漏检是静默的（0 错误、0 消息）。证据：上方读数表（原始日志已归档，git 014a4ab）。
 
 要让 POU 真正参与构建：
 
@@ -1609,7 +1609,7 @@ TextLines[0] : TYPE Struct_Clock_StructVerify :     ← 必须一起改
 
 `F04_FB` 全部 58 个对象（9 个子文件夹：SF06_通讯、SF05_设备状态机、SF98_34-1-擦拭机、
 SF02_气缸、SF99_其他、半自动、SF03_真空、SF01_轴控、SF04_产量统计）整树导出 →
-`scripts/examples/make_f04_translate.py` 单遍正则加 `_F04V` 后缀 →
+主机侧一次性脚本单遍正则加 `_F04V` 后缀（脚本已归档，做法即此） →
 `F04_FB_Verify` 按子文件夹结构逐个 `import_native`，58/58 无弹窗。
 
 ### 30.1 对象构成与实现语言
@@ -1644,7 +1644,7 @@ SF02_气缸、SF99_其他、半自动、SF03_真空、SF01_轴控、SF04_产量�
 ### 30.4 GVL 引用改写到 `_GVLVerify`
 
 用户要求新 FB 引脚/逻辑引用之前验证过的 `F01_Variable_GVLVerify` 副本变量。
-`make_f04_translate.py` 读取 `F01_Variable_GVLVerify` 8 个 GVL 的 687 个变量名，
+一次性翻译脚本读取 `F01_Variable_GVLVerify` 8 个 GVL 的 687 个变量名，
 把 FB 体内的 `Gv_xxx` 改写到 `Gv_xxx_GVLVerify`（实测 FB_Cylinder 副本 16 处、全树 851 处改写）。
 `VAR_IN_OUT io_stHMICylinder : Struct1_HMI_Cylinder_F04V` 这类**类型引用**走「内部名 → 副本类型」
 改写，而 `H_astAlarmRecord_GVLVerify` 这类**变量引用**走 GVL 映射，两条链并行不冲突。
@@ -1653,7 +1653,7 @@ SF02_气缸、SF99_其他、半自动、SF03_真空、SF01_轴控、SF04_产量�
 
 `F05_FC` 结构比 F04 多一种形态：**7 个 ST FC + 3 个 DUT，其中 5 个 FC 直接挂在
 `F05_FC` 根下**（不是子文件夹），2 个子文件夹（`SF01_AlarmRecord` 3 个对象、
-`SF02_AlarmWindow` 2 个对象）。整树导出 → `make_f05_translate.py` 加 `_F05V` →
+`SF02_AlarmWindow` 2 个对象）。整树导出 → 主机侧加 `_F05V` 后缀（一次性脚本） →
 `F05_FC_Verify`，10/10 无弹窗。
 
 ### 31.1 ⚠ 根下直接 POU 与「子文件夹」在导出时长得一样
@@ -1704,9 +1704,9 @@ IDE 脚本只读清单逐个 `import_native`。
 → 导入遍历目录时对每个目录调 `mk_folder` → 工程里多 5 个空文件夹。
 
 **三重防护（已在脚本中落地）**：
-1. `make_f05_translate.py`：目录内无 `.native` 直接 `skip`；
-2. `task_import_f05.py`：`natives` 列表为空则 `[SKIP]`，不调 `mk_folder`；
-3. 事后清理 `task_f05_rm_empty.py`：判定 `kids==0` 且 `textual_declaration` /
+1. 翻译脚本：目录内无 `.native` 直接 `skip`；
+2. 导入脚本：`natives` 列表为空则 `[SKIP]`，不调 `mk_folder`；
+3. 事后清理脚本：判定 `kids==0` 且 `textual_declaration` /
    `textual_implementation` 都取不到 → 纯容器 → `remove()`。
 
 **判别空 Folder 的可靠方法**：`len(kids(o)) == 0` 且两个 textual 属性都抛异常或

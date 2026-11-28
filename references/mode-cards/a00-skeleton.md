@@ -201,11 +201,11 @@ r = host.import_native(SRC)              # 返回 NativeImportResult
 
 ---
 
-## 附录 A · 独立 `PROGRAM` 版（只在工站没有自动 POU 宿主时用）
+## 附录 A · 独立 `PROGRAM` 版（只在工站没有动作槽宿主时用）
 
-`assets/natives/prg_Stn3LoadSeq.native`（1,191,815 B / 31 网络 / 1145 个 Id，生成器 `scripts/examples/gen_a00_stn3.py`）把 8 段骨架全部写进一个独立 `PROGRAM`，变量用 `STNControl[3]`，验证时需临时挂 `MainTask`（否则不进编译单元，0 错误是假通过）。
+历史上有一个独立 `PROGRAM` 版本（`prg_Stn3LoadSeq`：31 网络 / 1145 个 Id，把 8 段骨架全写进一个 PROGRAM、变量用 `STNControl[3]`），已随 2026-11-28 精简移出仓库；需要时从 git 历史 `014a4ab` 取回 `assets/natives/prg_Stn3LoadSeq.native` 与 `scripts/examples/gen_a00_stn3.py`。
 
-它适合：工站没有动作槽宿主、要把骨架当教学样本、或要单独调试一段流程。**模板工程里不要这么做**——会绕开工站体系。
+它只适合：工站没有动作槽宿主、要把骨架当教学样本、或单独调试一段流程。**模板工程里不要这么做**——会绕开工站体系，而且验证时还得临时挂 `MainTask`（不挂不进编译单元，0 错误是假通过）。
 
 ---
 

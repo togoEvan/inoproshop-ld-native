@@ -73,7 +73,7 @@ proj.export_native(objects=..., destination=..., recursive=True,
 
 ```
 do_replace.py <native文件> <父对象名> "关键字过滤"
-# 例：do_replace.py work\startstop_state3.native Application "prg_StartStop"
+# 例：do_replace.py work\prg_SeqDemo.native Application "prg_SeqDemo"
 ```
 
 流程：旧对象改名 `prg_X_old_tmp` → `parent.import_native(path, None, handler)` → 删旧对象 → `proj.save()`

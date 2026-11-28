@@ -72,7 +72,7 @@ BASE = D:\plc_mcp (source: derive:D:\plc_mcp\ide)
 │   │   ├── task_build.py     #   只 build 不读消息（与 task_check 配对，间隔 ≥10s）
 │   │   ├── task_silent_import.py  #   静默导入核心
 │   │   └── …                 #   其余见 scripts/ide/README.md
-│   └── studies/              # ✗ 98 个一次性考古脚本（勿在验收链路引用）
+│   └── （一次性探针不进库，放本地 work/）
 ├── check_ipy_syntax.py       # IronPython 2 语法自检（改动 ide/*.py 后必跑）
 ├── test_bridge_protocol.py   # IPC 协议回归（假守护，不碰真实 IDE）
 ├── base_path.txt             # 可选：手工指定 BASE（第 2 优先级）
