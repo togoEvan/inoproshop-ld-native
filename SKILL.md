@@ -13,7 +13,8 @@ description: 汇川 InoProShop（CODESYS V3.5 SP11 系）LD 梯形图 native XML
 
 ## 铁律（违反必踩坑）
 
-40 条，按主题分六组；编号与 `README.md` 一致（沿用历史编号、不重排）。完整论证见 `README.md`。
+47 条，按主题分六组；编号与 `README.md` 一致（沿用历史编号、不重排）。完整论证见 `README.md`。
+> **2026-11-28 修重号**：A 段原 25 / 26 → **45 / 46**，F 段原 41 → **47**（曾与 D 段 25 / 26、B 段 41 撞号）。
 
 ### A. 验收与消息
 
@@ -25,6 +26,8 @@ description: 汇川 InoProShop（CODESYS V3.5 SP11 系）LD 梯形图 native XML
 18. **消息来源只有两个可靠通道**：① `import_native` 导入瞬间；② `app.build()`。**编译/检查类菜单命令走缓存，读不到真实错误**；菜单「检查程序」`ab02b3c3` 实测**不产生任何消息**。⚠ 别指望 `clear_messages` 后消息自己回来；「改一个字符再改回」强制变脏实测无效。
 23. **从未构建过的工程，编译分类 `97f48d64` 不存在**。必须先跑一次 `app.build()`（**不 clear**）才出现第 3 个分类。别因分类不存在就当 0 错误通过。真实工程构建后剩下的错误不一定是你的——先 `grep 你的 POU 名`，为 0 即无关。
 24. **两分类作用域不同（2026-11-26 实测）**：① **预编译**在 `build()` 阶段覆盖 **Application 下全部 POU**，与挂不挂任务**无关**；② **编译**只含**挂进任务调用列表**的 POU。负样本：未挂任务 → 预编译 ZZZ **1** / 编译 **0**；挂上 MainTask → 预编译 **1** / 编译 **2**。⚠ 预编译消息**异步补齐**：`clear_messages(cat)`（**必须传分类参数**，无参报 `takes exactly 1 argument`）后立刻读 0 条，约 10s 后才 101 条；空闲 20s 仍是 0 条（不自恢复）。
+45. **消息截断阈值按 severity 各自计数：Warning 100、Error 500**（隐藏实例灌 1300 个未定义标识符 → Error 恰 501 = 500 实体 + 1 提示行）。**提示措辞不统一**：警告/消息级是「多于N个警告/消息发生：跳过更多的…」，错误级**不带「发生」**——原文 `多于500个错误：跳过更多的错误信息`。按文本判截断的正则不能锚定「发生」，否则 >500 错误看不见截断 → 条数差恒 0 → **假 PASS**。
+46. **判导入成败要看三条，`2af7707f` 不是结果台账**：① `import_native()` 抛不抛异常——**不可靠**（同 GUID + 同名二次导入会**卡死 6 分钟**，不返回不报错）；② **唯一可靠的成功信号**：`2af7707f` 新增 `Text|导入对象 '<name>'`（它的 Error 恒 0 是设计如此）；③ 失败原因看 `194b48a9`「脚本消息」的新增 Error（坏 native 抛异常时 `194b48a9 n=1 err=1`、`2af7707f` 完全不变）。外层必须超时 + 「台账没新增就判失败」。
 
 ### B. 结构合法性
 
@@ -40,6 +43,7 @@ description: 汇川 InoProShop（CODESYS V3.5 SP11 系）LD 梯形图 native XML
 16. **往 XML 文本节点塞自由文本必须转义 `<` `>` `&`**。注释里写 `<Null/>` 会被解析成真实子节点，导致 `rt_diff` 整段错位。统一走 `xml_text()`，且必须定义在 `textlines_block()` **之前**。
 21. **FB 类框的 `Instance.Type` 必须填 BoxType 名、`Instance.Operand` 必须填实例名**。写空 `Instance.Type` → `import_native` 抛 **「已标识项中有一项的格式无效。」**，且是**模态弹窗**：主线程阻塞 → 守护心跳停 → `bridge` 全部超时（看起来像「API 挂了」）。解除：`SendMessage(hButton, BM_CLICK=0x00F5, 0, 0)`。
 22. **`check_slots.py` 不能按「输入槽数 == `InputParam` 名数」校验比较框 / MOVE / 算术框**。比较框 `InputParam` 只有 `['EN']` 但恒 3 槽；MOVE 恒 2 槽；ADD 恒 3 槽。已加 `_input_exempt()`。**元教训**：校验脚本的规则本身也要拿真实工程回归。
+41. **线圈只能挂 NETITEM（`9873c309-1f09-4ebf-9078-42d8057ef11b`）或触点 PIN 的 `OutputItems`，不能挂功能框**。挂 AND 框 `OutputItems` 上时：导入接受、预编译 0、编译 0、导出原样保留，唯独 IDE 里该梯级末尾只画一个**空方块**——四条验收链全部放行。A00 全工程分布：NETITEM→线圈 **15**、触点 PIN→线圈 **5**、BOX→线圈 **0**。生成器用 `netitem()` / `coil_tree()` / `coil_net()`；验收链补「图形（人眼）」。
 
 ### C. 挂载与实例
 
@@ -59,7 +63,14 @@ description: 汇川 InoProShop（CODESYS V3.5 SP11 系）LD 梯形图 native XML
 29. **GVL = `Object > Interface > TextDocument > TextLines`**（无 `NetworkList`、无 `Implementation`）。一个 GVL 内可有多段 `VAR_GLOBAL`；`EmbeddedTypeGuids` 是 `Array[a9ed5b7e]` 单元素（Folder 的是 `<Null/>`）。
 30. **Folder 的四条 GUID 关系**：`Properties.ParentObjects` 的 Key = 导出根 SV Guid、Value = 父容器 guid；`ParentSVNodeGuid` = 该 Value；`MetaObject.ParentGuid` = **祖父** guid（直属 Application 的 Folder → 全零）；被导出的 Folder 自身 `IsRoot=True`。
 
-### E. CAM（电子凸轮）与曲线
+### E. 枚举 / POU / 凸轮 / 轴组
+
+31. **枚举字面量是全局符号，不是类型内作用域**。复制 DUT 副本时沿用原枚举值（`A1_上料移栽R轴:=1,`）会与原件全局符号**重名**（实测 277 条「符号'xxx'存在重名」），且裸引用全变「未知类型」。**枚举值也要加后缀**；提取正则要吃行尾注释：`^\s*(ident)\s*:=\s*-?\d+\s*,?\s*(//.*)?$`。
+32. **POU TypeGuid 正确取值**：FB/FC = `6f9dac99-8de1-4efc-8465-68ac443b7d08`、DUT = `2db5746d-d284-4425-9f7f-2663a34b0ebc`、Folder = `738bea1e-…`、GVL = `ffbfa93a-…`。⚠ 旧记录里的 `6f9dac99-f3a6-45e5-…` 是错的。**根下直接 POU 导出时也会生成「空目录 + `<名>_folder.native`」**，判别只能靠 TypeGuid。
+33. **`Implementation` Type GUID**：ST = `{3b83b776-fb25-43b8-99f2-3c507c9143fc}`、LD = `{25e509de-33d4-4447-93f8-c9e4ea381c8b}`（DUT 无此节点）。⚠ 旧记录的 `3b83b776-a464-…` / `25e509de-a6c5-…` 是错的。
+34. **根下直接 POU 会在工程里被误建为空文件夹**。导出时根下 POU 也生成同名空目录 → 翻译复制该目录 → 导入对每个目录 `mk_folder`，工程多出 N 个空文件夹（F05 实测 5 个）。**防护**：翻译与导入都先判「目录内有无 `.native`」，无则跳过。**判别空 Folder**：`kids==0` 且 `textual_declaration` / `textual_implementation` 都取不到。
+
+35–38 用表格式（历史格式，语义与上面 31–34 一致）：
 
 | # | 铁律 |
 |---|------|
@@ -74,7 +85,7 @@ description: 汇川 InoProShop（CODESYS V3.5 SP11 系）LD 梯形图 native XML
 |---|------|
 | 39 | **结果必须与命令对账（`run_id`），「文件出现」不等于「这是我这轮的结果」**。旧 bridge 只做「删 `result.json` → 写 `cmd.json` → 等 `result.json` 出现」。上一条命令超时后守护迟一点才写结果，这条**迟到结果**会被下一次调用当成自己的读走——`ok` 是 `true`、JSON 能解析，只有内容是错的，是最阴险的假成功。现在每条命令带唯一 `run_id`，守护原样回带，对不上就丢弃继续等；旧版守护不回带时退化为「出现即认」并标 `legacy_daemon: true`。**自检**：`python bridge.py selftest`，`ping` 结果里必须有 `run_id` 且不出现 `legacy_daemon`。 |
 | 40 | **`os.kill(pid, 0)` 在 Windows 上不能判活**，别照 POSIX 的 `ESRCH` 写。实测（Win11 / Python 3.12）：`os.kill(999999, 0)` → `errno 22 (WinError 87)`，而 `os.kill(36704, 0)`（该 pid **明明活着**）抛**同一个 `errno 22`**。按 `== ESRCH` 判活会把所有进程都判成死的——陈旧锁永远能抢，等于没锁（实测陈旧锁用例直接失败）。**正确做法**：Windows 上 `OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION)` + `GetExitCodeProcess`，拿到句柄且 `STILL_ACTIVE(259)` 才算活；判不了时**当作活着**。`bridge.py` 的 `_pid_alive()` 已按此实现。 |
-| 41 | **`app.build()` 是增量编译：无改动时预编译分类不重跑，读到的是上一轮陈旧消息**。2026-11-27 F20 实测：连跑三次都是「预编译 0 / 编译 104」，看似 0 错误，实为上一轮留下的 104 条。**验收前必须先清分类**：`system.clear_messages(cat)` 逐个清预编译 `217bc73e` 与编译 `97f48d64`（**必须传分类参数**，无参重载报 `takes exactly 1 argument`），再 build，主机侧等 ≥10s 后读。**自检**：清完再 build 预编译必须重新出现 ~101 条，仍为 0 说明没重跑、结论无效。工具 `scripts/ide/tasks/task_build_clean.py`。 |
+| 47 | **`app.build()` 是增量编译：无改动时预编译分类不重跑，读到的是上一轮陈旧消息**。2026-11-27 F20 实测：连跑三次都是「预编译 0 / 编译 104」，看似 0 错误，实为上一轮留下的 104 条。**验收前必须先清分类**：`system.clear_messages(cat)` 逐个清预编译 `217bc73e` 与编译 `97f48d64`（**必须传分类参数**，无参重载报 `takes exactly 1 argument`），再 build，主机侧等 ≥10s 后读。**自检**：清完再 build 预编译必须重新出现 ~101 条，仍为 0 说明没重跑、结论无效。工具 `scripts/ide/tasks/task_build_clean.py`。 |
 | 42 | **ST 声明区在 native 里是「每行一个独立 Text 节点」，不能按 VAR/PROGRAM 关键字筛节点**。`Single Name="Text"` 粒度是**一行**，整块 `VAR…END_VAR` 从不落在同一节点里；按关键字筛会漏掉绝大多数声明行，`locals` 识别为空。**后果最危险**：局部名被当全局名一起改写（静默错误，双分类仍 0 错误）。**正确做法**：从 `PROGRAM/FUNCTION_BLOCK/FUNCTION <name>` 那一行起把所有后续 Text 节点 join 起来再解析 `VAR…END_VAR`，剥掉 `//` 行注释。**自检**：locals 应为个位数到十几（F20 实测 6~16/个），出现 0 一定是提取逻辑坏了。 |
 | 43 | **IDE 脚本不要用 `sys.exit()` 收尾 —— 会弹 `Uncaught exception` 模态框**。IronPython 里 `SystemExit` 不继承 `Exception`，`handle_on_main` 的 `except Exception` 兜不住，IDE 弹出标题 `Uncaught exception, please check the error log for details.`、内容 `SystemExit` 的框，一直挡界面。**做法**：脚本末尾直接 `print(u"done")`，需要分步就用文件/标志位判断。⚠ 两类弹框关法（`PostMessage`，不动鼠标/不抢焦点）：`Uncaught exception` 的「确定」对 `WM_COMMAND IDOK(1)` **无反应**，须 `WM_CLOSE(0x0010)`；`导出的文件已经存在：…，是否希望替换？` 是 `IDYES(6)`/`IDNO(7)`，**误点「是」会覆盖主机侧刚改好的 native**，选前必须核对目标文件 mtime 与内容。 |
 | 44 | **LD POU 的标识符有 4 类载体，只改 `Text` 会漏掉 90%**。纯 ST 组（F01~F11/F20）只处理 `Text`+`Operand` 就够；F21 实测 `STN1_02_Auto` 2155 处改写里 **1953 处在 `Operand Type="string"`**，`Text` 只有 114 处。四类载体：① `Single Name="Text"`（ST 代码）；② `Operand Type="string"`（LD 触点/线圈操作数）；③ `BoxType`（LD 功能框类型名）；④ `Instance > Operand Type="string"`（FB 实例操作数）。`SymbolComment`/`Address` 在 LD native 里**全为空**，不能靠它们定位。⚠ 另：**LD 的 `Path` 数组是「每个 network 一个」**（`STN1_02_Auto` 有 87 个），每个数组元素 4 = POU 自身名（要改），元素 5 = network 名（不改）；纯 ST 的 POU 一个 `Path` 数组都没有。**自检**：翻译后统计各载体命中数，`Operand` 命中数为 0 而该 POU 含 `NetworkList` → 一定漏改。参考 `scripts/examples/make_f21_translate.py`。 |

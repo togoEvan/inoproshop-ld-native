@@ -9,8 +9,10 @@ daemon 再 `exec` 这里的脚本。
 | 目录 | 数量 | 用途 | 进验收链路 |
 |------|------|------|------------|
 | `ide/`（本层） | 5 | 守护本体 + 路径自解析 + 全量导出 | ✅ 是 |
-| `ide/tasks/` | 38 | 验收 / 导入 / 导出 / 建对象 / 任务槽 / GVL 等**可复用操作** | ✅ 是 |
-| `ide/studies/` | 75 | 一次性考古脚本（探 API、探结构、A/B 对照、F0x 普查） | ❌ 否 |
+| `ide/tasks/` | 45 | 验收 / 导入 / 导出 / 建对象 / 任务槽 / GVL 等**可复用操作** | ✅ 是 |
+| `ide/studies/` | 98 | 一次性考古脚本（探 API、探结构、A/B 对照、F0x 普查） | ❌ 否 |
+
+本索引逐条覆盖 **tasks 45/45** 与 **studies 98/98**（2026-11-28 由 git 文件清单核对，无遗漏、无残留）。
 
 **`studies/` 的边界**：它们是为回答某个具体问题临时写的，问题答完就冻结。
 新增能力请写进 `tasks/`，不要往 `studies/` 里堆；验收链路里不要引用 `studies/`，
@@ -39,19 +41,22 @@ daemon 再 `exec` 这里的脚本。
 | `reload_daemon.py` | 热重载：改完 plc_daemon.py 后用它换新，不必重启 IDE |
 | `scan_all_native.py` | 批量导出全工程对象为 native（结构学习语料，只读） |
 
-## tasks/（38 个，可复用）
+## tasks/（45 个，可复用）
 
 | 脚本 | 用途 |
 |------|------|
+| `tasks/export_all.py` | IDE 内递归导出整个 active_application，每个对象一个 .native（语料来源，只读） |
 | `tasks/task_allmsg_dump.py` | 全量消息转储：build 之后把所有分类里的每条消息（不论级别）都写出来 |
 | `tasks/task_at_check.py` | 核对 F01_Variable_GVLVerify 下 8 个副本 GVL 是否保留了 AT 地址 |
 | `tasks/task_at_scan.py` | 扫描整个 Application 里所有 AT 绝对地址（含 POU/GVL），算已用区间和空闲区间 |
 | `tasks/task_build.py` | 只跑 app.build()，不读消息 —— 与 task_check.py 配对使用 |
 | `tasks/task_build_check.py` | 构建一次（不 clear_messages），让编译分类出现 |
+| `tasks/task_build_clean.py` | 干净验收：先 clear 两个分类 → build() → 退出，主机侧等待后读（避免把陈旧消息当本轮结果） |
 | `tasks/task_check.py` | 验收：只读两个分类的消息并统计 Error / Warning，单次快照，绝不阻塞 IDE |
 | `tasks/task_cleanup_final.py` | 收尾：把验证 POU 从 MainTask 调用列表摘掉并删除，只保留 F99_GVLVerify 文件夹 |
 | `tasks/task_cleanup_negative.py` | 删除负样本对象（GVL_BadTest），保留 F99_GVLVerify 验证文件夹 |
 | `tasks/task_cleanup_test_pou.py` | 删除临时验证 POU（prg_GvlVerifyUse），保留 F99_GVLVerify 文件夹 |
+| `tasks/task_clear_io_cat.py` | 清掉「导出/导入」分类里的残留消息（「文件已经存在」这类非代码 Error） |
 | `tasks/task_cmd_list.py` | 枚举 system.commands（GetEnumerator 返回 ScriptCommand 对象），反射取 guid/name/des… |
 | `tasks/task_cmd_run.py` | 执行指定的 IDE 命令（按 GUID 字符串，遍历 commands 找到匹配项后 execute） |
 | `tasks/task_copy_cleanup.py` | 收尾：删除验证 POU 并把 MainTask 调用列表恢复成只剩 M000_MAIN |
@@ -71,8 +76,9 @@ daemon 再 `exec` 这里的脚本。
 | `tasks/task_gvl_task_test.py` | GVL 全局变量验证（正确版）：建 POU + 挂进 MainTask 调用列表 + build + dump |
 | `tasks/task_import_overwrite.py` | 覆盖式导入：不改名让位，直接 import_native，遇到同名覆盖弹框由主机侧点「全部」 |
 | `tasks/task_list_folders.py` | 列出 Application 下所有 F0x 开头的 Folder / GVL 及成员，用于确认 F02 内容 |
-| `tasks/task_msg_text.py` | 用 get_messages(cat) 直接 dump 每个分类的全部消息文本（返回的是字符串） |
 | `tasks/task_mount_assert.py` | 验收前置断言：给定 POU 名必须已挂进某任务的调用列表（不挂=不进编译单元=假通过）；结果落 `ipc/task_mount_result.json`，主机侧读 json 判定（eval_file 下退出码无意义） |
+| `tasks/task_msg_text.py` | 用 get_messages(cat) 直接 dump 每个分类的全部消息文本（返回的是字符串） |
+| `tasks/task_msgdump_now.py` | 只读转储当前消息、逐分类统计 severity（验证 ≥100 条时是否被截断、Error 是否真为 0） |
 | `tasks/task_readback_pou.py` | 读回 prg_GvlVerifyUse 的声明/实现原文，确认 replace 是否真的写进工程 |
 | `tasks/task_readnow.py` | 不清空，直接读当前 5 个分类的所有消息 |
 | `tasks/task_rename_children.py` | 把某个文件夹下的子对象（GVL）批量改名，统一加后缀 |
@@ -81,13 +87,15 @@ daemon 再 `exec` 这里的脚本。
 | `tasks/task_show_state.py` | 显示 MainTask 调用列表 + prg_NoTaskTest 是否存在 |
 | `tasks/task_silent_import.py` | 静默导入 native：改名让位 → import_native → 同 tick 读消息 → 失败回滚 → 删旧 → 保存 |
 | `tasks/task_snap.py` | 消息池快照（before/after 各一拍）→ 主机侧 delta_snap.py 差分。主判据是 **err_pool**（`get_message_objects(cat, Severity.Error)` 按完整池过滤，不受 100 条截断）；另含 meta.which 自证、err_total/err_addrs 对象级兜底；severity 读不到直接 raise（不产坏快照） |
+| `tasks/task_taskcfg_read.py` | 只读：打印 Task Configuration 每个任务的 pous 列表 + Application 顶层对象名 |
 | `tasks/task_tree_dump.py` | 列出 Application 下的全部对象（含 Folder/GVL），并展开 F01_Variable |
 | `tasks/task_unhook_task.py` | 彻底把 prg_GvlVerifyUse 从 MainTask 调用列表摘掉（remove 传名字无效，改试索引/其它方式） |
 
-## studies/（75 个，一次性考古）
+## studies/（98 个，一次性考古）
 
 | 脚本 | 当时要回答的问题 |
 |------|------------------|
+
 | `studies/task_ab_f08.py` | F08 轴组 A/B 验证 |
 | `studies/task_alt_import_f08.py` | 把 f08_out_alt 的副本同名覆盖导入 F08_AxisGroup_Verify（对照实验） |
 | `studies/task_at_ab_test.py` | A/B 对照：验证副本 GVL（保留 AT 绝对地址）里的变量是否真的全局可见 |
@@ -118,8 +126,14 @@ daemon 再 `exec` 这里的脚本。
 | `studies/task_export_f07.py` | 整树导出 F07_CAM：每个子文件夹单独 native + 每个对象单独 native + 整包备份 |
 | `studies/task_export_f07_top.py` | 导出 F07_CAM_Verify 顶层文件夹 native（备份 f07_top_backup.native） |
 | `studies/task_export_f10.py` | F10 第一步：导出 4 个 POU 的 native + 建 F10_POU_EthercatTask_Verify 顶层文件夹 |
+| `studies/task_export_f11.py` | F11 第一步：导出 F11_POU_MainTask 全部 POU + 建 Verify 顶层文件夹 |
+| `studies/task_export_f20.py` | F20 第一步：导出 F20_POU_Station0_总控 全部 POU + 建 Verify 顶层文件夹 |
+| `studies/task_export_f21.py` | F21 第一步：导出 F21_POU_Station1_工站1_搬运移栽 全部 POU + 建 Verify 顶层文件夹 |
 | `studies/task_export_sf01.py` | 补导出：SF01_Alarm 子文件夹的 14 个报警结构体 + F02_Struct_Verify 文件夹的 SV GUID |
 | `studies/task_export_taskcfg_f08.py` | 把 prg_F08VerifyUse 从指定任务里彻底摘掉（绕开 pous.remove 无效的问题） |
+| `studies/task_export_taskcfg_f11.py` | 导出 Task Configuration native（供主机侧删残留的 prg_F11VerifyUse） |
+| `studies/task_export_taskcfg_f20.py` | 导出 Task Configuration native（供主机侧删残留的 prg_F20VerifyUse） |
+| `studies/task_export_taskcfg_f21.py` | 导出 Task Configuration native（供主机侧删残留的 prg_F21VerifyUse） |
 | `studies/task_f02_ab_test.py` | A/B 验证副本 Struct：建 ST POU prg_StructVerifyUse 挂进 MainTask，两种实现切换 |
 | `studies/task_f02_cleanup.py` | 收尾：删除 prg_StructVerifyUse（任务列表已通过覆盖导入复位，不再动 pous） |
 | `studies/task_f04_ab_test.py` | A/B 验证 F04 副本 FB：ST POU prg_F04VerifyUse 挂 MainTask 实例化副本 FB |
@@ -131,6 +145,10 @@ daemon 再 `exec` 这里的脚本。
 | `studies/task_f05_rm_empty.py` | 删除 F05_FC_Verify 下误建的空文件夹（无子对象、无代码的纯容器） |
 | `studies/task_f07_ab_test.py` | F07 CAM A/B 验证 |
 | `studies/task_f07_cleanup.py` | F04 收尾：摘测试 POU 任务槽 + 删除 prg_F07VerifyUse |
+| `studies/task_f11_ab_test.py` | F11 A/B 验证：副本确实在预编译/编译作用域内 |
+| `studies/task_f11_purge.py` | 清空 F11_POU_MainTask_Verify 下的全部子对象（重导入前） |
+| `studies/task_f20_ab_test.py` | F20 A/B 验证：副本确实在预编译/编译作用域内 |
+| `studies/task_f21_ab_test.py` | F21 A/B 验证：副本确实在预编译/编译作用域内 |
 | `studies/task_force_rebuild.py` | 强制重编译：app.clean() + app.rebuild()，然后全量 dump 消息 |
 | `studies/task_guidref_f08.py` | 查 F08 轴组引用的 4 个 POU Guid + 2 个 AxisGuid 在工程里对应哪个对象 |
 | `studies/task_import_cam1.py` | 把 Cam1_F07V.native 导入已存在的 F07_CAM_Verify 文件夹，并回读校验 |
@@ -140,7 +158,11 @@ daemon 再 `exec` 这里的脚本。
 | `studies/task_import_f07.py` | 建 F07_CAM_Verify 顶层文件夹并导入 CAM 副本（单对象，无子文件夹） |
 | `studies/task_import_f08.py` | 建 F08_AxisGroup_Verify 顶层文件夹并导入轴组副本 |
 | `studies/task_import_f10.py` | F10 第三步：把 ipc/f10_out 下的 4 个翻译副本导入 F10_POU_EthercatTask_Verify 顶层文件夹 |
+| `studies/task_import_f11.py` | F11 第三步：把 ipc/f11_out 下 15 个翻译副本导入 Verify 顶层文件夹 |
+| `studies/task_import_f20.py` | F20 第三步：把 ipc/f20_out 下 7 个翻译副本导入 Verify 顶层文件夹 |
+| `studies/task_import_f21.py` | F21 第三步：把 ipc/f21_out 下 7 个翻译副本导入 Verify 顶层文件夹 |
 | `studies/task_import_sf01.py` | 在 F02_Struct_Verify 下建 SF01_Alarm_StructVerify 子文件夹，导入 14 个报警结构体副本 |
+| `studies/task_list_top.py` | 列出 Application 下全部直接子对象，找 F 系列顶层文件夹（含 F20） |
 | `studies/task_pool_f08.py` | 探测 SoftMotion General Axis Pool：能否新建虚拟轴、轴对象长什么样 |
 | `studies/task_pou_api_probe.py` | 探测：如何在脚本里创建一个 POU（用于写一段引用 GVL 变量的代码做交叉验证） |
 | `studies/task_poulist_probe.py` | 探测 ScriptPouObjectList 的增删 API（把 POU 挂进任务调用列表） |
@@ -150,19 +172,28 @@ daemon 再 `exec` 这里的脚本。
 | `studies/task_probe_f08.py` | 探测 F08_AxisGroup 下轴组对象的能力：属性、方法、能否导出 native |
 | `studies/task_probe_f10.py` | 探测 F10 下 4 个 POU 的真实格式：ST / LD / CFC，以及声明与实现的开头 |
 | `studies/task_readback_f08.py` | F08 回读验证：导出导入后的轴组，比对 13 个关键字段，并检查内部 POU Guid 是否被重建 |
+| `studies/task_readback_f11.py` | F11 回读验证：导出导入后的副本比对关键字段 |
 | `studies/task_scan_f04.py` | 扫描 F04_FB：列出全部子文件夹 + FB，标注实现语言（ST/LD）与对象大小 |
 | `studies/task_scan_f05.py` | 扫描 F05_FC：列出全部子文件夹 + FB，标注实现语言（ST/LD）与对象大小 |
 | `studies/task_scan_f07.py` | 扫描 F07_CAM：列出全部子项（含直接 POU），标注实现语言（ST/LD）与对象大小 |
 | `studies/task_scan_f08.py` | 扫描 F08 文件夹：递归列出全部子项，标注类型 / TypeGuid / 实现语言 |
 | `studies/task_scan_f10.py` | 扫描 F10 文件夹：递归列出全部子项，标注类型与实现语言 |
+| `studies/task_scan_f11.py` | 扫描 F11 文件夹：递归列全部子项，标注类型与实现语言 |
+| `studies/task_scan_f20.py` | 扫描 F20 文件夹：递归列全部子项，标注类型与实现语言 |
+| `studies/task_scan_f21.py` | 扫描 F21 文件夹：递归列全部子项，标注类型与实现语言 |
 | `studies/task_sf01_ab_test.py` | A/B 验证子文件夹副本：ST POU prg_Sf01VerifyUse 挂 MainTask |
 | `studies/task_sf01_cleanup.py` | 收尾（SF01 轮）：删除 prg_Sf01VerifyUse + 摘任务槽 + 保存 |
 | `studies/task_task_api_probe.py` | 探测 Task Configuration 的调用列表 API（用于把验证 POU 挂进任务，强制参与编译） |
 | `studies/task_tasks_f08.py` | 列出 Task Configuration 下全部任务名与其 POU 列表 |
 | `studies/task_topguid_f10.py` | F10 补充步骤：读取 F10_POU_EthercatTask_Verify 顶层文件夹 guid |
+| `studies/task_topguid_f11.py` | 读 F11 Verify 顶层文件夹 guid → ipc/f11_top_guid.txt |
+| `studies/task_topguid_f20.py` | 读 F20 Verify 顶层文件夹 guid → ipc/f20_top_guid.txt |
+| `studies/task_topguid_f21.py` | 读 F21 Verify 顶层文件夹 guid → ipc/f21_top_guid.txt |
+| `studies/task_unhook_f11.py` | 把 prg_F11VerifyUse 从 MainTask 彻底摘掉（remove 名字无效，须按索引再摘） |
 | `studies/task_unhook_task2.py` | 彻底摘掉 MainTask 里的空槽项：试 Item(i) 后 remove(obj)，并检查最终列表 |
 | `studies/task_unhook_task3.py` | 再试几种摘除空槽项的办法 |
 | `studies/task_usage_f08.py` | F08 轴组用法探测：工程里轴组是怎么被 POU 引用的 + 对照实验 |
+| `studies/task_verify_tc.py` | 验收 F11 收尾：确认 MainTask 的 POU 列表已不含 prg_F11VerifyUse |
 
 ## 常用入口
 
