@@ -123,7 +123,7 @@ BRANCH
 ## 7. 复现这份普查
 
 ```
-python scripts/corpus/export_all.py        # 需在 IDE 内跑（IronPython），或见 toolchain 里的注入方式
+scripts/ide/tasks/export_all.py            # IDE 内跑（IronPython），不走主机侧 bridge
 python scripts/corpus/index_native.py      # raw/*.native -> index.json + LD/ST 清单
 python scripts/corpus/scan_forms.py        # BoxType/CallType/槽数/InputFlags 统计
 python scripts/corpus/parse_net.py         # 网络形状统计 -> net_shapes.json
