@@ -24,8 +24,8 @@
 | `scripts/ide/` | 6 | IronPython 2 守护本体 + 批量导出 + 索引 | 谨慎改（改完 reload） |
 | `scripts/ide/tasks/` | 47 | 可复用单次任务：验收 / 导入 / 导出 / 建对象 / 任务槽 / GVL / 消息 | 要改 |
 | `scripts/corpus/` | 5 | 语料工具：全量索引、网络切分、形状统计、native 转文本 | 要改 |
-| `scripts/examples/` | 14 | 生成器：模板 6 / 结构样本 6 / 任务槽工具 2，索引见 `examples/README.md` | 参考用，别当库 |
-| `assets/natives/` | 10 | 已验证克隆样本 8 份 + `negative/` 2 份（约 2.3MB） | **只读**（结构来源） |
+| `scripts/examples/` | 14 | 生成器：模板 6 / 结构样本 6 / 任务槽工具 1，索引见 `examples/README.md` | 参考用，别当库 |
+| `assets/natives/` | 10 | 已验证克隆样本 8 份 + `negative/` 2 份（约 2.7MB） | **只读**（结构来源） |
 
 ## 2. 「我要做什么」→ 去哪
 
